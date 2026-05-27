@@ -114,6 +114,7 @@
     "vscode:prepublish": "node esbuild.js --production",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
     "lint": "eslint src webview-src",
+    "lint:fix": "eslint src webview-src --fix",
     "test": "vitest run"
   },
   "devDependencies": {

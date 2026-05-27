@@ -36,6 +36,10 @@ tasks:
     desc: Run ESLint over extension and webview source
     cmd: npm run lint
 
+  lint:fix:
+    desc: Run ESLint with --fix over extension and webview source
+    cmd: npm run lint:fix
+
   # ── Packaging ─────────────────────────────────────────────────────────────
   package:
     desc: Package extension as a .vsix file (runs production build first)

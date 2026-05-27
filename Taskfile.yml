@@ -24,6 +24,21 @@ tasks:
     cmds:
       - task: vscode:check
 
+  lint:
+    desc: Run ESLint across UI sub-projects
+    cmds:
+      - task: vscode:lint
+
+  lint:fix:
+    desc: Auto-fix ESLint issues across UI sub-projects
+    cmds:
+      - task: vscode:lint:fix
+
+  fix:
+    desc: Auto-fix all ESLint issues across UI sub-projects
+    cmds:
+      - task: vscode:lint:fix
+
   ci:
     desc: Full CI pipeline across UI sub-projects
     cmds:

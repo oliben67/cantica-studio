@@ -1,0 +1,464 @@
+/* ─────────────────────────────────────────────────────────────
+   Cantica Scores – webview stylesheet
+   Aesthetic mirrors cantica-frontend: violet-600 accent, zinc palette.
+   VS Code CSS variables are used as the semantic base so the panel
+   respects the user's editor theme.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Cantica brand colours */
+  --cs-accent:        #7c3aed;   /* violet-600 */
+  --cs-accent-dim:    rgba(124, 58, 237, 0.15);
+  --cs-accent-border: rgba(124, 58, 237, 0.40);
+
+  /* Semantic tokens mapped from VS Code variables */
+  --cs-bg:            var(--vscode-editor-background,      #09090b);
+  --cs-bg-panel:      var(--vscode-sideBar-background,     #111113);
+  --cs-bg-hover:      var(--vscode-list-hoverBackground,   #1c1c1f);
+  --cs-text:          var(--vscode-editor-foreground,      #d4d4d8);
+  --cs-text-muted:    var(--vscode-descriptionForeground,  #71717a);
+  --cs-border:        var(--vscode-panel-border,           #27272a);
+  --cs-error:         var(--vscode-errorForeground,        #f87171);
+  --cs-font:          var(--vscode-font-family,            'Segoe UI', system-ui, sans-serif);
+  --cs-font-mono:     var(--vscode-editor-font-family,     ui-monospace, Consolas, monospace);
+  --cs-font-size:     var(--vscode-font-size,              13px);
+  --cs-radius:        6px;
+  --cs-explorer-w:    264px;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button { font: inherit; cursor: pointer; }
+ul, li { list-style: none; }
+
+body {
+  font-family: var(--cs-font);
+  font-size: var(--cs-font-size);
+  background: var(--cs-bg);
+  color: var(--cs-text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Root layout
+   ───────────────────────────────────────────────────────────── */
+.cs-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Toolbar
+   ───────────────────────────────────────────────────────────── */
+.cs-toolbar {
+  flex-shrink: 0;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--cs-bg-panel);
+  border-bottom: 1px solid var(--cs-border);
+}
+
+.cs-toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--cs-text);
+  white-space: nowrap;
+}
+
+.cs-accent-icon { color: var(--cs-accent); flex-shrink: 0; }
+
+.cs-toolbar-server {
+  flex: 1;
+  font-family: var(--cs-font-mono);
+  font-size: 11px;
+  color: var(--cs-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  background: var(--cs-accent-dim);
+  border: 1px solid var(--cs-accent-border);
+  border-radius: var(--cs-radius);
+  max-width: 320px;
+}
+
+.cs-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cs-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--cs-radius);
+  background: transparent;
+  color: var(--cs-text-muted);
+  transition: background 0.15s, color 0.15s;
+}
+.cs-icon-btn:hover  { background: var(--cs-bg-hover); color: var(--cs-text); }
+.cs-icon-btn:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 1px; }
+
+/* ─────────────────────────────────────────────────────────────
+   Workspace split
+   ───────────────────────────────────────────────────────────── */
+.cs-workspace {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Explorer panel
+   ───────────────────────────────────────────────────────────── */
+.cs-explorer {
+  width: var(--cs-explorer-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--cs-bg-panel);
+  border-right: 1px solid var(--cs-border);
+}
+.cs-explorer--right {
+  border-right: none;
+  border-left: 1px solid var(--cs-border);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Agent tree
+   ───────────────────────────────────────────────────────────── */
+.cs-tree {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Search bar */
+.cs-tree-search {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--cs-border);
+  color: var(--cs-text-muted);
+}
+.cs-tree-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--cs-text);
+}
+.cs-tree-search-input::placeholder { color: var(--cs-text-muted); }
+.cs-tree-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--cs-text-muted);
+  flex-shrink: 0;
+}
+.cs-tree-search-clear:hover { color: var(--cs-text); background: var(--cs-bg-hover); }
+
+/* Tree list */
+.cs-tree-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 8px;
+}
+
+/* Namespace header */
+.cs-ns-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 5px 10px;
+  background: transparent;
+  border: none;
+  color: var(--cs-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: left;
+}
+.cs-ns-header:hover { background: var(--cs-bg-hover); }
+.cs-ns-header:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: -2px; }
+
+.cs-chevron { transition: transform 0.15s; flex-shrink: 0; }
+.cs-chevron--open { transform: rotate(90deg); }
+
+.cs-ns-name { flex: 1; }
+.cs-ns-count {
+  font-size: 10px;
+  color: var(--cs-text-muted);
+  background: var(--cs-bg-hover);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Agent items */
+.cs-agent-list { padding: 2px 0; }
+.cs-agent-item {
+  padding: 3px 10px 3px 26px;
+  cursor: grab;
+  transition: background 0.1s;
+}
+.cs-agent-item:hover { background: var(--cs-bg-hover); }
+.cs-agent-item:active { cursor: grabbing; }
+.cs-agent-item:hover .cs-agent-link-btn { opacity: 1; }
+
+.cs-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--cs-text-muted);
+}
+
+.cs-agent-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--cs-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-agent-link-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--cs-text-muted);
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+}
+.cs-agent-link-btn:hover { color: var(--cs-accent); }
+.cs-agent-link-btn:focus-visible { opacity: 1; outline: 2px solid var(--cs-accent); }
+
+.cs-agent-desc {
+  font-size: 11px;
+  color: var(--cs-text-muted);
+  padding-left: 17px;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.cs-agent-empty {
+  padding: 4px 26px;
+  font-size: 11px;
+  color: var(--cs-text-muted);
+}
+
+/* Empty / error states */
+.cs-tree-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--cs-text-muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.cs-tree-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 14px;
+  color: var(--cs-error);
+  font-size: 12px;
+  text-align: center;
+}
+.cs-tree-error-msg { font-weight: 500; }
+.cs-tree-error-hint { color: var(--cs-text-muted); font-size: 11px; line-height: 1.6; }
+.cs-tree-error-hint code {
+  font-family: var(--cs-font-mono);
+  color: var(--cs-accent);
+  background: var(--cs-accent-dim);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Workflow canvas
+   ───────────────────────────────────────────────────────────── */
+.cs-canvas {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.cs-canvas-root {
+  width: 100%;
+  height: 100%;
+}
+
+/* Canvas empty hint (rendered as a React Flow Panel) */
+.cs-canvas-hint-panel {
+  pointer-events: none;
+  margin-top: 80px;
+}
+.cs-canvas-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--cs-text-muted);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.7;
+}
+.cs-canvas-hint-sub { font-size: 11px; opacity: 0.75; }
+
+/* ─────────────────────────────────────────────────────────────
+   React Flow overrides (cantica theme)
+   ───────────────────────────────────────────────────────────── */
+.react-flow { background: var(--cs-bg) !important; }
+
+.react-flow__controls {
+  border: 1px solid var(--cs-border) !important;
+  border-radius: var(--cs-radius) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background: var(--cs-bg-panel) !important;
+  border-bottom: 1px solid var(--cs-border) !important;
+  fill: var(--cs-text-muted) !important;
+  color: var(--cs-text-muted) !important;
+}
+.react-flow__controls-button:hover {
+  background: var(--cs-bg-hover) !important;
+  fill: var(--cs-text) !important;
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--cs-border) !important;
+  border-radius: var(--cs-radius) !important;
+  background: var(--cs-bg-panel) !important;
+  overflow: hidden;
+}
+
+.react-flow__edge-path { stroke: var(--cs-accent) !important; stroke-width: 2; }
+.react-flow__edge.selected .react-flow__edge-path { stroke: #a78bfa !important; }
+.react-flow__connection-path { stroke: var(--cs-accent) !important; }
+
+/* Save button */
+.cs-save-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  background: var(--cs-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--cs-radius);
+  font-size: 12px;
+  font-weight: 500;
+  transition: opacity 0.15s, transform 0.1s;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
+}
+.cs-save-btn:hover  { opacity: 0.88; }
+.cs-save-btn:active { transform: scale(0.97); }
+.cs-save-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ─────────────────────────────────────────────────────────────
+   AI Actor node
+   ───────────────────────────────────────────────────────────── */
+.cs-node {
+  background: var(--cs-bg-panel);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: 10px 14px;
+  min-width: 180px;
+  max-width: 260px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.15s;
+}
+.cs-node:hover  { border-color: var(--cs-accent-border); }
+.cs-node--selected {
+  border-color: var(--cs-accent) !important;
+  box-shadow: 0 0 0 2px var(--cs-accent-dim), 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.cs-node-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.cs-node-ns {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cs-accent);
+}
+.cs-node-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cs-text);
+  word-break: break-word;
+}
+.cs-node-desc {
+  font-size: 11px;
+  color: var(--cs-text-muted);
+  margin-top: 5px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cs-node-handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: var(--cs-accent) !important;
+  border: 2px solid var(--cs-bg-panel) !important;
+  border-radius: 50% !important;
+}
+.cs-node-handle--in  { left: -5px !important; }
+.cs-node-handle--out { right: -5px !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   Scrollbar
+   ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar              { width: 6px; height: 6px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: var(--cs-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover  { background: var(--cs-text-muted); }

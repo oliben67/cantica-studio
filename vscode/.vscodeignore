@@ -1,0 +1,12 @@
+.vscode-test/
+.vscode-test.mjs
+node_modules/**
+src/**
+webview-src/**
+tests/**
+eslint.config.mjs
+tsconfig*.json
+esbuild.js
+*.map
+.task/
+Taskfile.yml

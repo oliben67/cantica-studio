@@ -1,0 +1,132 @@
+{
+  "name": "cantica-studio",
+  "displayName": "Cantica Scores",
+  "description": "Visual AI agent workflow builder backed by a Cantica prompt server",
+  "version": "0.1.0",
+  "publisher": "oliben67",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oliben67/cantica.git",
+    "directory": "cantica-ui/vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cantica-studio",
+          "title": "Cantica Scores",
+          "icon": "icons/activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "cantica-studio": [
+        {
+          "id": "canticaScores.agentsView",
+          "name": "AI Actors",
+          "icon": "icons/activitybar.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "canticaScores.agentsView",
+        "contents": "No Cantica server configured.\n[Configure Server](command:canticaScores.configureServer)",
+        "when": "!canticaScores.hasAgents"
+      }
+    ],
+    "commands": [
+      {
+        "command": "canticaScores.openPanel",
+        "title": "Open Workflow Canvas",
+        "category": "Cantica Scores",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "canticaScores.refreshAgents",
+        "title": "Refresh AI Actors",
+        "category": "Cantica Scores",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "canticaScores.configureServer",
+        "title": "Configure Cantica Server",
+        "category": "Cantica Scores",
+        "icon": "$(settings-gear)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "canticaScores.refreshAgents",
+          "when": "view == canticaScores.agentsView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "canticaScores.openPanel",
+          "when": "view == canticaScores.agentsView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "canticaScores.configureServer",
+          "when": "view == canticaScores.agentsView",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Cantica Scores",
+      "properties": {
+        "canticaScores.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8042",
+          "markdownDescription": "Base URL of the Cantica prompt server (e.g. `http://localhost:8042` or `https://my-cantica.example.com`). The extension will call `/v1/namespaces` and `/v1/prompts` on this host.",
+          "scope": "machine-overridable",
+          "order": 1
+        },
+        "canticaScores.authToken": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional Bearer token sent as `Authorization: Bearer <token>` when `CANTICA_AUTH_ENABLED=true` on the server.",
+          "scope": "machine-overridable",
+          "order": 2
+        },
+        "canticaScores.explorerSide": {
+          "type": "string",
+          "enum": ["left", "right"],
+          "default": "left",
+          "markdownDescription": "Side of the workflow canvas where the AI Actors explorer panel is docked.",
+          "scope": "window",
+          "order": 3
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "vscode:prepublish": "node esbuild.js --production",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
+    "lint": "eslint src webview-src",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.90.0",
+    "@xyflow/react": "^12.0.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

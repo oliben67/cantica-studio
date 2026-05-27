@@ -1,0 +1,84 @@
+# https://taskfile.dev  —  requires Task ≥ 3.28
+version: '3'
+
+# ── Default ────────────────────────────────────────────────────────────────
+tasks:
+  default:
+    desc: List all available tasks
+    silent: true
+    cmd: task --list
+
+  # ── Setup ─────────────────────────────────────────────────────────────────
+  install:
+    desc: Install extension npm dependencies
+    cmd: npm install
+
+  # ── Build ─────────────────────────────────────────────────────────────────
+  compile:
+    desc: Build extension host + webview (development mode)
+    cmd: node esbuild.js
+
+  compile:prod:
+    desc: Build extension host + webview (production/minified)
+    cmd: node esbuild.js --production
+
+  watch:
+    desc: Rebuild extension on source changes (dev server mode)
+    cmd: node esbuild.js --watch
+
+  # ── Type checking ──────────────────────────────────────────────────────────
+  typecheck:
+    desc: Run tsc --noEmit on extension host and webview code
+    cmd: npm run typecheck
+
+  # ── Linting ───────────────────────────────────────────────────────────────
+  lint:
+    desc: Run ESLint over extension and webview source
+    cmd: npm run lint
+
+  # ── Packaging ─────────────────────────────────────────────────────────────
+  package:
+    desc: Package extension as a .vsix file (runs production build first)
+    cmds:
+      - cmd: command -v vsce >/dev/null 2>&1 || npm install -g @vscode/vsce
+        silent: true
+      - vsce package --out dist/cantica-studio.vsix
+
+  install:vsix:
+    desc: Install the packaged .vsix into VS Code
+    cmds:
+      - task: package
+      - code --install-extension dist/cantica-studio.vsix
+
+  # ── Combined workflows ────────────────────────────────────────────────────
+  check:
+    desc: Run all quality gates — typecheck + lint + compile
+    cmds:
+      - task: typecheck
+      - task: lint
+      - task: compile
+
+  ci:
+    desc: Full CI pipeline — install → typecheck → lint → production build
+    cmds:
+      - task: install
+      - task: typecheck
+      - task: lint
+      - task: compile:prod
+
+  # ── Clean ─────────────────────────────────────────────────────────────────
+  clean:
+    desc: Remove build artefacts (dist/)
+    silent: true
+    cmd: |
+      rm -rf dist/
+      printf '\033[32m✓ Clean\033[0m\n'
+
+  clean:all:
+    desc: Remove build artefacts and node_modules (run task install to restore)
+    cmds:
+      - task: clean
+      - cmd: rm -rf node_modules/
+        silent: true
+      - cmd: printf '\033[32m✓ Fully clean\033[0m\n'
+        silent: true

@@ -1,0 +1,40 @@
+# https://taskfile.dev  —  requires Task ≥ 3.28
+version: '3'
+
+includes:
+  vscode:
+    taskfile: ./vscode/Taskfile.yml
+    dir: ./vscode
+
+# ── Default ────────────────────────────────────────────────────────────────
+tasks:
+  default:
+    desc: List all available tasks
+    silent: true
+    cmd: task --list
+
+  # ── Convenience shorthands ────────────────────────────────────────────────
+  install:
+    desc: Install all UI sub-project dependencies
+    cmds:
+      - task: vscode:install
+
+  check:
+    desc: Run all quality gates across UI sub-projects
+    cmds:
+      - task: vscode:check
+
+  ci:
+    desc: Full CI pipeline across UI sub-projects
+    cmds:
+      - task: vscode:ci
+
+  clean:
+    desc: Remove build artefacts across UI sub-projects
+    cmds:
+      - task: vscode:clean
+
+  clean:all:
+    desc: Remove build artefacts and node_modules across UI sub-projects
+    cmds:
+      - task: vscode:clean:all

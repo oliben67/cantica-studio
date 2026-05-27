@@ -1,20 +1,618 @@
-"use strict";var f=Object.create;var h=Object.defineProperty;var b=Object.getOwnPropertyDescriptor;var C=Object.getOwnPropertyNames;var y=Object.getPrototypeOf,P=Object.prototype.hasOwnProperty;var S=(n,e)=>{for(var t in e)h(n,t,{get:e[t],enumerable:!0})},u=(n,e,t,s)=>{if(e&&typeof e=="object"||typeof e=="function")for(let i of C(e))!P.call(n,i)&&i!==t&&h(n,i,{get:()=>e[i],enumerable:!(s=b(e,i))||s.enumerable});return n};var g=(n,e,t)=>(t=n!=null?f(y(n)):{},u(e||!n||!n.__esModule?h(t,"default",{value:n,enumerable:!0}):t,n)),x=n=>u(h({},"__esModule",{value:!0}),n);var A={};S(A,{activate:()=>k,deactivate:()=>U});module.exports=x(A);var c=g(require("vscode"));var o=g(require("vscode")),m=class n{constructor(e,t,s,i,r){this.provider=s;this.client=i;this.panel=e,this.settings=r,this.panel.webview.html=this.buildHtml(t),this.panel.iconPath=o.Uri.joinPath(t.extensionUri,"icons","activitybar.svg"),this.panel.onDidDispose(()=>this.dispose(),null,this.disposables),this.panel.webview.onDidReceiveMessage(d=>void this.handleMessage(d),null,this.disposables)}static viewType="canticaScores.panel";static current;panel;disposables=[];settings;static show(e,t,s,i){if(n.current!==void 0)return n.current.panel.reveal(o.ViewColumn.Beside,!0),n.current;let r=o.window.createWebviewPanel(n.viewType,"Cantica Scores",{viewColumn:o.ViewColumn.Beside,preserveFocus:!1},{enableScripts:!0,localResourceRoots:[o.Uri.joinPath(e.extensionUri,"dist","webview")],retainContextWhenHidden:!0});return n.current=new n(r,e,t,s,i),n.current}async handleMessage(e){if(typeof e!="object"||e===null)return;let t=e;switch(t.type){case"ready":await this.pushAll();break;case"refresh":await this.fetchAndPush();break;case"explorerSideChanged":{let s=t.side;(s==="left"||s==="right")&&await o.workspace.getConfiguration().update("canticaScores.explorerSide",s,o.ConfigurationTarget.Global);break}case"openPrompt":{let s=t.namespace,i=t.name;if(typeof s=="string"&&typeof i=="string"){let r=`${this.settings.serverUrl.replace(/\/$/,"")}/v1/prompts/${encodeURIComponent(s)}/${encodeURIComponent(i)}`;await o.env.openExternal(o.Uri.parse(r))}break}case"saveWorkflow":await o.window.showInformationMessage("Workflow saved (in-memory). Persistence coming soon.");break}}async fetchAndPush(){try{let[e,t]=await Promise.all([this.client.fetchNamespaces(),this.client.fetchPrompts()]);this.provider.update(e,t);let s={type:"updateAgents",namespaces:e,prompts:t};await this.panel.webview.postMessage(s)}catch(e){let t=e instanceof Error?e.message:String(e);this.provider.setError(t);let s={type:"error",message:t};await this.panel.webview.postMessage(s)}}async pushAll(){let e={type:"updateSettings",settings:this.settings};await this.panel.webview.postMessage(e),await this.fetchAndPush()}updateSettings(e){this.settings=e;let t={type:"updateSettings",settings:e};this.panel.webview.postMessage(t)}buildHtml(e){let t=this.panel.webview,s=t.asWebviewUri(o.Uri.joinPath(e.extensionUri,"dist","webview","index.js")),i=t.asWebviewUri(o.Uri.joinPath(e.extensionUri,"dist","webview","index.css")),r=T();return`<!DOCTYPE html>
+"use strict";
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/extension.ts
+var extension_exports = {};
+__export(extension_exports, {
+  activate: () => activate,
+  deactivate: () => deactivate
+});
+module.exports = __toCommonJS(extension_exports);
+var vscode4 = __toESM(require("vscode"));
+
+// src/agents-panel.ts
+var vscode = __toESM(require("vscode"));
+var AgentsPanel = class _AgentsPanel {
+  constructor(panel, context, provider, client, settings) {
+    this.provider = provider;
+    this.client = client;
+    this.panel = panel;
+    this.settings = settings;
+    this.panel.webview.html = this.buildHtml(context);
+    this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "icons", "activitybar.svg");
+    this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+    this.panel.webview.onDidReceiveMessage(
+      (msg) => void this.handleMessage(msg),
+      null,
+      this.disposables
+    );
+  }
+  static viewType = "canticaScores.panel";
+  static current;
+  panel;
+  disposables = [];
+  settings;
+  static show(context, provider, client, settings) {
+    if (_AgentsPanel.current !== void 0) {
+      _AgentsPanel.current.panel.reveal(vscode.ViewColumn.Beside, true);
+      return _AgentsPanel.current;
+    }
+    const panel = vscode.window.createWebviewPanel(
+      _AgentsPanel.viewType,
+      "Cantica Scores",
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+      {
+        enableScripts: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(context.extensionUri, "dist", "webview")
+        ],
+        retainContextWhenHidden: true
+      }
+    );
+    _AgentsPanel.current = new _AgentsPanel(panel, context, provider, client, settings);
+    return _AgentsPanel.current;
+  }
+  async handleMessage(msg) {
+    if (typeof msg !== "object" || msg === null) return;
+    const raw = msg;
+    switch (raw["type"]) {
+      case "ready":
+        await this.pushAll();
+        break;
+      case "refresh":
+        await this.fetchAndPush();
+        break;
+      case "explorerSideChanged": {
+        const side = raw["side"];
+        if (side === "left" || side === "right") {
+          await vscode.workspace.getConfiguration().update("canticaScores.explorerSide", side, vscode.ConfigurationTarget.Global);
+        }
+        break;
+      }
+      case "openPrompt": {
+        const ns = raw["namespace"];
+        const name = raw["name"];
+        if (typeof ns === "string" && typeof name === "string") {
+          const url = `${this.settings.serverUrl.replace(/\/$/, "")}/v1/prompts/${encodeURIComponent(ns)}/${encodeURIComponent(name)}`;
+          await vscode.env.openExternal(vscode.Uri.parse(url));
+        }
+        break;
+      }
+      case "saveWorkflow":
+        await vscode.window.showInformationMessage(
+          "Workflow saved (in-memory). Persistence coming soon."
+        );
+        break;
+    }
+  }
+  async fetchAndPush() {
+    try {
+      const [namespaces, prompts] = await Promise.all([
+        this.client.fetchNamespaces(),
+        this.client.fetchPrompts()
+      ]);
+      this.provider.update(namespaces, prompts);
+      const msg = { type: "updateAgents", namespaces, prompts };
+      await this.panel.webview.postMessage(msg);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.provider.setError(message);
+      const msg = { type: "error", message };
+      await this.panel.webview.postMessage(msg);
+    }
+  }
+  async pushAll() {
+    const settingsMsg = { type: "updateSettings", settings: this.settings };
+    await this.panel.webview.postMessage(settingsMsg);
+    await this.fetchAndPush();
+  }
+  updateSettings(settings) {
+    this.settings = settings;
+    const msg = { type: "updateSettings", settings };
+    void this.panel.webview.postMessage(msg);
+  }
+  buildHtml(context) {
+    const webview = this.panel.webview;
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "index.js")
+    );
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "index.css")
+    );
+    const nonce = generateNonce();
+    return (
+      /* html */
+      `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none';
-                 style-src ${t.cspSource} 'unsafe-inline';
-                 script-src 'nonce-${r}';
-                 img-src ${t.cspSource} data:;" />
-  <link rel="stylesheet" href="${i}" />
+                 style-src ${webview.cspSource} 'unsafe-inline';
+                 script-src 'nonce-${nonce}';
+                 img-src ${webview.cspSource} data:;" />
+  <link rel="stylesheet" href="${styleUri}" />
   <title>Cantica Scores</title>
 </head>
 <body>
   <div id="root"></div>
-  <script nonce="${r}" src="${s}"></script>
+  <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
-</html>`}dispose(){n.current=void 0,this.panel.dispose();for(let e of this.disposables)e.dispose();this.disposables.length=0}};function T(){let n="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";return Array.from({length:32},()=>{let e=Math.floor(Math.random()*n.length);return n[e]??"A"}).join("")}var a=g(require("vscode")),p=class extends a.TreeItem{constructor(t,s,i,r){super(t,s);this.label=t;this.collapsibleState=s;this.namespace=i;this.promptName=r;i!==void 0&&r!==void 0?(this.description=i,this.iconPath=new a.ThemeIcon("robot"),this.contextValue="agent",this.tooltip=new a.MarkdownString(`**${r}** \`${i}\`
+</html>`
+    );
+  }
+  dispose() {
+    _AgentsPanel.current = void 0;
+    this.panel.dispose();
+    for (const d of this.disposables) d.dispose();
+    this.disposables.length = 0;
+  }
+};
+function generateNonce() {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  return Array.from({ length: 32 }, () => {
+    const idx = Math.floor(Math.random() * chars.length);
+    return chars[idx] ?? "A";
+  }).join("");
+}
 
-Drag onto the workflow canvas or click to open in browser.`,!0),this.command={command:"canticaScores.openPanel",title:"Open Workflow Canvas",arguments:[]}):(this.iconPath=new a.ThemeIcon("symbol-namespace"),this.contextValue="namespace")}},v=class{_onDidChangeTreeData=new a.EventEmitter;onDidChangeTreeData=this._onDidChangeTreeData.event;namespaces=[];promptsByNamespace=new Map;errorMessage;update(e,t){this.namespaces=e,this.errorMessage=void 0,this.promptsByNamespace.clear();for(let s of t){let i=this.promptsByNamespace.get(s.namespace)??[];i.push(s),this.promptsByNamespace.set(s.namespace,i)}this._onDidChangeTreeData.fire()}setError(e){this.errorMessage=e,this._onDidChangeTreeData.fire()}refresh(){this._onDidChangeTreeData.fire()}getTreeItem(e){return e}getChildren(e){if(this.errorMessage){let s=new p(`Error: ${this.errorMessage}`,a.TreeItemCollapsibleState.None);return s.iconPath=new a.ThemeIcon("warning"),[s]}if(!e){if(this.namespaces.length===0){let s=new p("No actors loaded",a.TreeItemCollapsibleState.None);return s.iconPath=new a.ThemeIcon("info"),[s]}return this.namespaces.map(s=>new p(s.name,a.TreeItemCollapsibleState.Collapsed,s.name,void 0))}return(this.promptsByNamespace.get(e.label)??[]).map(s=>new p(s.name,a.TreeItemCollapsibleState.None,e.label,s.name))}};var l=class{baseUrl;authToken;constructor(e,t){this.baseUrl=e.replace(/\/$/,""),this.authToken=t}buildHeaders(){let e={"Content-Type":"application/json",Accept:"application/json"};return this.authToken&&(e.Authorization=`Bearer ${this.authToken}`),e}async fetchNamespaces(){let e=`${this.baseUrl}/v1/namespaces`,t=await fetch(e,{headers:this.buildHeaders()});if(!t.ok)throw new Error(`Cantica server error fetching namespaces: ${t.status} ${t.statusText}`);return t.json()}async fetchPrompts(){let e=`${this.baseUrl}/v1/prompts`,t=await fetch(e,{headers:this.buildHeaders()});if(!t.ok)throw new Error(`Cantica server error fetching prompts: ${t.status} ${t.statusText}`);return t.json()}async ping(){try{return(await fetch(`${this.baseUrl}/health`,{headers:this.buildHeaders(),signal:AbortSignal.timeout(5e3)})).ok}catch{return!1}}};function w(){let n=c.workspace.getConfiguration("canticaScores");return{serverUrl:n.get("serverUrl")??"http://localhost:8042",authToken:n.get("authToken")??"",explorerSide:n.get("explorerSide")??"left"}}function k(n){let e=w(),t=new l(e.serverUrl,e.authToken),s=new v,i=c.window.createTreeView("canticaScores.agentsView",{treeDataProvider:s,showCollapseAll:!0});n.subscriptions.push(i),n.subscriptions.push(c.commands.registerCommand("canticaScores.openPanel",()=>{m.show(n,s,t,e).fetchAndPush()}),c.commands.registerCommand("canticaScores.refreshAgents",async()=>{try{let[r,d]=await Promise.all([t.fetchNamespaces(),t.fetchPrompts()]);s.update(r,d),c.window.showInformationMessage(`Loaded ${d.length} AI actors from ${e.serverUrl}`)}catch(r){let d=r instanceof Error?r.message:String(r);s.setError(d),c.window.showErrorMessage(`Cantica: ${d}`)}}),c.commands.registerCommand("canticaScores.configureServer",async()=>{await c.commands.executeCommand("workbench.action.openSettings","canticaScores")})),n.subscriptions.push(c.workspace.onDidChangeConfiguration(r=>{r.affectsConfiguration("canticaScores")&&(e=w(),t=new l(e.serverUrl,e.authToken),c.commands.executeCommand("canticaScores.refreshAgents"))})),c.commands.executeCommand("canticaScores.refreshAgents")}function U(){}0&&(module.exports={activate,deactivate});
+// src/agents-provider.ts
+var vscode2 = __toESM(require("vscode"));
+var AgentItem = class extends vscode2.TreeItem {
+  constructor(label, collapsibleState, namespace, promptName) {
+    super(label, collapsibleState);
+    this.label = label;
+    this.collapsibleState = collapsibleState;
+    this.namespace = namespace;
+    this.promptName = promptName;
+    if (namespace !== void 0 && promptName !== void 0) {
+      this.description = namespace;
+      this.iconPath = new vscode2.ThemeIcon("robot");
+      this.contextValue = "agent";
+      this.tooltip = new vscode2.MarkdownString(
+        `**${promptName}** \`${namespace}\`
+
+Drag onto the workflow canvas or click to open in browser.`,
+        true
+      );
+      this.command = {
+        command: "canticaScores.openPanel",
+        title: "Open Workflow Canvas",
+        arguments: []
+      };
+    } else {
+      this.iconPath = new vscode2.ThemeIcon("symbol-namespace");
+      this.contextValue = "namespace";
+    }
+  }
+};
+var AgentsProvider = class {
+  _onDidChangeTreeData = new vscode2.EventEmitter();
+  onDidChangeTreeData = this._onDidChangeTreeData.event;
+  namespaces = [];
+  promptsByNamespace = /* @__PURE__ */ new Map();
+  errorMessage;
+  update(namespaces, prompts) {
+    this.namespaces = namespaces;
+    this.errorMessage = void 0;
+    this.promptsByNamespace.clear();
+    for (const prompt of prompts) {
+      const list = this.promptsByNamespace.get(prompt.namespace) ?? [];
+      list.push(prompt);
+      this.promptsByNamespace.set(prompt.namespace, list);
+    }
+    this._onDidChangeTreeData.fire();
+  }
+  setError(message) {
+    this.errorMessage = message;
+    this._onDidChangeTreeData.fire();
+  }
+  refresh() {
+    this._onDidChangeTreeData.fire();
+  }
+  getTreeItem(element) {
+    return element;
+  }
+  getChildren(element) {
+    if (this.errorMessage) {
+      const item = new AgentItem(
+        `Error: ${this.errorMessage}`,
+        vscode2.TreeItemCollapsibleState.None
+      );
+      item.iconPath = new vscode2.ThemeIcon("warning");
+      return [item];
+    }
+    if (!element) {
+      if (this.namespaces.length === 0) {
+        const item = new AgentItem("No actors loaded", vscode2.TreeItemCollapsibleState.None);
+        item.iconPath = new vscode2.ThemeIcon("info");
+        return [item];
+      }
+      return this.namespaces.map(
+        (ns) => new AgentItem(
+          ns.name,
+          vscode2.TreeItemCollapsibleState.Collapsed,
+          ns.name,
+          void 0
+        )
+      );
+    }
+    const prompts = this.promptsByNamespace.get(element.label) ?? [];
+    return prompts.map(
+      (p) => new AgentItem(
+        p.name,
+        vscode2.TreeItemCollapsibleState.None,
+        element.label,
+        p.name
+      )
+    );
+  }
+};
+
+// src/cantica-client.ts
+var CanticaClient = class {
+  baseUrl;
+  authToken;
+  constructor(baseUrl, authToken) {
+    this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.authToken = authToken;
+  }
+  buildHeaders() {
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    };
+    if (this.authToken) {
+      headers["Authorization"] = `Bearer ${this.authToken}`;
+    }
+    return headers;
+  }
+  async fetchNamespaces() {
+    const url = `${this.baseUrl}/v1/namespaces`;
+    const response = await fetch(url, { headers: this.buildHeaders() });
+    if (!response.ok) {
+      throw new Error(
+        `Cantica server error fetching namespaces: ${response.status} ${response.statusText}`
+      );
+    }
+    return response.json();
+  }
+  async fetchPrompts() {
+    const url = `${this.baseUrl}/v1/prompts`;
+    const response = await fetch(url, { headers: this.buildHeaders() });
+    if (!response.ok) {
+      throw new Error(
+        `Cantica server error fetching prompts: ${response.status} ${response.statusText}`
+      );
+    }
+    return response.json();
+  }
+  /** Health-check: resolves to true if the server is reachable. */
+  async ping() {
+    try {
+      const response = await fetch(`${this.baseUrl}/health`, {
+        headers: this.buildHeaders(),
+        signal: AbortSignal.timeout(5e3)
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+};
+
+// src/studioManager.ts
+var child_process = __toESM(require("node:child_process"));
+var os = __toESM(require("node:os"));
+var path = __toESM(require("node:path"));
+var vscode3 = __toESM(require("vscode"));
+var IMAGE = "cantica-studio-api:latest";
+var CONTAINER = "cantica-studio-api";
+var INTERNAL_PORT = 8043;
+var StudioManager = class _StudioManager {
+  outputChannel;
+  constructor() {
+    this.outputChannel = vscode3.window.createOutputChannel("Cantica Studio");
+  }
+  dispose() {
+    this.outputChannel.dispose();
+  }
+  /** Resolved canticaHome from settings or OS default. */
+  static canticaHome() {
+    const cfg = vscode3.workspace.getConfiguration("canticaScores");
+    const configured = cfg.get("canticaHome") ?? "";
+    return configured || path.join(os.homedir(), ".cantica");
+  }
+  /** Port for the local studio API (from settings or default). */
+  static studioPort() {
+    const cfg = vscode3.workspace.getConfiguration("canticaScores");
+    return cfg.get("studioPort") ?? INTERNAL_PORT;
+  }
+  /** URL for the local studio API. */
+  static studioUrl() {
+    return `http://localhost:${_StudioManager.studioPort()}`;
+  }
+  /** Returns true if Docker is available on PATH. */
+  async isDockerAvailable() {
+    return new Promise((resolve) => {
+      child_process.exec("docker info", { timeout: 5e3 }, (err) => resolve(!err));
+    });
+  }
+  /** Returns true if the container is currently running. */
+  async isRunning() {
+    return new Promise((resolve) => {
+      child_process.exec(
+        `docker inspect --format "{{.State.Running}}" ${CONTAINER}`,
+        { timeout: 5e3 },
+        (err, stdout) => resolve(!err && stdout.trim() === "true")
+      );
+    });
+  }
+  /** Returns true if the image exists locally. */
+  async imageExists() {
+    return new Promise((resolve) => {
+      child_process.exec(
+        `docker image inspect ${IMAGE}`,
+        { timeout: 5e3 },
+        (err) => resolve(!err)
+      );
+    });
+  }
+  /** Pull the image from the registry. */
+  async pullImage(progress) {
+    return new Promise((resolve, reject) => {
+      progress.report({ message: `Pulling ${IMAGE}\u2026` });
+      this.outputChannel.appendLine(`[studio] Pulling ${IMAGE}`);
+      const proc = child_process.spawn("docker", ["pull", IMAGE], { stdio: "pipe" });
+      proc.stdout.on("data", (d) => this.outputChannel.append(d.toString()));
+      proc.stderr.on("data", (d) => this.outputChannel.append(d.toString()));
+      proc.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`docker pull exited with code ${code}`));
+        }
+      });
+    });
+  }
+  /** Start the container. Assumes the image is present. */
+  async start(progress) {
+    const port = _StudioManager.studioPort();
+    const home = _StudioManager.canticaHome();
+    await new Promise((resolve) => {
+      child_process.exec(`docker rm -f ${CONTAINER}`, { timeout: 5e3 }, () => resolve());
+    });
+    progress.report({ message: "Starting Cantica Studio API container\u2026" });
+    this.outputChannel.appendLine(`[studio] Starting container \u2014 home=${home} port=${port}`);
+    const args = [
+      "run",
+      "-d",
+      "--name",
+      CONTAINER,
+      "--restart",
+      "unless-stopped",
+      "-p",
+      `${port}:${INTERNAL_PORT}`,
+      "-v",
+      `${home}:/cantica-home`,
+      "-e",
+      `CANTICA_HOME=/cantica-home`,
+      "-e",
+      `CANTICA_PORT=${INTERNAL_PORT}`,
+      IMAGE
+    ];
+    await new Promise((resolve, reject) => {
+      child_process.execFile("docker", args, { timeout: 15e3 }, (err, stdout, stderr) => {
+        if (err) {
+          this.outputChannel.appendLine(`[studio] start error: ${stderr}`);
+          reject(new Error(`Failed to start container: ${stderr || err.message}`));
+        } else {
+          this.outputChannel.appendLine(`[studio] Container started: ${stdout.trim()}`);
+          resolve();
+        }
+      });
+    });
+  }
+  /** Stop (and remove) the container. */
+  async stop() {
+    return new Promise((resolve) => {
+      this.outputChannel.appendLine("[studio] Stopping container");
+      child_process.exec(`docker rm -f ${CONTAINER}`, { timeout: 1e4 }, () => resolve());
+    });
+  }
+  /**
+   * Poll the health endpoint until it responds ok or timeout expires.
+   * Returns true when healthy, false on timeout.
+   */
+  async waitUntilHealthy(timeoutMs = 3e4, intervalMs = 1e3) {
+    const url = `${_StudioManager.studioUrl()}/health`;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(2e3) });
+        if (res.ok) return true;
+      } catch {
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    return false;
+  }
+  /**
+   * Ensure the local studio API is running.
+   * Shows progress UI and handles image pulling if needed.
+   * Returns the local URL if successful, or undefined on failure.
+   */
+  async ensureRunning() {
+    if (!await this.isDockerAvailable()) {
+      void vscode3.window.showErrorMessage(
+        "Docker is required for the local Cantica Studio. Install Docker Desktop and try again.",
+        "Get Docker"
+      ).then((choice) => {
+        if (choice === "Get Docker") {
+          void vscode3.env.openExternal(vscode3.Uri.parse("https://www.docker.com/products/docker-desktop/"));
+        }
+      });
+      return void 0;
+    }
+    if (await this.isRunning()) {
+      return _StudioManager.studioUrl();
+    }
+    return vscode3.window.withProgress(
+      {
+        location: vscode3.ProgressLocation.Notification,
+        title: "Cantica Studio",
+        cancellable: false
+      },
+      async (progress) => {
+        try {
+          if (!await this.imageExists()) {
+            await this.pullImage(progress);
+          }
+          await this.start(progress);
+          progress.report({ message: "Waiting for API to become ready\u2026" });
+          const healthy = await this.waitUntilHealthy();
+          if (!healthy) {
+            this.outputChannel.show(true);
+            void vscode3.window.showErrorMessage(
+              "Cantica Studio API did not become healthy in time. See Output panel."
+            );
+            return void 0;
+          }
+          return _StudioManager.studioUrl();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.outputChannel.appendLine(`[studio] Error: ${message}`);
+          this.outputChannel.show(true);
+          void vscode3.window.showErrorMessage(`Cantica Studio: ${message}`);
+          return void 0;
+        }
+      }
+    );
+  }
+};
+
+// src/extension.ts
+var LOCAL_STUDIO_URL = "http://localhost:8043";
+function readSettings() {
+  const cfg = vscode4.workspace.getConfiguration("canticaScores");
+  return {
+    serverUrl: cfg.get("serverUrl") ?? LOCAL_STUDIO_URL,
+    authToken: cfg.get("authToken") ?? "",
+    explorerSide: cfg.get("explorerSide") ?? "left"
+  };
+}
+function isLocalStudio(url) {
+  return url.startsWith("http://localhost:8043") || url.startsWith("http://127.0.0.1:8043");
+}
+function activate(context) {
+  let settings = readSettings();
+  let client = new CanticaClient(settings.serverUrl, settings.authToken);
+  const provider = new AgentsProvider();
+  const studio = new StudioManager();
+  context.subscriptions.push(studio);
+  const treeView = vscode4.window.createTreeView("canticaScores.agentsView", {
+    treeDataProvider: provider,
+    showCollapseAll: true
+  });
+  context.subscriptions.push(treeView);
+  async function ensureLocalStudio() {
+    const url = await studio.ensureRunning();
+    if (url) {
+      const cfg = vscode4.workspace.getConfiguration("canticaScores");
+      await cfg.update("serverUrl", url, vscode4.ConfigurationTarget.Global);
+    }
+    return url;
+  }
+  context.subscriptions.push(
+    vscode4.commands.registerCommand("canticaScores.openPanel", () => {
+      const panel = AgentsPanel.show(context, provider, client, settings);
+      void panel.fetchAndPush();
+    }),
+    vscode4.commands.registerCommand("canticaScores.refreshAgents", async () => {
+      try {
+        const [namespaces, prompts] = await Promise.all([
+          client.fetchNamespaces(),
+          client.fetchPrompts()
+        ]);
+        provider.update(namespaces, prompts);
+        void vscode4.window.showInformationMessage(
+          `Loaded ${prompts.length} AI actors from ${settings.serverUrl}`
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        provider.setError(message);
+        void vscode4.window.showErrorMessage(`Cantica: ${message}`);
+      }
+    }),
+    vscode4.commands.registerCommand("canticaScores.configureServer", async () => {
+      await vscode4.commands.executeCommand("workbench.action.openSettings", "canticaScores");
+    }),
+    vscode4.commands.registerCommand("canticaScores.startLocalStudio", async () => {
+      const url = await ensureLocalStudio();
+      if (url) {
+        client = new CanticaClient(url, "");
+        void vscode4.commands.executeCommand("canticaScores.refreshAgents");
+      }
+    }),
+    vscode4.commands.registerCommand("canticaScores.stopLocalStudio", async () => {
+      await studio.stop();
+      void vscode4.window.showInformationMessage("Cantica Studio API stopped.");
+    })
+  );
+  context.subscriptions.push(
+    vscode4.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("canticaScores")) {
+        settings = readSettings();
+        client = new CanticaClient(settings.serverUrl, settings.authToken);
+        void vscode4.commands.executeCommand("canticaScores.refreshAgents");
+      }
+    })
+  );
+  async function initialLoad() {
+    const autoStart = vscode4.workspace.getConfiguration("canticaScores").get("autoStartStudio") ?? true;
+    if (autoStart && isLocalStudio(settings.serverUrl)) {
+      const url = await studio.ensureRunning();
+      if (url) {
+        settings = readSettings();
+        client = new CanticaClient(settings.serverUrl, settings.authToken);
+      }
+    }
+    void vscode4.commands.executeCommand("canticaScores.refreshAgents");
+  }
+  void initialLoad();
+}
+function deactivate() {
+}
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  activate,
+  deactivate
+});
+//# sourceMappingURL=extension.js.map

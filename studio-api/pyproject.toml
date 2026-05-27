@@ -1,0 +1,33 @@
+[project]
+name = "cantica-studio-api"
+version = "0.1.0"
+description = "Lightweight local Cantica API for the Cantica Studio VSCode extension"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    # cantica-api is installed from the sibling repo at build/dev time
+]
+
+[project.scripts]
+cantica-studio = "cantica_studio_api.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cantica_studio_api"]
+
+[tool.uv.sources]
+# Local development: cantica-api is at ../../../cantica-api
+# In Docker the package is installed from a copied wheel.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4"]

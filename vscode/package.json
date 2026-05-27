@@ -37,7 +37,7 @@
     "viewsWelcome": [
       {
         "view": "canticaScores.agentsView",
-        "contents": "No Cantica server configured.\n[Configure Server](command:canticaScores.configureServer)",
+        "contents": "Start a local Cantica Studio API (Docker required).\n[Start Local Studio](command:canticaScores.startLocalStudio)\nOr connect to an existing server.\n[Configure Server](command:canticaScores.configureServer)",
         "when": "!canticaScores.hasAgents"
       }
     ],
@@ -59,6 +59,18 @@
         "title": "Configure Cantica Server",
         "category": "Cantica Scores",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "canticaScores.startLocalStudio",
+        "title": "Start Local Studio API",
+        "category": "Cantica Scores",
+        "icon": "$(play)"
+      },
+      {
+        "command": "canticaScores.stopLocalStudio",
+        "title": "Stop Local Studio API",
+        "category": "Cantica Scores",
+        "icon": "$(debug-stop)"
       }
     ],
     "menus": {
@@ -77,6 +89,16 @@
           "command": "canticaScores.configureServer",
           "when": "view == canticaScores.agentsView",
           "group": "navigation@3"
+        },
+        {
+          "command": "canticaScores.startLocalStudio",
+          "when": "view == canticaScores.agentsView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "canticaScores.stopLocalStudio",
+          "when": "view == canticaScores.agentsView",
+          "group": "navigation@5"
         }
       ]
     },
@@ -104,6 +126,27 @@
           "markdownDescription": "Side of the workflow canvas where the AI Actors explorer panel is docked.",
           "scope": "window",
           "order": 3
+        },
+        "canticaScores.canticaHome": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the Cantica home directory (vault, templates). Defaults to `~/.cantica` when empty.",
+          "scope": "machine-overridable",
+          "order": 4
+        },
+        "canticaScores.studioPort": {
+          "type": "number",
+          "default": 8043,
+          "markdownDescription": "Local port for the Cantica Studio API container.",
+          "scope": "machine-overridable",
+          "order": 5
+        },
+        "canticaScores.autoStartStudio": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Automatically start the local Cantica Studio API container when the extension activates.",
+          "scope": "machine-overridable",
+          "order": 6
         }
       }
     }

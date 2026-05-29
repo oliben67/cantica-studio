@@ -1,3 +1,5 @@
+"""v1 API router — wires graph, prompts, and runtime sub-routers."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter

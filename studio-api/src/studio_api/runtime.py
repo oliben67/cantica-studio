@@ -116,7 +116,10 @@ class ActorRuntime:
         ref = self._refs.pop(name, None)
         if ref is None:
             raise KeyError(f"Actor {name!r} is not running")
-        self._scheduler.remove_job(f"cron-{name}", jobstore=None)  # ignore if absent
+        try:
+            self._scheduler.remove_job(f"cron-{name}")
+        except Exception:
+            pass  # actor had no cron jobs
         try:
             ref.stop()
         except Exception:

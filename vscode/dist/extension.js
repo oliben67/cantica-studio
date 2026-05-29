@@ -36,13 +36,39 @@ __export(extension_exports, {
 module.exports = __toCommonJS(extension_exports);
 var vscode4 = __toESM(require("vscode"));
 
-// src/agents-panel.ts
+// src/actors-panel.ts
 var vscode = __toESM(require("vscode"));
-var AgentsPanel = class _AgentsPanel {
-  constructor(panel, context, provider, client, settings) {
-    this.provider = provider;
-    this.client = client;
+var ActorsPanel = class _ActorsPanel {
+  static viewType = "canticaScores.panel";
+  static current;
+  panel;
+  disposables = [];
+  settings;
+  client;
+  fileSaveWatcher;
+  static show(context, client, settings) {
+    if (_ActorsPanel.current !== void 0) {
+      _ActorsPanel.current.panel.reveal(vscode.ViewColumn.Beside, true);
+      _ActorsPanel.current.client = client;
+      _ActorsPanel.current.settings = settings;
+      return _ActorsPanel.current;
+    }
+    const panel = vscode.window.createWebviewPanel(
+      _ActorsPanel.viewType,
+      "Cantica Studio",
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+      {
+        enableScripts: true,
+        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "dist", "webview")],
+        retainContextWhenHidden: true
+      }
+    );
+    _ActorsPanel.current = new _ActorsPanel(panel, context, client, settings);
+    return _ActorsPanel.current;
+  }
+  constructor(panel, context, client, settings) {
     this.panel = panel;
+    this.client = client;
     this.settings = settings;
     this.panel.webview.html = this.buildHtml(context);
     this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "icons", "activitybar.svg");
@@ -53,40 +79,62 @@ var AgentsPanel = class _AgentsPanel {
       this.disposables
     );
   }
-  static viewType = "canticaScores.panel";
-  static current;
-  panel;
-  disposables = [];
-  settings;
-  static show(context, provider, client, settings) {
-    if (_AgentsPanel.current !== void 0) {
-      _AgentsPanel.current.panel.reveal(vscode.ViewColumn.Beside, true);
-      return _AgentsPanel.current;
-    }
-    const panel = vscode.window.createWebviewPanel(
-      _AgentsPanel.viewType,
-      "Cantica Scores",
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
-      {
-        enableScripts: true,
-        localResourceRoots: [
-          vscode.Uri.joinPath(context.extensionUri, "dist", "webview")
-        ],
-        retainContextWhenHidden: true
-      }
-    );
-    _AgentsPanel.current = new _AgentsPanel(panel, context, provider, client, settings);
-    return _AgentsPanel.current;
-  }
   async handleMessage(msg) {
     if (typeof msg !== "object" || msg === null) return;
     const raw = msg;
     switch (raw["type"]) {
       case "ready":
-        await this.pushAll();
+        await this.pushSettings();
+        await this.pushGraph();
+        await this.pushPrompts();
         break;
-      case "refresh":
-        await this.fetchAndPush();
+      case "saveGraph": {
+        const graph = raw["graph"];
+        try {
+          await this.client.saveGraph(graph);
+          await this.registerFileSaveWatcher(graph);
+        } catch (err) {
+          void vscode.window.showErrorMessage(`Save failed: ${String(err)}`);
+        }
+        break;
+      }
+      case "addActor":
+        break;
+      case "runActor": {
+        const name = raw["name"];
+        const instruction = raw["instruction"];
+        try {
+          const output = await this.client.instructActor(name, instruction);
+          await this.post({ type: "actorOutput", name, output });
+        } catch (err) {
+          await this.post({ type: "error", message: String(err) });
+        }
+        break;
+      }
+      case "fireEvent": {
+        const name = raw["name"];
+        const eventName = raw["eventName"];
+        const context = raw["context"] ?? "";
+        try {
+          const output = await this.client.fireEvent(name, eventName, context);
+          await this.post({ type: "actorOutput", name, output });
+        } catch (err) {
+          await this.post({ type: "error", message: String(err) });
+        }
+        break;
+      }
+      case "stopActor": {
+        const name = raw["name"];
+        try {
+          await this.client.stopActor(name);
+          await this.post({ type: "actorStatus", name, running: false });
+        } catch (err) {
+          await this.post({ type: "error", message: String(err) });
+        }
+        break;
+      }
+      case "refreshPrompts":
+        await this.pushPrompts();
         break;
       case "explorerSideChanged": {
         const side = raw["side"];
@@ -95,57 +143,61 @@ var AgentsPanel = class _AgentsPanel {
         }
         break;
       }
-      case "openPrompt": {
-        const ns = raw["namespace"];
-        const name = raw["name"];
-        if (typeof ns === "string" && typeof name === "string") {
-          const url = `${this.settings.serverUrl.replace(/\/$/, "")}/v1/prompts/${encodeURIComponent(ns)}/${encodeURIComponent(name)}`;
-          await vscode.env.openExternal(vscode.Uri.parse(url));
-        }
-        break;
-      }
-      case "saveWorkflow":
-        await vscode.window.showInformationMessage(
-          "Workflow saved (in-memory). Persistence coming soon."
-        );
-        break;
     }
   }
-  async fetchAndPush() {
-    try {
-      const [namespaces, prompts] = await Promise.all([
-        this.client.fetchNamespaces(),
-        this.client.fetchPrompts()
-      ]);
-      this.provider.update(namespaces, prompts);
-      const msg = { type: "updateAgents", namespaces, prompts };
-      await this.panel.webview.postMessage(msg);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.provider.setError(message);
-      const msg = { type: "error", message };
-      await this.panel.webview.postMessage(msg);
+  async pushGraph() {
+    const graph = await this.client.loadGraph();
+    if (graph) {
+      await this.post({ type: "loadGraph", graph });
+      await this.registerFileSaveWatcher(graph);
     }
   }
-  async pushAll() {
-    const settingsMsg = { type: "updateSettings", settings: this.settings };
-    await this.panel.webview.postMessage(settingsMsg);
-    await this.fetchAndPush();
+  async pushPrompts() {
+    const prompts = await this.client.fetchPrompts(this.settings.servers);
+    await this.post({ type: "updatePrompts", prompts });
   }
-  updateSettings(settings) {
+  async pushSettings() {
+    await this.post({ type: "updateSettings", settings: this.settings });
+  }
+  updateSettings(settings, client) {
     this.settings = settings;
-    const msg = { type: "updateSettings", settings };
-    void this.panel.webview.postMessage(msg);
+    this.client = client;
+    void this.pushSettings();
+    void this.pushPrompts();
+  }
+  async registerFileSaveWatcher(graph) {
+    this.fileSaveWatcher?.dispose();
+    const patterns = graph.actors.flatMap((a) => a.promptEvents).filter((e) => !!e.filePattern).map((e) => e.filePattern);
+    if (patterns.length === 0) return;
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      `{${patterns.join(",")}}`
+    );
+    watcher.onDidChange((uri) => {
+      for (const actor of graph.actors) {
+        for (const evt of actor.promptEvents) {
+          if (evt.filePattern && vscode.languages.match({ pattern: evt.filePattern }, { uri, languageId: "" }) !== 0) {
+            void this.client.fireEvent(actor.name, evt.name, uri.fsPath).then((output) => {
+              void this.post({ type: "actorOutput", name: actor.name, output });
+            });
+          }
+        }
+      }
+    });
+    this.fileSaveWatcher = watcher;
+    this.disposables.push(watcher);
+  }
+  async post(msg) {
+    await this.panel.webview.postMessage(msg);
   }
   buildHtml(context) {
-    const webview = this.panel.webview;
-    const scriptUri = webview.asWebviewUri(
+    const wv = this.panel.webview;
+    const scriptUri = wv.asWebviewUri(
       vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "index.js")
     );
-    const styleUri = webview.asWebviewUri(
+    const styleUri = wv.asWebviewUri(
       vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "index.css")
     );
-    const nonce = generateNonce();
+    const nonce = _nonce();
     return (
       /* html */
       `<!DOCTYPE html>
@@ -155,11 +207,11 @@ var AgentsPanel = class _AgentsPanel {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none';
-                 style-src ${webview.cspSource} 'unsafe-inline';
+                 style-src ${wv.cspSource} 'unsafe-inline';
                  script-src 'nonce-${nonce}';
-                 img-src ${webview.cspSource} data:;" />
+                 img-src ${wv.cspSource} data:;" />
   <link rel="stylesheet" href="${styleUri}" />
-  <title>Cantica Scores</title>
+  <title>Cantica Studio</title>
 </head>
 <body>
   <div id="root"></div>
@@ -169,18 +221,16 @@ var AgentsPanel = class _AgentsPanel {
     );
   }
   dispose() {
-    _AgentsPanel.current = void 0;
+    _ActorsPanel.current = void 0;
+    this.fileSaveWatcher?.dispose();
     this.panel.dispose();
     for (const d of this.disposables) d.dispose();
     this.disposables.length = 0;
   }
 };
-function generateNonce() {
+function _nonce() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  return Array.from({ length: 32 }, () => {
-    const idx = Math.floor(Math.random() * chars.length);
-    return chars[idx] ?? "A";
-  }).join("");
+  return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)] ?? "A").join("");
 }
 
 // src/agents-provider.ts
@@ -276,57 +326,223 @@ var AgentsProvider = class {
   }
 };
 
-// src/cantica-client.ts
-var CanticaClient = class {
-  baseUrl;
-  authToken;
-  constructor(baseUrl, authToken) {
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.authToken = authToken;
+// src/studio-client.ts
+function studioUrl(path2, port) {
+  return `http://localhost:${port}${path2}`;
+}
+function headers(token) {
+  const h = { "Content-Type": "application/json", Accept: "application/json" };
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  return h;
+}
+var StudioClient = class {
+  port;
+  constructor(port = 8043) {
+    this.port = port;
   }
-  buildHeaders() {
-    const headers = {
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    };
-    if (this.authToken) {
-      headers["Authorization"] = `Bearer ${this.authToken}`;
-    }
-    return headers;
+  url(path2) {
+    return studioUrl(path2, this.port);
   }
-  async fetchNamespaces() {
-    const url = `${this.baseUrl}/v1/namespaces`;
-    const response = await fetch(url, { headers: this.buildHeaders() });
-    if (!response.ok) {
-      throw new Error(
-        `Cantica server error fetching namespaces: ${response.status} ${response.statusText}`
-      );
-    }
-    return response.json();
-  }
-  async fetchPrompts() {
-    const url = `${this.baseUrl}/v1/prompts`;
-    const response = await fetch(url, { headers: this.buildHeaders() });
-    if (!response.ok) {
-      throw new Error(
-        `Cantica server error fetching prompts: ${response.status} ${response.statusText}`
-      );
-    }
-    return response.json();
-  }
-  /** Health-check: resolves to true if the server is reachable. */
   async ping() {
     try {
-      const response = await fetch(`${this.baseUrl}/health`, {
-        headers: this.buildHeaders(),
-        signal: AbortSignal.timeout(5e3)
-      });
-      return response.ok;
+      const r = await fetch(this.url("/health"), { signal: AbortSignal.timeout(4e3) });
+      return r.ok;
     } catch {
       return false;
     }
   }
+  // ── Graph ────────────────────────────────────────────────────────────────────
+  async loadGraph() {
+    try {
+      const r = await fetch(this.url("/v1/graph"));
+      if (!r.ok) return null;
+      const raw = await r.json();
+      return _parseGraph(raw);
+    } catch {
+      return null;
+    }
+  }
+  async saveGraph(graph) {
+    const r = await fetch(this.url("/v1/graph"), {
+      method: "PUT",
+      headers: headers(),
+      body: JSON.stringify({ data: _serializeGraph(graph) })
+    });
+    if (!r.ok) throw new Error(`Save failed: ${r.status}`);
+  }
+  // ── Prompts ──────────────────────────────────────────────────────────────────
+  async fetchPrompts(servers) {
+    try {
+      const r = await fetch(this.url("/v1/prompts"), { signal: AbortSignal.timeout(8e3) });
+      if (!r.ok) return [];
+      return r.json();
+    } catch {
+      return [];
+    }
+  }
+  // ── Runtime ──────────────────────────────────────────────────────────────────
+  async listRunning() {
+    const r = await fetch(this.url("/v1/runtime/actors"));
+    if (!r.ok) return [];
+    return r.json();
+  }
+  async startActor(def) {
+    const body = {
+      name: def.name,
+      define_prompt: def.definePrompt.uri ?? def.definePrompt.content ?? "",
+      provider: def.provider,
+      model: def.model,
+      max_tokens: def.maxTokens,
+      max_history: def.maxHistory,
+      prompt_events: def.promptEvents.map((e) => ({
+        name: e.name,
+        prompt: e.prompt.uri ?? e.prompt.content ?? "",
+        filePattern: e.filePattern
+      })),
+      cron_jobs: def.cronJobs.map((c) => ({
+        schedule: c.schedule,
+        prompt: c.prompt.uri ?? c.prompt.content ?? ""
+      })),
+      outbox: {}
+    };
+    const r = await fetch(this.url("/v1/runtime/actors"), {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(`Failed to start actor: ${r.status}`);
+  }
+  async stopActor(name) {
+    await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}`), { method: "DELETE" });
+  }
+  async instructActor(name, instruction) {
+    const r = await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}/instruct`), {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ instruction })
+    });
+    if (!r.ok) throw new Error(`Instruct failed: ${r.status}`);
+    const data = await r.json();
+    return data.output;
+  }
+  async fireEvent(name, eventName, context = "") {
+    const r = await fetch(
+      this.url(`/v1/runtime/actors/${encodeURIComponent(name)}/event/${encodeURIComponent(eventName)}`),
+      { method: "POST", headers: headers(), body: JSON.stringify({ context }) }
+    );
+    if (!r.ok) throw new Error(`Fire event failed: ${r.status}`);
+    const data = await r.json();
+    return data.output;
+  }
 };
+function _parseGraph(raw) {
+  const actors = (raw["actors"] ?? []).map(_parseActor);
+  const edges = (raw["edges"] ?? []).map(_parseEdge);
+  return {
+    id: raw["@id"] ?? "urn:cantica:studio:graph:default",
+    name: raw["name"] ?? "Workflow",
+    actors,
+    edges
+  };
+}
+function _parseActor(r) {
+  const pos = r["position"] ?? {};
+  const events = (r["promptEvents"] ?? []).map((e) => {
+    const fp = e["filePattern"];
+    return {
+      name: e["name"] ?? "",
+      prompt: _parseRef(e["prompt"]),
+      ...fp ? { filePattern: fp } : {}
+    };
+  });
+  const crons = (r["cronJobs"] ?? []).map((c) => ({
+    schedule: c["schedule"] ?? "",
+    prompt: _parseRef(c["prompt"])
+  }));
+  return {
+    id: r["@id"] ?? "",
+    name: r["name"] ?? "",
+    definePrompt: _parseRef(r["definePrompt"]),
+    provider: r["provider"] ?? "claude",
+    model: r["model"] ?? "claude-sonnet-4-6",
+    maxTokens: r["maxTokens"] ?? 4096,
+    maxHistory: r["maxHistory"] ?? 10,
+    position: { x: pos.x ?? 0, y: pos.y ?? 0 },
+    promptEvents: events,
+    cronJobs: crons
+  };
+}
+function _parseEdge(r) {
+  const te = r["targetEvent"];
+  return {
+    id: r["@id"] ?? "",
+    from: r["from"] ?? "",
+    to: r["to"] ?? "",
+    ...te ? { targetEvent: te } : {},
+    prompt: _parseRef(r["prompt"]),
+    label: r["label"] ?? ""
+  };
+}
+function _parseRef(v) {
+  if (typeof v === "string") return v.startsWith("cantica://") ? { uri: v } : { content: v };
+  if (typeof v === "object" && v !== null) {
+    const o = v;
+    const uri = o["uri"];
+    const content = o["content"];
+    return { ...uri ? { uri } : {}, ...content ? { content } : {} };
+  }
+  return {};
+}
+function _serializeGraph(g) {
+  return {
+    "@context": { "@vocab": "https://cantica.dev/studio/", "schema": "http://schema.org/", "name": "schema:name" },
+    "@type": "ActorGraph",
+    "@id": g.id,
+    "name": g.name,
+    "actors": g.actors.map(_serializeActor),
+    "edges": g.edges.map(_serializeEdge)
+  };
+}
+function _serializeActor(a) {
+  return {
+    "@type": "AIActor",
+    "@id": a.id,
+    "name": a.name,
+    "definePrompt": _serializeRef(a.definePrompt),
+    "provider": a.provider,
+    "model": a.model,
+    "maxTokens": a.maxTokens,
+    "maxHistory": a.maxHistory,
+    "position": a.position,
+    "promptEvents": a.promptEvents.map((e) => ({
+      "@type": "PromptEvent",
+      "name": e.name,
+      "prompt": _serializeRef(e.prompt),
+      ...e.filePattern ? { "filePattern": e.filePattern } : {}
+    })),
+    "cronJobs": a.cronJobs.map((c) => ({
+      "@type": "CronJob",
+      "schedule": c.schedule,
+      "prompt": _serializeRef(c.prompt)
+    }))
+  };
+}
+function _serializeEdge(e) {
+  return {
+    "@type": "ActorMessage",
+    "@id": e.id,
+    "from": e.from,
+    "to": e.to,
+    ...e.targetEvent ? { "targetEvent": e.targetEvent } : { "targetEvent": null },
+    "prompt": _serializeRef(e.prompt),
+    "label": e.label
+  };
+}
+function _serializeRef(r) {
+  if (r.uri) return r.uri;
+  if (r.content) return r.content;
+  return {};
+}
 
 // src/studioManager.ts
 var child_process = __toESM(require("node:child_process"));
@@ -522,10 +738,22 @@ var StudioManager = class _StudioManager {
 var LOCAL_STUDIO_URL = "http://localhost:8043";
 function readSettings() {
   const cfg = vscode4.workspace.getConfiguration("canticaScores");
+  const serverUrl = cfg.get("serverUrl") ?? LOCAL_STUDIO_URL;
+  const authToken = cfg.get("authToken") ?? "";
+  const rawServers = cfg.get("servers") ?? [];
+  const servers = [
+    { url: serverUrl, authToken },
+    ...rawServers.filter((s) => s.url && s.url !== serverUrl).map((s) => ({ url: s.url, authToken: s.authToken ?? "" }))
+  ];
   return {
-    serverUrl: cfg.get("serverUrl") ?? LOCAL_STUDIO_URL,
-    authToken: cfg.get("authToken") ?? "",
-    explorerSide: cfg.get("explorerSide") ?? "left"
+    servers,
+    serverUrl,
+    authToken,
+    explorerSide: cfg.get("explorerSide") ?? "left",
+    canticaHome: cfg.get("canticaHome") ?? "",
+    studioPort: cfg.get("studioPort") ?? 8043,
+    autoStartStudio: cfg.get("autoStartStudio") ?? true,
+    graphFile: cfg.get("graphFile") ?? ".vscode/actors.jsonld"
   };
 }
 function isLocalStudio(url) {
@@ -533,7 +761,7 @@ function isLocalStudio(url) {
 }
 function activate(context) {
   let settings = readSettings();
-  let client = new CanticaClient(settings.serverUrl, settings.authToken);
+  let client = new StudioClient(settings.studioPort);
   const provider = new AgentsProvider();
   const studio = new StudioManager();
   context.subscriptions.push(studio);
@@ -542,71 +770,57 @@ function activate(context) {
     showCollapseAll: true
   });
   context.subscriptions.push(treeView);
-  async function ensureLocalStudio() {
-    const url = await studio.ensureRunning();
-    if (url) {
-      const cfg = vscode4.workspace.getConfiguration("canticaScores");
-      await cfg.update("serverUrl", url, vscode4.ConfigurationTarget.Global);
-    }
-    return url;
-  }
   context.subscriptions.push(
     vscode4.commands.registerCommand("canticaScores.openPanel", () => {
-      const panel = AgentsPanel.show(context, provider, client, settings);
-      void panel.fetchAndPush();
+      const panel = ActorsPanel.show(context, client, settings);
+      void panel.pushGraph();
     }),
-    vscode4.commands.registerCommand("canticaScores.refreshAgents", async () => {
-      try {
-        const [namespaces, prompts] = await Promise.all([
-          client.fetchNamespaces(),
-          client.fetchPrompts()
-        ]);
-        provider.update(namespaces, prompts);
-        void vscode4.window.showInformationMessage(
-          `Loaded ${prompts.length} AI actors from ${settings.serverUrl}`
-        );
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        provider.setError(message);
-        void vscode4.window.showErrorMessage(`Cantica: ${message}`);
-      }
+    vscode4.commands.registerCommand("canticaScores.newActor", () => {
+      const panel = ActorsPanel.show(context, client, settings);
+      void panel.pushGraph().then(() => {
+        void panel["panel"]?.webview.postMessage({ type: "addActor" });
+      });
+    }),
+    vscode4.commands.registerCommand("canticaScores.saveGraph", async () => {
+      void vscode4.commands.executeCommand("canticaScores.openPanel");
+      void vscode4.window.showInformationMessage("Use the Save button in the Actor Studio canvas.");
+    }),
+    vscode4.commands.registerCommand("canticaScores.loadGraph", async () => {
+      const panel = ActorsPanel.show(context, client, settings);
+      await panel.pushGraph();
     }),
     vscode4.commands.registerCommand("canticaScores.configureServer", async () => {
       await vscode4.commands.executeCommand("workbench.action.openSettings", "canticaScores");
     }),
     vscode4.commands.registerCommand("canticaScores.startLocalStudio", async () => {
-      const url = await ensureLocalStudio();
+      const url = await studio.ensureRunning();
       if (url) {
-        client = new CanticaClient(url, "");
-        void vscode4.commands.executeCommand("canticaScores.refreshAgents");
+        settings = readSettings();
+        client = new StudioClient(settings.studioPort);
+        void vscode4.window.showInformationMessage(`Studio API running at ${url}`);
       }
     }),
     vscode4.commands.registerCommand("canticaScores.stopLocalStudio", async () => {
       await studio.stop();
-      void vscode4.window.showInformationMessage("Cantica Studio API stopped.");
+      void vscode4.window.showInformationMessage("Studio API stopped.");
     })
   );
   context.subscriptions.push(
     vscode4.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("canticaScores")) {
         settings = readSettings();
-        client = new CanticaClient(settings.serverUrl, settings.authToken);
-        void vscode4.commands.executeCommand("canticaScores.refreshAgents");
+        client = new StudioClient(settings.studioPort);
+        ActorsPanel["current"]?.updateSettings(settings, client);
       }
     })
   );
-  async function initialLoad() {
-    const autoStart = vscode4.workspace.getConfiguration("canticaScores").get("autoStartStudio") ?? true;
-    if (autoStart && isLocalStudio(settings.serverUrl)) {
-      const url = await studio.ensureRunning();
-      if (url) {
-        settings = readSettings();
-        client = new CanticaClient(settings.serverUrl, settings.authToken);
-      }
+  void (async () => {
+    if (settings.autoStartStudio && isLocalStudio(settings.serverUrl)) {
+      await studio.ensureRunning();
+      settings = readSettings();
+      client = new StudioClient(settings.studioPort);
     }
-    void vscode4.commands.executeCommand("canticaScores.refreshAgents");
-  }
-  void initialLoad();
+  })();
 }
 function deactivate() {
 }

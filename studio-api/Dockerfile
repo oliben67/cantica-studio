@@ -11,25 +11,26 @@ RUN pip install --no-cache-dir build && python -m build --wheel --outdir /dist
 FROM python:3.14-slim
 
 LABEL org.opencontainers.image.title="Cantica Studio API"
-LABEL org.opencontainers.image.description="Lightweight local prompt server for the Cantica Studio VSCode extension"
+LABEL org.opencontainers.image.description="AI Actor Studio — run actor-ai agents with MCP and Cantica prompt integration"
 LABEL org.opencontainers.image.source="https://github.com/oliben67/cantica"
 
 # Install the cantica library from the wheel built in stage 1
 COPY --from=cantica-wheel /dist /dist
 RUN pip install --no-cache-dir /dist/*.whl
 
-# Install studio-api
+# Install studio-api and its dependencies (actor-ai from PyPI, etc.)
 WORKDIR /app
 COPY cantica-studio/studio-api/pyproject.toml ./
 COPY cantica-studio/studio-api/src ./src
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e ".[actor-ai]" 2>/dev/null || pip install --no-cache-dir -e .
 
-ENV CANTICA_HOME=/cantica-home
-ENV CANTICA_HOST=0.0.0.0
-ENV CANTICA_PORT=8043
+ENV STUDIO_WORKSPACE=/workspace
+ENV STUDIO_HOST=0.0.0.0
+ENV STUDIO_PORT=8043
+ENV STUDIO_LOG_LEVEL=info
 
 EXPOSE 8043
 
-VOLUME ["/cantica-home"]
+VOLUME ["/workspace"]
 
-CMD ["cantica-studio"]
+CMD ["studio"]

@@ -1,23 +1,26 @@
 services:
-  cantica-studio-api:
+  studio-api:
     build:
       context: ../..        # repo root (cantica-studio/ lives under cantica-project/)
       dockerfile: cantica-studio/studio-api/Dockerfile
-    image: cantica-studio-api:latest
-    container_name: cantica-studio-api
+    image: studio-api:latest
+    container_name: studio-api
     restart: unless-stopped
     ports:
-      - "${CANTICA_PORT:-8043}:8043"
+      - "${STUDIO_PORT:-8043}:8043"
     volumes:
-      - "${CANTICA_HOME:-${HOME}/.cantica}:/cantica-home"
+      - "${STUDIO_WORKSPACE:-${PWD}}:/workspace"
     environment:
-      CANTICA_HOME: /cantica-home
-      CANTICA_HOST: 0.0.0.0
-      CANTICA_PORT: 8043
-      CANTICA_LOG_LEVEL: info
+      STUDIO_WORKSPACE: /workspace
+      STUDIO_HOST: 0.0.0.0
+      STUDIO_PORT: 8043
+      STUDIO_LOG_LEVEL: info
+      # JSON array of Cantica servers, e.g.:
+      # STUDIO_CANTICA_SERVERS: '[{"url":"http://host.docker.internal:8042","auth_token":""}]'
+      STUDIO_CANTICA_SERVERS: "${STUDIO_CANTICA_SERVERS:-[]}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8043/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s

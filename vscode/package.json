@@ -1,152 +1,102 @@
 {
   "name": "cantica-studio",
-  "displayName": "Cantica Scores",
-  "description": "Visual AI agent workflow builder backed by a Cantica prompt server",
-  "version": "0.1.0",
+  "displayName": "Cantica Studio",
+  "description": "AI Actor Studio — build, connect, and run actor-ai agents backed by Cantica prompts",
+  "version": "0.2.0",
   "publisher": "oliben67",
   "repository": {
     "type": "git",
     "url": "https://github.com/oliben67/cantica.git",
-    "directory": "cantica-ui/vscode"
+    "directory": "cantica-studio/vscode"
   },
-  "engines": {
-    "vscode": "^1.90.0"
-  },
+  "engines": { "vscode": "^1.90.0" },
   "categories": ["Other"],
   "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
-        {
-          "id": "cantica-studio",
-          "title": "Cantica Scores",
-          "icon": "icons/activitybar.svg"
-        }
+        { "id": "cantica-studio", "title": "Cantica Studio", "icon": "icons/activitybar.svg" }
       ]
     },
     "views": {
       "cantica-studio": [
-        {
-          "id": "canticaScores.agentsView",
-          "name": "AI Actors",
-          "icon": "icons/activitybar.svg"
-        }
+        { "id": "canticaScores.agentsView", "name": "AI Actors", "icon": "icons/activitybar.svg" }
       ]
     },
     "viewsWelcome": [
       {
         "view": "canticaScores.agentsView",
-        "contents": "Start a local Cantica Studio API (Docker required).\n[Start Local Studio](command:canticaScores.startLocalStudio)\nOr connect to an existing server.\n[Configure Server](command:canticaScores.configureServer)",
+        "contents": "Start the local Studio API (Docker required).\n[Start Studio API](command:canticaScores.startLocalStudio)\nOr connect to an existing server.\n[Configure](command:canticaScores.configureServer)",
         "when": "!canticaScores.hasAgents"
       }
     ],
     "commands": [
-      {
-        "command": "canticaScores.openPanel",
-        "title": "Open Workflow Canvas",
-        "category": "Cantica Scores",
-        "icon": "$(open-preview)"
-      },
-      {
-        "command": "canticaScores.refreshAgents",
-        "title": "Refresh AI Actors",
-        "category": "Cantica Scores",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "canticaScores.configureServer",
-        "title": "Configure Cantica Server",
-        "category": "Cantica Scores",
-        "icon": "$(settings-gear)"
-      },
-      {
-        "command": "canticaScores.startLocalStudio",
-        "title": "Start Local Studio API",
-        "category": "Cantica Scores",
-        "icon": "$(play)"
-      },
-      {
-        "command": "canticaScores.stopLocalStudio",
-        "title": "Stop Local Studio API",
-        "category": "Cantica Scores",
-        "icon": "$(debug-stop)"
-      }
+      { "command": "canticaScores.openPanel",        "title": "Open Actor Studio",   "category": "Cantica Studio", "icon": "$(open-preview)" },
+      { "command": "canticaScores.newActor",          "title": "Add AI Actor",        "category": "Cantica Studio", "icon": "$(add)" },
+      { "command": "canticaScores.saveGraph",         "title": "Save Actor Graph",    "category": "Cantica Studio", "icon": "$(save)" },
+      { "command": "canticaScores.loadGraph",         "title": "Reload Actor Graph",  "category": "Cantica Studio", "icon": "$(refresh)" },
+      { "command": "canticaScores.configureServer",   "title": "Configure Servers",   "category": "Cantica Studio", "icon": "$(settings-gear)" },
+      { "command": "canticaScores.startLocalStudio",  "title": "Start Studio API",    "category": "Cantica Studio", "icon": "$(play)" },
+      { "command": "canticaScores.stopLocalStudio",   "title": "Stop Studio API",     "category": "Cantica Studio", "icon": "$(debug-stop)" }
     ],
     "menus": {
       "view/title": [
-        {
-          "command": "canticaScores.refreshAgents",
-          "when": "view == canticaScores.agentsView",
-          "group": "navigation@1"
-        },
-        {
-          "command": "canticaScores.openPanel",
-          "when": "view == canticaScores.agentsView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "canticaScores.configureServer",
-          "when": "view == canticaScores.agentsView",
-          "group": "navigation@3"
-        },
-        {
-          "command": "canticaScores.startLocalStudio",
-          "when": "view == canticaScores.agentsView",
-          "group": "navigation@4"
-        },
-        {
-          "command": "canticaScores.stopLocalStudio",
-          "when": "view == canticaScores.agentsView",
-          "group": "navigation@5"
-        }
+        { "command": "canticaScores.openPanel",        "when": "view == canticaScores.agentsView", "group": "navigation@1" },
+        { "command": "canticaScores.newActor",         "when": "view == canticaScores.agentsView", "group": "navigation@2" },
+        { "command": "canticaScores.saveGraph",        "when": "view == canticaScores.agentsView", "group": "navigation@3" },
+        { "command": "canticaScores.configureServer",  "when": "view == canticaScores.agentsView", "group": "navigation@4" },
+        { "command": "canticaScores.startLocalStudio", "when": "view == canticaScores.agentsView", "group": "navigation@5" },
+        { "command": "canticaScores.stopLocalStudio",  "when": "view == canticaScores.agentsView", "group": "navigation@6" }
       ]
     },
     "configuration": {
-      "title": "Cantica Scores",
+      "title": "Cantica Studio",
       "properties": {
         "canticaScores.serverUrl": {
-          "type": "string",
-          "default": "http://localhost:8042",
-          "markdownDescription": "Base URL of the Cantica prompt server (e.g. `http://localhost:8042` or `https://my-cantica.example.com`). The extension will call `/v1/namespaces` and `/v1/prompts` on this host.",
-          "scope": "machine-overridable",
-          "order": 1
+          "type": "string", "default": "http://localhost:8042",
+          "markdownDescription": "Primary Cantica prompt server URL.",
+          "scope": "machine-overridable", "order": 1
+        },
+        "canticaScores.servers": {
+          "type": "array", "default": [],
+          "markdownDescription": "Additional Cantica servers: `[{\"url\": \"https://...\", \"authToken\": \"\"}]`.",
+          "items": {
+            "type": "object",
+            "properties": { "url": { "type": "string" }, "authToken": { "type": "string", "default": "" } },
+            "required": ["url"]
+          },
+          "scope": "machine-overridable", "order": 2
         },
         "canticaScores.authToken": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Optional Bearer token sent as `Authorization: Bearer <token>` when `CANTICA_AUTH_ENABLED=true` on the server.",
-          "scope": "machine-overridable",
-          "order": 2
+          "type": "string", "default": "",
+          "markdownDescription": "Bearer token for the primary Cantica server.",
+          "scope": "machine-overridable", "order": 3
         },
         "canticaScores.explorerSide": {
-          "type": "string",
-          "enum": ["left", "right"],
-          "default": "left",
-          "markdownDescription": "Side of the workflow canvas where the AI Actors explorer panel is docked.",
-          "scope": "window",
-          "order": 3
+          "type": "string", "enum": ["left", "right"], "default": "left",
+          "markdownDescription": "Side of the canvas where the prompt browser docks.",
+          "scope": "window", "order": 4
         },
         "canticaScores.canticaHome": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Path to the Cantica home directory (vault, templates). Defaults to `~/.cantica` when empty.",
-          "scope": "machine-overridable",
-          "order": 4
+          "type": "string", "default": "",
+          "markdownDescription": "Cantica home directory. Defaults to `~/.cantica`.",
+          "scope": "machine-overridable", "order": 5
         },
         "canticaScores.studioPort": {
-          "type": "number",
-          "default": 8043,
-          "markdownDescription": "Local port for the Cantica Studio API container.",
-          "scope": "machine-overridable",
-          "order": 5
+          "type": "number", "default": 8043,
+          "markdownDescription": "Local port for the Studio API container.",
+          "scope": "machine-overridable", "order": 6
         },
         "canticaScores.autoStartStudio": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Automatically start the local Cantica Studio API container when the extension activates.",
-          "scope": "machine-overridable",
-          "order": 6
+          "type": "boolean", "default": true,
+          "markdownDescription": "Auto-start the Studio API container on activation.",
+          "scope": "machine-overridable", "order": 7
+        },
+        "canticaScores.graphFile": {
+          "type": "string", "default": ".vscode/actors.jsonld",
+          "markdownDescription": "Workspace-relative path to the actor graph JSON-LD file.",
+          "scope": "resource", "order": 8
         }
       }
     }
@@ -171,6 +121,7 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "zustand": "^5.0.0"
   }
 }

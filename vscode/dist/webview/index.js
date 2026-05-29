@@ -1085,7 +1085,7 @@
             }
             return dispatcher.useContext(Context);
           }
-          function useState4(initialState) {
+          function useState3(initialState) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useState(initialState);
           }
@@ -1093,33 +1093,33 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useReducer(reducer, initialArg, init2);
           }
-          function useRef3(initialValue) {
+          function useRef2(initialValue) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useRef(initialValue);
           }
-          function useEffect3(create2, deps) {
+          function useEffect3(create3, deps) {
             var dispatcher = resolveDispatcher();
-            return dispatcher.useEffect(create2, deps);
+            return dispatcher.useEffect(create3, deps);
           }
-          function useInsertionEffect(create2, deps) {
+          function useInsertionEffect(create3, deps) {
             var dispatcher = resolveDispatcher();
-            return dispatcher.useInsertionEffect(create2, deps);
+            return dispatcher.useInsertionEffect(create3, deps);
           }
-          function useLayoutEffect2(create2, deps) {
+          function useLayoutEffect2(create3, deps) {
             var dispatcher = resolveDispatcher();
-            return dispatcher.useLayoutEffect(create2, deps);
+            return dispatcher.useLayoutEffect(create3, deps);
           }
-          function useCallback4(callback, deps) {
+          function useCallback3(callback, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useCallback(callback, deps);
           }
-          function useMemo3(create2, deps) {
+          function useMemo2(create3, deps) {
             var dispatcher = resolveDispatcher();
-            return dispatcher.useMemo(create2, deps);
+            return dispatcher.useMemo(create3, deps);
           }
-          function useImperativeHandle(ref, create2, deps) {
+          function useImperativeHandle(ref, create3, deps) {
             var dispatcher = resolveDispatcher();
-            return dispatcher.useImperativeHandle(ref, create2, deps);
+            return dispatcher.useImperativeHandle(ref, create3, deps);
           }
           function useDebugValue2(value, formatterFn) {
             {
@@ -1876,7 +1876,7 @@
           exports.memo = memo3;
           exports.startTransition = startTransition;
           exports.unstable_act = act;
-          exports.useCallback = useCallback4;
+          exports.useCallback = useCallback3;
           exports.useContext = useContext2;
           exports.useDebugValue = useDebugValue2;
           exports.useDeferredValue = useDeferredValue;
@@ -1885,10 +1885,10 @@
           exports.useImperativeHandle = useImperativeHandle;
           exports.useInsertionEffect = useInsertionEffect;
           exports.useLayoutEffect = useLayoutEffect2;
-          exports.useMemo = useMemo3;
+          exports.useMemo = useMemo2;
           exports.useReducer = useReducer;
-          exports.useRef = useRef3;
-          exports.useState = useState4;
+          exports.useRef = useRef2;
+          exports.useState = useState3;
           exports.useSyncExternalStore = useSyncExternalStore;
           exports.useTransition = useTransition;
           exports.version = ReactVersion;
@@ -2384,9 +2384,9 @@
           if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") {
             __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
           }
-          var React7 = require_react();
+          var React8 = require_react();
           var Scheduler = require_scheduler();
-          var ReactSharedInternals = React7.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React8.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           var suppressWarning = false;
           function setSuppressWarning(newSuppressWarning) {
             {
@@ -3993,7 +3993,7 @@
             {
               if (props.value == null) {
                 if (typeof props.children === "object" && props.children !== null) {
-                  React7.Children.forEach(props.children, function(child) {
+                  React8.Children.forEach(props.children, function(child) {
                     if (child == null) {
                       return;
                     }
@@ -13978,10 +13978,10 @@
           function rerenderState(initialState) {
             return rerenderReducer(basicStateReducer);
           }
-          function pushEffect(tag, create2, destroy, deps) {
+          function pushEffect(tag, create3, destroy, deps) {
             var effect = {
               tag,
-              create: create2,
+              create: create3,
               destroy,
               deps,
               // Circular
@@ -14019,13 +14019,13 @@
             var hook = updateWorkInProgressHook();
             return hook.memoizedState;
           }
-          function mountEffectImpl(fiberFlags, hookFlags, create2, deps) {
+          function mountEffectImpl(fiberFlags, hookFlags, create3, deps) {
             var hook = mountWorkInProgressHook();
             var nextDeps = deps === void 0 ? null : deps;
             currentlyRenderingFiber$1.flags |= fiberFlags;
-            hook.memoizedState = pushEffect(HasEffect | hookFlags, create2, void 0, nextDeps);
+            hook.memoizedState = pushEffect(HasEffect | hookFlags, create3, void 0, nextDeps);
           }
-          function updateEffectImpl(fiberFlags, hookFlags, create2, deps) {
+          function updateEffectImpl(fiberFlags, hookFlags, create3, deps) {
             var hook = updateWorkInProgressHook();
             var nextDeps = deps === void 0 ? null : deps;
             var destroy = void 0;
@@ -14035,31 +14035,31 @@
               if (nextDeps !== null) {
                 var prevDeps = prevEffect.deps;
                 if (areHookInputsEqual(nextDeps, prevDeps)) {
-                  hook.memoizedState = pushEffect(hookFlags, create2, destroy, nextDeps);
+                  hook.memoizedState = pushEffect(hookFlags, create3, destroy, nextDeps);
                   return;
                 }
               }
             }
             currentlyRenderingFiber$1.flags |= fiberFlags;
-            hook.memoizedState = pushEffect(HasEffect | hookFlags, create2, destroy, nextDeps);
+            hook.memoizedState = pushEffect(HasEffect | hookFlags, create3, destroy, nextDeps);
           }
-          function mountEffect(create2, deps) {
+          function mountEffect(create3, deps) {
             if ((currentlyRenderingFiber$1.mode & StrictEffectsMode) !== NoMode) {
-              return mountEffectImpl(MountPassiveDev | Passive | PassiveStatic, Passive$1, create2, deps);
+              return mountEffectImpl(MountPassiveDev | Passive | PassiveStatic, Passive$1, create3, deps);
             } else {
-              return mountEffectImpl(Passive | PassiveStatic, Passive$1, create2, deps);
+              return mountEffectImpl(Passive | PassiveStatic, Passive$1, create3, deps);
             }
           }
-          function updateEffect(create2, deps) {
-            return updateEffectImpl(Passive, Passive$1, create2, deps);
+          function updateEffect(create3, deps) {
+            return updateEffectImpl(Passive, Passive$1, create3, deps);
           }
-          function mountInsertionEffect(create2, deps) {
-            return mountEffectImpl(Update, Insertion, create2, deps);
+          function mountInsertionEffect(create3, deps) {
+            return mountEffectImpl(Update, Insertion, create3, deps);
           }
-          function updateInsertionEffect(create2, deps) {
-            return updateEffectImpl(Update, Insertion, create2, deps);
+          function updateInsertionEffect(create3, deps) {
+            return updateEffectImpl(Update, Insertion, create3, deps);
           }
-          function mountLayoutEffect(create2, deps) {
+          function mountLayoutEffect(create3, deps) {
             var fiberFlags = Update;
             {
               fiberFlags |= LayoutStatic;
@@ -14067,15 +14067,15 @@
             if ((currentlyRenderingFiber$1.mode & StrictEffectsMode) !== NoMode) {
               fiberFlags |= MountLayoutDev;
             }
-            return mountEffectImpl(fiberFlags, Layout, create2, deps);
+            return mountEffectImpl(fiberFlags, Layout, create3, deps);
           }
-          function updateLayoutEffect(create2, deps) {
-            return updateEffectImpl(Update, Layout, create2, deps);
+          function updateLayoutEffect(create3, deps) {
+            return updateEffectImpl(Update, Layout, create3, deps);
           }
-          function imperativeHandleEffect(create2, ref) {
+          function imperativeHandleEffect(create3, ref) {
             if (typeof ref === "function") {
               var refCallback = ref;
-              var _inst = create2();
+              var _inst = create3();
               refCallback(_inst);
               return function() {
                 refCallback(null);
@@ -14087,17 +14087,17 @@
                   error("Expected useImperativeHandle() first argument to either be a ref callback or React.createRef() object. Instead received: %s.", "an object with keys {" + Object.keys(refObject).join(", ") + "}");
                 }
               }
-              var _inst2 = create2();
+              var _inst2 = create3();
               refObject.current = _inst2;
               return function() {
                 refObject.current = null;
               };
             }
           }
-          function mountImperativeHandle(ref, create2, deps) {
+          function mountImperativeHandle(ref, create3, deps) {
             {
-              if (typeof create2 !== "function") {
-                error("Expected useImperativeHandle() second argument to be a function that creates a handle. Instead received: %s.", create2 !== null ? typeof create2 : "null");
+              if (typeof create3 !== "function") {
+                error("Expected useImperativeHandle() second argument to be a function that creates a handle. Instead received: %s.", create3 !== null ? typeof create3 : "null");
               }
             }
             var effectDeps = deps !== null && deps !== void 0 ? deps.concat([ref]) : null;
@@ -14108,16 +14108,16 @@
             if ((currentlyRenderingFiber$1.mode & StrictEffectsMode) !== NoMode) {
               fiberFlags |= MountLayoutDev;
             }
-            return mountEffectImpl(fiberFlags, Layout, imperativeHandleEffect.bind(null, create2, ref), effectDeps);
+            return mountEffectImpl(fiberFlags, Layout, imperativeHandleEffect.bind(null, create3, ref), effectDeps);
           }
-          function updateImperativeHandle(ref, create2, deps) {
+          function updateImperativeHandle(ref, create3, deps) {
             {
-              if (typeof create2 !== "function") {
-                error("Expected useImperativeHandle() second argument to be a function that creates a handle. Instead received: %s.", create2 !== null ? typeof create2 : "null");
+              if (typeof create3 !== "function") {
+                error("Expected useImperativeHandle() second argument to be a function that creates a handle. Instead received: %s.", create3 !== null ? typeof create3 : "null");
               }
             }
             var effectDeps = deps !== null && deps !== void 0 ? deps.concat([ref]) : null;
-            return updateEffectImpl(Update, Layout, imperativeHandleEffect.bind(null, create2, ref), effectDeps);
+            return updateEffectImpl(Update, Layout, imperativeHandleEffect.bind(null, create3, ref), effectDeps);
           }
           function mountDebugValue(value, formatterFn) {
           }
@@ -14439,38 +14439,38 @@
                 mountHookTypesDev();
                 return readContext(context);
               },
-              useEffect: function(create2, deps) {
+              useEffect: function(create3, deps) {
                 currentHookNameInDev = "useEffect";
                 mountHookTypesDev();
                 checkDepsAreArrayDev(deps);
-                return mountEffect(create2, deps);
+                return mountEffect(create3, deps);
               },
-              useImperativeHandle: function(ref, create2, deps) {
+              useImperativeHandle: function(ref, create3, deps) {
                 currentHookNameInDev = "useImperativeHandle";
                 mountHookTypesDev();
                 checkDepsAreArrayDev(deps);
-                return mountImperativeHandle(ref, create2, deps);
+                return mountImperativeHandle(ref, create3, deps);
               },
-              useInsertionEffect: function(create2, deps) {
+              useInsertionEffect: function(create3, deps) {
                 currentHookNameInDev = "useInsertionEffect";
                 mountHookTypesDev();
                 checkDepsAreArrayDev(deps);
-                return mountInsertionEffect(create2, deps);
+                return mountInsertionEffect(create3, deps);
               },
-              useLayoutEffect: function(create2, deps) {
+              useLayoutEffect: function(create3, deps) {
                 currentHookNameInDev = "useLayoutEffect";
                 mountHookTypesDev();
                 checkDepsAreArrayDev(deps);
-                return mountLayoutEffect(create2, deps);
+                return mountLayoutEffect(create3, deps);
               },
-              useMemo: function(create2, deps) {
+              useMemo: function(create3, deps) {
                 currentHookNameInDev = "useMemo";
                 mountHookTypesDev();
                 checkDepsAreArrayDev(deps);
                 var prevDispatcher = ReactCurrentDispatcher$1.current;
                 ReactCurrentDispatcher$1.current = InvalidNestedHooksDispatcherOnMountInDEV;
                 try {
-                  return mountMemo(create2, deps);
+                  return mountMemo(create3, deps);
                 } finally {
                   ReactCurrentDispatcher$1.current = prevDispatcher;
                 }
@@ -14548,33 +14548,33 @@
                 updateHookTypesDev();
                 return readContext(context);
               },
-              useEffect: function(create2, deps) {
+              useEffect: function(create3, deps) {
                 currentHookNameInDev = "useEffect";
                 updateHookTypesDev();
-                return mountEffect(create2, deps);
+                return mountEffect(create3, deps);
               },
-              useImperativeHandle: function(ref, create2, deps) {
+              useImperativeHandle: function(ref, create3, deps) {
                 currentHookNameInDev = "useImperativeHandle";
                 updateHookTypesDev();
-                return mountImperativeHandle(ref, create2, deps);
+                return mountImperativeHandle(ref, create3, deps);
               },
-              useInsertionEffect: function(create2, deps) {
+              useInsertionEffect: function(create3, deps) {
                 currentHookNameInDev = "useInsertionEffect";
                 updateHookTypesDev();
-                return mountInsertionEffect(create2, deps);
+                return mountInsertionEffect(create3, deps);
               },
-              useLayoutEffect: function(create2, deps) {
+              useLayoutEffect: function(create3, deps) {
                 currentHookNameInDev = "useLayoutEffect";
                 updateHookTypesDev();
-                return mountLayoutEffect(create2, deps);
+                return mountLayoutEffect(create3, deps);
               },
-              useMemo: function(create2, deps) {
+              useMemo: function(create3, deps) {
                 currentHookNameInDev = "useMemo";
                 updateHookTypesDev();
                 var prevDispatcher = ReactCurrentDispatcher$1.current;
                 ReactCurrentDispatcher$1.current = InvalidNestedHooksDispatcherOnMountInDEV;
                 try {
-                  return mountMemo(create2, deps);
+                  return mountMemo(create3, deps);
                 } finally {
                   ReactCurrentDispatcher$1.current = prevDispatcher;
                 }
@@ -14652,33 +14652,33 @@
                 updateHookTypesDev();
                 return readContext(context);
               },
-              useEffect: function(create2, deps) {
+              useEffect: function(create3, deps) {
                 currentHookNameInDev = "useEffect";
                 updateHookTypesDev();
-                return updateEffect(create2, deps);
+                return updateEffect(create3, deps);
               },
-              useImperativeHandle: function(ref, create2, deps) {
+              useImperativeHandle: function(ref, create3, deps) {
                 currentHookNameInDev = "useImperativeHandle";
                 updateHookTypesDev();
-                return updateImperativeHandle(ref, create2, deps);
+                return updateImperativeHandle(ref, create3, deps);
               },
-              useInsertionEffect: function(create2, deps) {
+              useInsertionEffect: function(create3, deps) {
                 currentHookNameInDev = "useInsertionEffect";
                 updateHookTypesDev();
-                return updateInsertionEffect(create2, deps);
+                return updateInsertionEffect(create3, deps);
               },
-              useLayoutEffect: function(create2, deps) {
+              useLayoutEffect: function(create3, deps) {
                 currentHookNameInDev = "useLayoutEffect";
                 updateHookTypesDev();
-                return updateLayoutEffect(create2, deps);
+                return updateLayoutEffect(create3, deps);
               },
-              useMemo: function(create2, deps) {
+              useMemo: function(create3, deps) {
                 currentHookNameInDev = "useMemo";
                 updateHookTypesDev();
                 var prevDispatcher = ReactCurrentDispatcher$1.current;
                 ReactCurrentDispatcher$1.current = InvalidNestedHooksDispatcherOnUpdateInDEV;
                 try {
-                  return updateMemo(create2, deps);
+                  return updateMemo(create3, deps);
                 } finally {
                   ReactCurrentDispatcher$1.current = prevDispatcher;
                 }
@@ -14756,33 +14756,33 @@
                 updateHookTypesDev();
                 return readContext(context);
               },
-              useEffect: function(create2, deps) {
+              useEffect: function(create3, deps) {
                 currentHookNameInDev = "useEffect";
                 updateHookTypesDev();
-                return updateEffect(create2, deps);
+                return updateEffect(create3, deps);
               },
-              useImperativeHandle: function(ref, create2, deps) {
+              useImperativeHandle: function(ref, create3, deps) {
                 currentHookNameInDev = "useImperativeHandle";
                 updateHookTypesDev();
-                return updateImperativeHandle(ref, create2, deps);
+                return updateImperativeHandle(ref, create3, deps);
               },
-              useInsertionEffect: function(create2, deps) {
+              useInsertionEffect: function(create3, deps) {
                 currentHookNameInDev = "useInsertionEffect";
                 updateHookTypesDev();
-                return updateInsertionEffect(create2, deps);
+                return updateInsertionEffect(create3, deps);
               },
-              useLayoutEffect: function(create2, deps) {
+              useLayoutEffect: function(create3, deps) {
                 currentHookNameInDev = "useLayoutEffect";
                 updateHookTypesDev();
-                return updateLayoutEffect(create2, deps);
+                return updateLayoutEffect(create3, deps);
               },
-              useMemo: function(create2, deps) {
+              useMemo: function(create3, deps) {
                 currentHookNameInDev = "useMemo";
                 updateHookTypesDev();
                 var prevDispatcher = ReactCurrentDispatcher$1.current;
                 ReactCurrentDispatcher$1.current = InvalidNestedHooksDispatcherOnRerenderInDEV;
                 try {
-                  return updateMemo(create2, deps);
+                  return updateMemo(create3, deps);
                 } finally {
                   ReactCurrentDispatcher$1.current = prevDispatcher;
                 }
@@ -14863,38 +14863,38 @@
                 mountHookTypesDev();
                 return readContext(context);
               },
-              useEffect: function(create2, deps) {
+              useEffect: function(create3, deps) {
                 currentHookNameInDev = "useEffect";
                 warnInvalidHookAccess();
                 mountHookTypesDev();
-                return mountEffect(create2, deps);
+                return mountEffect(create3, deps);
               },
-              useImperativeHandle: function(ref, create2, deps) {
+              useImperativeHandle: function(ref, create3, deps) {
                 currentHookNameInDev = "useImperativeHandle";
                 warnInvalidHookAccess();
                 mountHookTypesDev();
-                return mountImperativeHandle(ref, create2, deps);
+                return mountImperativeHandle(ref, create3, deps);
               },
-              useInsertionEffect: function(create2, deps) {
+              useInsertionEffect: function(create3, deps) {
                 currentHookNameInDev = "useInsertionEffect";
                 warnInvalidHookAccess();
                 mountHookTypesDev();
-                return mountInsertionEffect(create2, deps);
+                return mountInsertionEffect(create3, deps);
               },
-              useLayoutEffect: function(create2, deps) {
+              useLayoutEffect: function(create3, deps) {
                 currentHookNameInDev = "useLayoutEffect";
                 warnInvalidHookAccess();
                 mountHookTypesDev();
-                return mountLayoutEffect(create2, deps);
+                return mountLayoutEffect(create3, deps);
               },
-              useMemo: function(create2, deps) {
+              useMemo: function(create3, deps) {
                 currentHookNameInDev = "useMemo";
                 warnInvalidHookAccess();
                 mountHookTypesDev();
                 var prevDispatcher = ReactCurrentDispatcher$1.current;
                 ReactCurrentDispatcher$1.current = InvalidNestedHooksDispatcherOnMountInDEV;
                 try {
-                  return mountMemo(create2, deps);
+                  return mountMemo(create3, deps);
                 } finally {
                   ReactCurrentDispatcher$1.current = prevDispatcher;
                 }
@@ -14984,38 +14984,38 @@
                 updateHookTypesDev();
                 return readContext(context);
               },
-              useEffect: function(create2, deps) {
+              useEffect: function(create3, deps) {
                 currentHookNameInDev = "useEffect";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
-                return updateEffect(create2, deps);
+                return updateEffect(create3, deps);
               },
-              useImperativeHandle: function(ref, create2, deps) {
+              useImperativeHandle: function(ref, create3, deps) {
                 currentHookNameInDev = "useImperativeHandle";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
-                return updateImperativeHandle(ref, create2, deps);
+                return updateImperativeHandle(ref, create3, deps);
               },
-              useInsertionEffect: function(create2, deps) {
+              useInsertionEffect: function(create3, deps) {
                 currentHookNameInDev = "useInsertionEffect";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
-                return updateInsertionEffect(create2, deps);
+                return updateInsertionEffect(create3, deps);
               },
-              useLayoutEffect: function(create2, deps) {
+              useLayoutEffect: function(create3, deps) {
                 currentHookNameInDev = "useLayoutEffect";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
-                return updateLayoutEffect(create2, deps);
+                return updateLayoutEffect(create3, deps);
               },
-              useMemo: function(create2, deps) {
+              useMemo: function(create3, deps) {
                 currentHookNameInDev = "useMemo";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
                 var prevDispatcher = ReactCurrentDispatcher$1.current;
                 ReactCurrentDispatcher$1.current = InvalidNestedHooksDispatcherOnUpdateInDEV;
                 try {
-                  return updateMemo(create2, deps);
+                  return updateMemo(create3, deps);
                 } finally {
                   ReactCurrentDispatcher$1.current = prevDispatcher;
                 }
@@ -15105,38 +15105,38 @@
                 updateHookTypesDev();
                 return readContext(context);
               },
-              useEffect: function(create2, deps) {
+              useEffect: function(create3, deps) {
                 currentHookNameInDev = "useEffect";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
-                return updateEffect(create2, deps);
+                return updateEffect(create3, deps);
               },
-              useImperativeHandle: function(ref, create2, deps) {
+              useImperativeHandle: function(ref, create3, deps) {
                 currentHookNameInDev = "useImperativeHandle";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
-                return updateImperativeHandle(ref, create2, deps);
+                return updateImperativeHandle(ref, create3, deps);
               },
-              useInsertionEffect: function(create2, deps) {
+              useInsertionEffect: function(create3, deps) {
                 currentHookNameInDev = "useInsertionEffect";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
-                return updateInsertionEffect(create2, deps);
+                return updateInsertionEffect(create3, deps);
               },
-              useLayoutEffect: function(create2, deps) {
+              useLayoutEffect: function(create3, deps) {
                 currentHookNameInDev = "useLayoutEffect";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
-                return updateLayoutEffect(create2, deps);
+                return updateLayoutEffect(create3, deps);
               },
-              useMemo: function(create2, deps) {
+              useMemo: function(create3, deps) {
                 currentHookNameInDev = "useMemo";
                 warnInvalidHookAccess();
                 updateHookTypesDev();
                 var prevDispatcher = ReactCurrentDispatcher$1.current;
                 ReactCurrentDispatcher$1.current = InvalidNestedHooksDispatcherOnUpdateInDEV;
                 try {
-                  return updateMemo(create2, deps);
+                  return updateMemo(create3, deps);
                 } finally {
                   ReactCurrentDispatcher$1.current = prevDispatcher;
                 }
@@ -18861,13 +18861,13 @@
                       markComponentLayoutEffectMountStarted(finishedWork);
                     }
                   }
-                  var create2 = effect.create;
+                  var create3 = effect.create;
                   {
                     if ((flags & Insertion) !== NoFlags$1) {
                       setIsRunningInsertionEffect(true);
                     }
                   }
-                  effect.destroy = create2();
+                  effect.destroy = create3();
                   {
                     if ((flags & Insertion) !== NoFlags$1) {
                       setIsRunningInsertionEffect(false);
@@ -23589,7 +23589,7 @@
       if (true) {
         (function() {
           "use strict";
-          var React7 = require_react();
+          var React8 = require_react();
           var REACT_ELEMENT_TYPE = Symbol.for("react.element");
           var REACT_PORTAL_TYPE = Symbol.for("react.portal");
           var REACT_FRAGMENT_TYPE = Symbol.for("react.fragment");
@@ -23615,7 +23615,7 @@
             }
             return null;
           }
-          var ReactSharedInternals = React7.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React8.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           function error(format) {
             {
               {
@@ -24496,7 +24496,7 @@
           return x === y && (0 !== x || 1 / x === 1 / y) || x !== x && y !== y;
         }
         function useSyncExternalStore$2(subscribe, getSnapshot) {
-          didWarnOld18Alpha || void 0 === React7.startTransition || (didWarnOld18Alpha = true, console.error(
+          didWarnOld18Alpha || void 0 === React8.startTransition || (didWarnOld18Alpha = true, console.error(
             "You are using an outdated, pre-release alpha of React 18 that does not support useSyncExternalStore. The use-sync-external-store shim will not work correctly. Upgrade to a newer pre-release."
           ));
           var value = getSnapshot();
@@ -24506,7 +24506,7 @@
               "The result of getSnapshot should be cached to avoid an infinite loop"
             ), didWarnUncachedGetSnapshot = true);
           }
-          cachedValue = useState4({
+          cachedValue = useState3({
             inst: { value, getSnapshot }
           });
           var inst = cachedValue[0].inst, forceUpdate = cachedValue[1];
@@ -24544,8 +24544,8 @@
           return getSnapshot();
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React7 = require_react(), objectIs = "function" === typeof Object.is ? Object.is : is, useState4 = React7.useState, useEffect3 = React7.useEffect, useLayoutEffect2 = React7.useLayoutEffect, useDebugValue2 = React7.useDebugValue, didWarnOld18Alpha = false, didWarnUncachedGetSnapshot = false, shim = "undefined" === typeof window || "undefined" === typeof window.document || "undefined" === typeof window.document.createElement ? useSyncExternalStore$1 : useSyncExternalStore$2;
-        exports.useSyncExternalStore = void 0 !== React7.useSyncExternalStore ? React7.useSyncExternalStore : shim;
+        var React8 = require_react(), objectIs = "function" === typeof Object.is ? Object.is : is, useState3 = React8.useState, useEffect3 = React8.useEffect, useLayoutEffect2 = React8.useLayoutEffect, useDebugValue2 = React8.useDebugValue, didWarnOld18Alpha = false, didWarnUncachedGetSnapshot = false, shim = "undefined" === typeof window || "undefined" === typeof window.document || "undefined" === typeof window.document.createElement ? useSyncExternalStore$1 : useSyncExternalStore$2;
+        exports.useSyncExternalStore = void 0 !== React8.useSyncExternalStore ? React8.useSyncExternalStore : shim;
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
       })();
     }
@@ -24572,14 +24572,14 @@
           return x === y && (0 !== x || 1 / x === 1 / y) || x !== x && y !== y;
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React7 = require_react(), shim = require_shim(), objectIs = "function" === typeof Object.is ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef3 = React7.useRef, useEffect3 = React7.useEffect, useMemo3 = React7.useMemo, useDebugValue2 = React7.useDebugValue;
+        var React8 = require_react(), shim = require_shim(), objectIs = "function" === typeof Object.is ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef2 = React8.useRef, useEffect3 = React8.useEffect, useMemo2 = React8.useMemo, useDebugValue2 = React8.useDebugValue;
         exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector, isEqual) {
-          var instRef = useRef3(null);
+          var instRef = useRef2(null);
           if (null === instRef.current) {
             var inst = { hasValue: false, value: null };
             instRef.current = inst;
           } else inst = instRef.current;
-          instRef = useMemo3(
+          instRef = useMemo2(
             function() {
               function memoizedSelector(nextSnapshot) {
                 if (!hasMemo) {
@@ -24643,11 +24643,11 @@
   });
 
   // webview-src/index.tsx
-  var import_react11 = __toESM(require_react());
+  var import_react12 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // webview-src/App.tsx
-  var import_react9 = __toESM(require_react());
+  var import_react10 = __toESM(require_react());
 
   // node_modules/@xyflow/react/dist/esm/index.js
   var import_jsx_runtime = __toESM(require_jsx_runtime());
@@ -25330,9 +25330,9 @@
 
   // node_modules/d3-selection/src/selection/append.js
   function append_default(name) {
-    var create2 = typeof name === "function" ? name : creator_default(name);
+    var create3 = typeof name === "function" ? name : creator_default(name);
     return this.select(function() {
-      return this.appendChild(create2.apply(this, arguments));
+      return this.appendChild(create3.apply(this, arguments));
     });
   }
 
@@ -25341,9 +25341,9 @@
     return null;
   }
   function insert_default(name, before) {
-    var create2 = typeof name === "function" ? name : creator_default(name), select = before == null ? constantNull : typeof before === "function" ? before : selector_default(before);
+    var create3 = typeof name === "function" ? name : creator_default(name), select = before == null ? constantNull : typeof before === "function" ? before : selector_default(before);
     return this.select(function() {
-      return this.insertBefore(create2.apply(this, arguments), select.apply(this, arguments) || null);
+      return this.insertBefore(create3.apply(this, arguments), select.apply(this, arguments) || null);
     });
   }
 
@@ -30249,11 +30249,11 @@
     };
   }
 
-  // node_modules/zustand/esm/traditional.mjs
+  // node_modules/@xyflow/react/node_modules/zustand/esm/traditional.mjs
   var import_react = __toESM(require_react(), 1);
   var import_with_selector = __toESM(require_with_selector(), 1);
 
-  // node_modules/zustand/esm/vanilla.mjs
+  // node_modules/@xyflow/react/node_modules/zustand/esm/vanilla.mjs
   var import_meta = {};
   var createStoreImpl = (createState) => {
     let state;
@@ -30286,7 +30286,7 @@
   };
   var createStore = (createState) => createState ? createStoreImpl(createState) : createStoreImpl;
 
-  // node_modules/zustand/esm/traditional.mjs
+  // node_modules/@xyflow/react/node_modules/zustand/esm/traditional.mjs
   var { useDebugValue } = import_react.default;
   var { useSyncExternalStoreWithSelector } = import_with_selector.default;
   var identity3 = (arg) => arg;
@@ -30309,7 +30309,7 @@
   };
   var createWithEqualityFn = (createState, defaultEqualityFn) => createState ? createWithEqualityFnImpl(createState, defaultEqualityFn) : createWithEqualityFnImpl;
 
-  // node_modules/zustand/esm/shallow.mjs
+  // node_modules/@xyflow/react/node_modules/zustand/esm/shallow.mjs
   function shallow$1(objA, objB) {
     if (Object.is(objA, objB)) {
       return true;
@@ -33038,6 +33038,14 @@
     return (0, import_jsx_runtime.jsx)("div", { "data-testid": "rf__wrapper", ...rest, onScroll: wrapperOnScroll, style: { ...style2, ...wrapperStyle }, ref, className: cc(["react-flow", className, colorModeClassName]), id: id2, role: "application", children: (0, import_jsx_runtime.jsxs)(Wrapper, { nodes, edges, width, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode, children: [(0, import_jsx_runtime.jsx)(StoreUpdater, { nodes, edges, defaultNodes, defaultEdges, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, edgesFocusable, edgesReconnectable, elementsSelectable, elevateNodesOnSelect, elevateEdgesOnSelect, minZoom, maxZoom, nodeExtent, onNodesChange, onEdgesChange, snapToGrid, snapGrid, connectionMode, translateExtent, connectOnClick, defaultEdgeOptions, fitView, fitViewOptions, onNodesDelete, onEdgesDelete, onDelete, onNodeDragStart, onNodeDrag, onNodeDragStop, onSelectionDrag, onSelectionDragStart, onSelectionDragStop, onMove, onMoveStart, onMoveEnd, noPanClassName, nodeOrigin, rfId, autoPanOnConnect, autoPanOnNodeDrag, autoPanSpeed, onError, connectionRadius, isValidConnection, selectNodesOnDrag, nodeDragThreshold, connectionDragThreshold, onBeforeDelete, debug, ariaLabelConfig, zIndexMode }), (0, import_jsx_runtime.jsx)(GraphView, { onInit, onNodeClick, onEdgeClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, nodeTypes, edgeTypes, connectionLineType, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, selectionKeyCode, selectionOnDrag, selectionMode, deleteKeyCode, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, onlyRenderVisibleElements, defaultViewport: defaultViewport$1, translateExtent, minZoom, maxZoom, preventScrolling, zoomOnScroll, zoomOnPinch, zoomOnDoubleClick, panOnScroll, panOnScrollSpeed, panOnScrollMode, panOnDrag, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance, nodeClickDistance, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, defaultMarkerColor, noDragClassName, noWheelClassName, noPanClassName, rfId, disableKeyboardA11y, nodeExtent, viewport, onViewportChange }), (0, import_jsx_runtime.jsx)(SelectionListener, { onSelectionChange }), children2, (0, import_jsx_runtime.jsx)(Attribution, { proOptions, position: attributionPosition }), (0, import_jsx_runtime.jsx)(A11yDescriptions, { rfId, disableKeyboardA11y })] }) });
   }
   var index = fixedForwardRef(ReactFlow);
+  var selector$6 = (s) => s.domNode?.querySelector(".react-flow__edgelabel-renderer");
+  function EdgeLabelRenderer({ children: children2 }) {
+    const edgeLabelRenderer = useStore(selector$6);
+    if (!edgeLabelRenderer) {
+      return null;
+    }
+    return (0, import_react_dom.createPortal)(children2, edgeLabelRenderer);
+  }
   function useNodesState(initialNodes) {
     const [nodes, setNodes] = (0, import_react2.useState)(initialNodes);
     const onNodesChange = (0, import_react2.useCallback)((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
@@ -33482,375 +33490,586 @@
   }
   var NodeResizeControl = (0, import_react2.memo)(ResizeControl);
 
-  // webview-src/components/AgentTree.tsx
-  var import_react3 = __toESM(require_react());
-  function AgentTree({ namespaces, prompts, error, onOpenPrompt }) {
-    const [filter2, setFilter] = (0, import_react3.useState)("");
-    const [collapsed, setCollapsed] = (0, import_react3.useState)(/* @__PURE__ */ new Set());
-    const filtered = (0, import_react3.useMemo)(() => {
-      if (!filter2.trim()) return prompts;
-      const q = filter2.toLowerCase();
-      return prompts.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.namespace.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)
-      );
-    }, [prompts, filter2]);
-    const byNamespace = (0, import_react3.useMemo)(() => {
-      const map = /* @__PURE__ */ new Map();
-      for (const p of filtered) {
-        const list = map.get(p.namespace) ?? [];
-        list.push(p);
-        map.set(p.namespace, list);
+  // webview-src/components/ActorNode.tsx
+  var import_react4 = __toESM(require_react());
+
+  // node_modules/zustand/esm/vanilla.mjs
+  var createStoreImpl2 = (createState) => {
+    let state;
+    const listeners = /* @__PURE__ */ new Set();
+    const setState = (partial, replace) => {
+      const nextState = typeof partial === "function" ? partial(state) : partial;
+      if (!Object.is(nextState, state)) {
+        const previousState = state;
+        state = (replace != null ? replace : typeof nextState !== "object" || nextState === null) ? nextState : Object.assign({}, state, nextState);
+        listeners.forEach((listener) => listener(state, previousState));
       }
-      return map;
-    }, [filtered]);
-    const toggleNs = (ns) => setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(ns)) next.delete(ns);
-      else next.add(ns);
-      return next;
-    });
-    const startDrag = (e, data) => {
-      e.dataTransfer.setData("application/cantica-agent", JSON.stringify(data));
-      e.dataTransfer.effectAllowed = "copy";
     };
-    if (error) {
-      return /* @__PURE__ */ import_react3.default.createElement("div", { className: "cs-tree-error" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" }), /* @__PURE__ */ import_react3.default.createElement("path", { d: "M12 9v4" }), /* @__PURE__ */ import_react3.default.createElement("path", { d: "M12 17h.01" })), /* @__PURE__ */ import_react3.default.createElement("p", { className: "cs-tree-error-msg" }, error), /* @__PURE__ */ import_react3.default.createElement("p", { className: "cs-tree-error-hint" }, "Check ", /* @__PURE__ */ import_react3.default.createElement("code", null, "canticaScores.serverUrl"), " in Settings."));
-    }
-    return /* @__PURE__ */ import_react3.default.createElement("div", { className: "cs-tree" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "cs-tree-search" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "12", height: "12", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react3.default.createElement("circle", { cx: "11", cy: "11", r: "8" }), /* @__PURE__ */ import_react3.default.createElement("path", { d: "m21 21-4.3-4.3" })), /* @__PURE__ */ import_react3.default.createElement(
-      "input",
-      {
-        className: "cs-tree-search-input",
-        value: filter2,
-        onChange: (e) => setFilter(e.target.value),
-        placeholder: "Filter actors\u2026",
-        "aria-label": "Filter AI actors"
+    const getState = () => state;
+    const getInitialState2 = () => initialState;
+    const subscribe = (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    };
+    const api = { setState, getState, getInitialState: getInitialState2, subscribe };
+    const initialState = state = createState(setState, getState, api);
+    return api;
+  };
+  var createStore3 = ((createState) => createState ? createStoreImpl2(createState) : createStoreImpl2);
+
+  // node_modules/zustand/esm/react.mjs
+  var import_react3 = __toESM(require_react(), 1);
+  var identity4 = (arg) => arg;
+  function useStore2(api, selector = identity4) {
+    const slice = import_react3.default.useSyncExternalStore(
+      api.subscribe,
+      import_react3.default.useCallback(() => selector(api.getState()), [api, selector]),
+      import_react3.default.useCallback(() => selector(api.getInitialState()), [api, selector])
+    );
+    import_react3.default.useDebugValue(slice);
+    return slice;
+  }
+  var createImpl = (createState) => {
+    const api = createStore3(createState);
+    const useBoundStore = (selector) => useStore2(api, selector);
+    Object.assign(useBoundStore, api);
+    return useBoundStore;
+  };
+  var create2 = ((createState) => createState ? createImpl(createState) : createImpl);
+
+  // webview-src/store.ts
+  var _idSeq = 0;
+  var nextId = (prefix) => `${prefix}-${Date.now()}-${++_idSeq}`;
+  function defaultActor(pos = { x: 100, y: 100 }) {
+    return {
+      id: `urn:cantica:studio:actor:${nextId("actor")}`,
+      name: `actor-${_idSeq}`,
+      definePrompt: {},
+      provider: "claude",
+      model: "claude-sonnet-4-6",
+      maxTokens: 4096,
+      maxHistory: 10,
+      position: pos,
+      promptEvents: [],
+      cronJobs: []
+    };
+  }
+  var useStore3 = create2((set3) => ({
+    graph: { id: "urn:cantica:studio:graph:default", name: "New Workflow", actors: [], edges: [] },
+    selectedActorId: null,
+    selectedEdgeId: null,
+    runningActors: /* @__PURE__ */ new Set(),
+    actorOutputs: /* @__PURE__ */ new Map(),
+    prompts: [],
+    settings: {
+      servers: [],
+      serverUrl: "http://localhost:8042",
+      authToken: "",
+      explorerSide: "left",
+      canticaHome: "",
+      studioPort: 8043,
+      autoStartStudio: true,
+      graphFile: ".vscode/actors.jsonld"
+    },
+    explorerSide: "left",
+    setGraph: (graph) => set3({ graph }),
+    addActor: (pos) => set3((s) => ({
+      graph: { ...s.graph, actors: [...s.graph.actors, defaultActor(pos)] }
+    })),
+    updateActor: (id2, patch) => set3((s) => ({
+      graph: {
+        ...s.graph,
+        actors: s.graph.actors.map((a) => a.id === id2 ? { ...a, ...patch } : a)
       }
-    ), filter2 && /* @__PURE__ */ import_react3.default.createElement(
-      "button",
-      {
-        className: "cs-tree-search-clear",
-        onClick: () => setFilter(""),
-        "aria-label": "Clear filter"
+    })),
+    removeActor: (id2) => set3((s) => ({
+      graph: {
+        ...s.graph,
+        actors: s.graph.actors.filter((a) => a.id !== id2),
+        edges: s.graph.edges.filter((e) => e.from !== id2 && e.to !== id2)
       },
-      /* @__PURE__ */ import_react3.default.createElement("svg", { width: "10", height: "10", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M18 6 6 18M6 6l12 12" }))
-    )), namespaces.length === 0 ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "cs-tree-empty" }, /* @__PURE__ */ import_react3.default.createElement("p", null, "No AI actors loaded."), /* @__PURE__ */ import_react3.default.createElement("p", null, "Configure a Cantica server URL in Settings.")) : /* @__PURE__ */ import_react3.default.createElement("ul", { className: "cs-tree-list", role: "tree" }, namespaces.map((ns) => {
-      const items = byNamespace.get(ns.name) ?? [];
-      const isOpen = !collapsed.has(ns.name);
-      return /* @__PURE__ */ import_react3.default.createElement("li", { key: ns.name, role: "treeitem", "aria-expanded": isOpen }, /* @__PURE__ */ import_react3.default.createElement(
+      selectedActorId: s.selectedActorId === id2 ? null : s.selectedActorId
+    })),
+    addEdge: (edge) => set3((s) => ({
+      graph: {
+        ...s.graph,
+        edges: [
+          ...s.graph.edges,
+          { ...edge, id: `urn:cantica:studio:edge:${nextId("edge")}` }
+        ]
+      }
+    })),
+    updateEdge: (id2, patch) => set3((s) => ({
+      graph: {
+        ...s.graph,
+        edges: s.graph.edges.map((e) => e.id === id2 ? { ...e, ...patch } : e)
+      }
+    })),
+    removeEdge: (id2) => set3((s) => ({
+      graph: { ...s.graph, edges: s.graph.edges.filter((e) => e.id !== id2) },
+      selectedEdgeId: s.selectedEdgeId === id2 ? null : s.selectedEdgeId
+    })),
+    updateActorPosition: (id2, pos) => set3((s) => ({
+      graph: {
+        ...s.graph,
+        actors: s.graph.actors.map((a) => a.id === id2 ? { ...a, position: pos } : a)
+      }
+    })),
+    selectActor: (id2) => set3({ selectedActorId: id2, selectedEdgeId: null }),
+    selectEdge: (id2) => set3({ selectedEdgeId: id2, selectedActorId: null }),
+    setRunning: (name, running) => set3((s) => {
+      const next = new Set(s.runningActors);
+      running ? next.add(name) : next.delete(name);
+      return { runningActors: next };
+    }),
+    setOutput: (name, output) => set3((s) => {
+      const next = new Map(s.actorOutputs);
+      next.set(name, output);
+      return { actorOutputs: next };
+    }),
+    setPrompts: (prompts) => set3({ prompts }),
+    setSettings: (settings) => set3({ settings, explorerSide: settings.explorerSide }),
+    setExplorerSide: (side) => set3({ explorerSide: side })
+  }));
+
+  // webview-src/components/ActorNode.tsx
+  var vscode = acquireVsCodeApi();
+  var PROVIDER_COLORS = {
+    claude: "#d97706",
+    gpt: "#16a34a",
+    gemini: "#2563eb",
+    mistral: "#7c3aed"
+  };
+  var ActorNode = (0, import_react4.memo)(function ActorNode2({ data, selected: selected2 }) {
+    const actor = data.actor;
+    const [eventsOpen, setEventsOpen] = (0, import_react4.useState)(false);
+    const [cronsOpen, setCronsOpen] = (0, import_react4.useState)(false);
+    const { runningActors, actorOutputs, selectActor } = useStore3();
+    const running = runningActors.has(actor.name);
+    const output = actorOutputs.get(actor.name);
+    const color2 = PROVIDER_COLORS[actor.provider] ?? "#6b7280";
+    function handleRun(e) {
+      e.stopPropagation();
+      const instruction = window.prompt(`Instruct ${actor.name}:`);
+      if (instruction) {
+        vscode.postMessage({ type: "runActor", name: actor.name, instruction });
+      }
+    }
+    function handleStop(e) {
+      e.stopPropagation();
+      vscode.postMessage({ type: "stopActor", name: actor.name });
+    }
+    return /* @__PURE__ */ import_react4.default.createElement(
+      "div",
+      {
+        className: `cs-actor-node${selected2 ? " cs-actor-node--selected" : ""}${running ? " cs-actor-node--running" : ""}`,
+        onClick: () => selectActor(actor.id)
+      },
+      /* @__PURE__ */ import_react4.default.createElement(Handle, { type: "target", position: Position.Left, className: "cs-handle cs-handle--target" }),
+      /* @__PURE__ */ import_react4.default.createElement(Handle, { type: "source", position: Position.Right, className: "cs-handle cs-handle--source" }),
+      /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-actor-header" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-actor-badge", style: { background: color2 } }, actor.provider), /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-actor-name" }, actor.name), /* @__PURE__ */ import_react4.default.createElement("span", { className: `cs-actor-status${running ? " cs-actor-status--on" : ""}`, title: running ? "running" : "idle" })),
+      (actor.definePrompt.uri || actor.definePrompt.content) && /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-actor-define-prompt" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-actor-section-label" }, "role"), /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-actor-prompt-ref" }, actor.definePrompt.uri ?? (actor.definePrompt.content ?? "").slice(0, 40))),
+      actor.promptEvents.length > 0 && /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-actor-section" }, /* @__PURE__ */ import_react4.default.createElement(
         "button",
         {
-          className: "cs-ns-header",
-          onClick: () => toggleNs(ns.name)
+          className: "cs-actor-section-toggle",
+          onClick: (e) => {
+            e.stopPropagation();
+            setEventsOpen((o) => !o);
+          }
         },
-        /* @__PURE__ */ import_react3.default.createElement(
-          "svg",
-          {
-            width: "10",
-            height: "10",
-            viewBox: "0 0 24 24",
-            fill: "none",
-            stroke: "currentColor",
-            strokeWidth: "2.5",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-            className: `cs-chevron ${isOpen ? "cs-chevron--open" : ""}`,
-            "aria-hidden": "true"
-          },
-          /* @__PURE__ */ import_react3.default.createElement("path", { d: "m9 18 6-6-6-6" })
-        ),
-        /* @__PURE__ */ import_react3.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", className: "cs-accent-icon", "aria-hidden": "true" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" })),
-        /* @__PURE__ */ import_react3.default.createElement("span", { className: "cs-ns-name" }, ns.name),
-        /* @__PURE__ */ import_react3.default.createElement("span", { className: "cs-ns-count" }, items.length)
-      ), isOpen && /* @__PURE__ */ import_react3.default.createElement("ul", { className: "cs-agent-list", role: "group" }, items.length === 0 && filter2 ? /* @__PURE__ */ import_react3.default.createElement("li", { className: "cs-agent-empty" }, "No matches") : items.map((prompt) => /* @__PURE__ */ import_react3.default.createElement(
-        "li",
+        /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-actor-section-label" }, "\u26A1 events (", actor.promptEvents.length, ")"),
+        /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-chevron" }, eventsOpen ? "\u25B4" : "\u25BE")
+      ), eventsOpen && /* @__PURE__ */ import_react4.default.createElement("ul", { className: "cs-actor-list" }, actor.promptEvents.map((evt) => /* @__PURE__ */ import_react4.default.createElement("li", { key: evt.name, className: "cs-actor-list-item" }, /* @__PURE__ */ import_react4.default.createElement(
+        "button",
         {
-          key: prompt.name,
-          className: "cs-agent-item",
-          draggable: true,
-          onDragStart: (e) => startDrag(e, {
-            namespace: prompt.namespace,
-            name: prompt.name,
-            ...prompt.description !== void 0 ? { description: prompt.description } : {}
-          }),
-          title: "Drag onto the canvas to add to workflow",
-          role: "treeitem"
+          className: "cs-fire-btn",
+          title: `Fire ${evt.name}`,
+          onClick: (e) => {
+            e.stopPropagation();
+            vscode.postMessage({ type: "fireEvent", name: actor.name, eventName: evt.name, context: "" });
+          }
         },
-        /* @__PURE__ */ import_react3.default.createElement("div", { className: "cs-agent-row" }, /* @__PURE__ */ import_react3.default.createElement("svg", { width: "12", height: "12", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react3.default.createElement("rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2" }), /* @__PURE__ */ import_react3.default.createElement("path", { d: "M7 11V7a5 5 0 0 1 10 0v4" })), /* @__PURE__ */ import_react3.default.createElement("span", { className: "cs-agent-name" }, prompt.name), /* @__PURE__ */ import_react3.default.createElement(
-          "button",
-          {
-            className: "cs-agent-link-btn",
-            onClick: () => onOpenPrompt(prompt.namespace, prompt.name),
-            title: "Open prompt in browser",
-            "aria-label": `Open ${prompt.name} in browser`
-          },
-          /* @__PURE__ */ import_react3.default.createElement("svg", { width: "10", height: "10", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react3.default.createElement("path", { d: "M15 3h6v6" }), /* @__PURE__ */ import_react3.default.createElement("path", { d: "M10 14 21 3" }), /* @__PURE__ */ import_react3.default.createElement("path", { d: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }))
-        )),
-        prompt.description && /* @__PURE__ */ import_react3.default.createElement("p", { className: "cs-agent-desc" }, prompt.description)
-      ))));
-    })));
-  }
+        "\u25B6"
+      ), /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-event-name" }, evt.name), evt.filePattern && /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-file-pattern" }, evt.filePattern))))),
+      actor.cronJobs.length > 0 && /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-actor-section" }, /* @__PURE__ */ import_react4.default.createElement(
+        "button",
+        {
+          className: "cs-actor-section-toggle",
+          onClick: (e) => {
+            e.stopPropagation();
+            setCronsOpen((o) => !o);
+          }
+        },
+        /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-actor-section-label" }, "\u{1F550} crons (", actor.cronJobs.length, ")"),
+        /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-chevron" }, cronsOpen ? "\u25B4" : "\u25BE")
+      ), cronsOpen && /* @__PURE__ */ import_react4.default.createElement("ul", { className: "cs-actor-list" }, actor.cronJobs.map((c, i) => /* @__PURE__ */ import_react4.default.createElement("li", { key: i, className: "cs-actor-list-item" }, /* @__PURE__ */ import_react4.default.createElement("code", { className: "cs-cron-schedule" }, c.schedule))))),
+      output && /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-actor-output" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "cs-actor-section-label" }, "last output"), /* @__PURE__ */ import_react4.default.createElement("p", { className: "cs-actor-output-text" }, output.slice(0, 120), output.length > 120 ? "\u2026" : "")),
+      /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-actor-footer" }, running ? /* @__PURE__ */ import_react4.default.createElement("button", { className: "cs-actor-btn cs-actor-btn--stop", onClick: handleStop }, "Stop") : /* @__PURE__ */ import_react4.default.createElement("button", { className: "cs-actor-btn cs-actor-btn--run", onClick: handleRun }, "Run"))
+    );
+  });
 
-  // webview-src/components/Toolbar.tsx
-  var import_react4 = __toESM(require_react());
-  function Toolbar({ explorerSide, serverUrl, onToggleSide, onRefresh }) {
-    const displayUrl = serverUrl.replace(/^https?:\/\//, "");
-    return /* @__PURE__ */ import_react4.default.createElement("header", { className: "cs-toolbar" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-toolbar-brand" }, /* @__PURE__ */ import_react4.default.createElement(
-      "svg",
-      {
-        width: "18",
-        height: "18",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: "currentColor",
-        strokeWidth: "2",
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        "aria-hidden": "true",
-        className: "cs-accent-icon"
-      },
-      /* @__PURE__ */ import_react4.default.createElement("path", { d: "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" }),
-      /* @__PURE__ */ import_react4.default.createElement("path", { d: "M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" })
-    ), /* @__PURE__ */ import_react4.default.createElement("span", null, "Cantica Scores")), /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-toolbar-server", title: serverUrl }, displayUrl), /* @__PURE__ */ import_react4.default.createElement("div", { className: "cs-toolbar-actions" }, /* @__PURE__ */ import_react4.default.createElement(
-      "button",
-      {
-        className: "cs-icon-btn",
-        onClick: onRefresh,
-        title: "Refresh AI actors from Cantica server",
-        "aria-label": "Refresh actors"
-      },
-      /* @__PURE__ */ import_react4.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react4.default.createElement("path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" }), /* @__PURE__ */ import_react4.default.createElement("path", { d: "M21 3v5h-5" }), /* @__PURE__ */ import_react4.default.createElement("path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" }), /* @__PURE__ */ import_react4.default.createElement("path", { d: "M8 16H3v5" }))
-    ), /* @__PURE__ */ import_react4.default.createElement(
-      "button",
-      {
-        className: "cs-icon-btn",
-        onClick: onToggleSide,
-        title: `Move explorer to the ${explorerSide === "left" ? "right" : "left"}`,
-        "aria-label": "Toggle explorer side"
-      },
-      explorerSide === "left" ? (
-        /* Panel-right icon */
-        /* @__PURE__ */ import_react4.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react4.default.createElement("rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }), /* @__PURE__ */ import_react4.default.createElement("path", { d: "M15 3v18" }))
-      ) : (
-        /* Panel-left icon */
-        /* @__PURE__ */ import_react4.default.createElement("svg", { width: "14", height: "14", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react4.default.createElement("rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }), /* @__PURE__ */ import_react4.default.createElement("path", { d: "M9 3v18" }))
-      )
-    )));
-  }
-
-  // webview-src/components/WorkflowCanvas.tsx
-  var import_react7 = __toESM(require_react());
-
-  // webview-src/components/AgentNode.tsx
-  var import_react5 = __toESM(require_react());
-  var AgentNode = (0, import_react5.memo)(function AgentNode2({
+  // webview-src/components/ActorEdge.tsx
+  var import_react6 = __toESM(require_react());
+  function ActorEdge({
+    id: id2,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
     data,
     selected: selected2
   }) {
-    return /* @__PURE__ */ import_react5.default.createElement("div", { className: `cs-node ${selected2 ? "cs-node--selected" : ""}` }, /* @__PURE__ */ import_react5.default.createElement(
-      Handle,
+    const edgeData = data;
+    const label = edgeData?.edge.label ?? "";
+    const isEvent = !!edgeData?.edge.targetEvent;
+    const [edgePath, labelX, labelY] = getBezierPath({
+      sourceX,
+      sourceY,
+      sourcePosition,
+      targetX,
+      targetY,
+      targetPosition
+    });
+    return /* @__PURE__ */ import_react6.default.createElement(import_react6.default.Fragment, null, /* @__PURE__ */ import_react6.default.createElement(
+      BaseEdge,
       {
-        type: "target",
-        position: Position.Left,
-        className: "cs-node-handle cs-node-handle--in",
-        "aria-label": "Input"
+        id: id2,
+        path: edgePath,
+        style: {
+          stroke: isEvent ? "#a78bfa" : "#7c3aed",
+          strokeWidth: selected2 ? 2.5 : 1.5,
+          strokeDasharray: isEvent ? "6 3" : void 0
+        }
       }
-    ), /* @__PURE__ */ import_react5.default.createElement("div", { className: "cs-node-header" }, /* @__PURE__ */ import_react5.default.createElement(
-      "svg",
+    ), label && /* @__PURE__ */ import_react6.default.createElement(EdgeLabelRenderer, null, /* @__PURE__ */ import_react6.default.createElement(
+      "div",
       {
-        width: "12",
-        height: "12",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: "currentColor",
-        strokeWidth: "2",
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        "aria-hidden": "true"
+        className: "cs-edge-label nodrag nopan",
+        style: { transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)` }
       },
-      /* @__PURE__ */ import_react5.default.createElement("rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2" }),
-      /* @__PURE__ */ import_react5.default.createElement("path", { d: "M7 11V7a5 5 0 0 1 10 0v4" })
-    ), /* @__PURE__ */ import_react5.default.createElement("span", { className: "cs-node-ns" }, data.namespace)), /* @__PURE__ */ import_react5.default.createElement("div", { className: "cs-node-name" }, data.name), data.description && /* @__PURE__ */ import_react5.default.createElement("div", { className: "cs-node-desc" }, data.description), /* @__PURE__ */ import_react5.default.createElement(
-      Handle,
-      {
-        type: "source",
-        position: Position.Right,
-        className: "cs-node-handle cs-node-handle--out",
-        "aria-label": "Output"
-      }
-    ));
-  });
+      isEvent && /* @__PURE__ */ import_react6.default.createElement("span", { className: "cs-edge-event-badge" }, "\u26A1", edgeData?.edge.targetEvent),
+      label
+    )));
+  }
 
-  // webview-src/components/WorkflowCanvas.tsx
-  var NODE_TYPES = { agentNode: AgentNode };
-  var _idSeq = 0;
-  var nextId = () => `actor-${(++_idSeq).toString()}`;
-  function WorkflowCanvasInner({ onSave }) {
-    const [nodes, setNodes, onNodesChange] = useNodesState([]);
-    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-    const { screenToFlowPosition, toObject } = useReactFlow();
-    const onConnect = (0, import_react7.useCallback)(
-      (connection) => setEdges((eds) => addEdge(connection, eds)),
-      [setEdges]
+  // webview-src/components/ActorPropertiesPanel.tsx
+  var import_react8 = __toESM(require_react());
+  var PROVIDERS = ["claude", "gpt", "gemini", "mistral", "deepseek"];
+  function PromptRefInput({ value, onChange, prompts, placeholder }) {
+    const raw = value.uri ?? value.content ?? "";
+    return /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-prop-prompt-row" }, /* @__PURE__ */ import_react8.default.createElement(
+      "input",
+      {
+        className: "cs-prop-input",
+        value: raw,
+        placeholder: placeholder ?? "cantica:// URI or raw text",
+        onChange: (e) => {
+          const v = e.target.value;
+          onChange(v.startsWith("cantica://") ? { uri: v } : { content: v });
+        },
+        list: "cs-prompt-datalist"
+      }
+    ), /* @__PURE__ */ import_react8.default.createElement("datalist", { id: "cs-prompt-datalist" }, prompts.map((p) => /* @__PURE__ */ import_react8.default.createElement(
+      "option",
+      {
+        key: `${p._server}/${p.namespace}/${p.name}`,
+        value: `cantica://${p.namespace}/${p.name}`,
+        label: `${p.namespace}/${p.name}`
+      }
+    ))));
+  }
+  function ActorProps({ actor }) {
+    const { updateActor, removeActor, prompts } = useStore3();
+    const up = (patch) => updateActor(actor.id, patch);
+    function addEvent() {
+      up({ promptEvents: [...actor.promptEvents, { name: "new-event", prompt: {} }] });
+    }
+    function updateEvent(i, newEvt) {
+      up({ promptEvents: actor.promptEvents.map((e, j) => j === i ? newEvt : e) });
+    }
+    function removeEvent(i) {
+      up({ promptEvents: actor.promptEvents.filter((_, j) => j !== i) });
+    }
+    function addCron() {
+      up({ cronJobs: [...actor.cronJobs, { schedule: "0 9 * * 1-5", prompt: {} }] });
+    }
+    function updateCron(i, patch) {
+      const crons = actor.cronJobs.map((c, j) => j === i ? { ...c, ...patch } : c);
+      up({ cronJobs: crons });
+    }
+    function removeCron(i) {
+      up({ cronJobs: actor.cronJobs.filter((_, j) => j !== i) });
+    }
+    return /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-props-body" }, /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label" }, "Name", /* @__PURE__ */ import_react8.default.createElement("input", { className: "cs-prop-input", value: actor.name, onChange: (e) => up({ name: e.target.value }) })), /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label" }, "Define Prompt (role)", /* @__PURE__ */ import_react8.default.createElement(PromptRefInput, { value: actor.definePrompt, onChange: (v) => up({ definePrompt: v }), prompts })), /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-prop-row" }, /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label cs-prop-half" }, "Provider", /* @__PURE__ */ import_react8.default.createElement("select", { className: "cs-prop-select", value: actor.provider, onChange: (e) => up({ provider: e.target.value }) }, PROVIDERS.map((p) => /* @__PURE__ */ import_react8.default.createElement("option", { key: p }, p)))), /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label cs-prop-half" }, "Model", /* @__PURE__ */ import_react8.default.createElement("input", { className: "cs-prop-input", value: actor.model, onChange: (e) => up({ model: e.target.value }) }))), /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-prop-row" }, /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label cs-prop-half" }, "Max tokens", /* @__PURE__ */ import_react8.default.createElement(
+      "input",
+      {
+        className: "cs-prop-input",
+        type: "number",
+        value: actor.maxTokens,
+        onChange: (e) => up({ maxTokens: Number(e.target.value) })
+      }
+    )), /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label cs-prop-half" }, "History turns", /* @__PURE__ */ import_react8.default.createElement(
+      "input",
+      {
+        className: "cs-prop-input",
+        type: "number",
+        value: actor.maxHistory,
+        onChange: (e) => up({ maxHistory: Number(e.target.value) })
+      }
+    ))), /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-prop-section-header" }, /* @__PURE__ */ import_react8.default.createElement("span", null, "\u26A1 Prompt Events"), /* @__PURE__ */ import_react8.default.createElement("button", { className: "cs-prop-add-btn", onClick: addEvent }, "+ Add")), actor.promptEvents.map((evt, i) => /* @__PURE__ */ import_react8.default.createElement("div", { key: i, className: "cs-prop-list-item" }, /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-prop-row" }, /* @__PURE__ */ import_react8.default.createElement(
+      "input",
+      {
+        className: "cs-prop-input cs-prop-half",
+        placeholder: "event name",
+        value: evt.name,
+        onChange: (e) => updateEvent(i, { ...evt, name: e.target.value })
+      }
+    ), /* @__PURE__ */ import_react8.default.createElement(
+      "input",
+      {
+        className: "cs-prop-input cs-prop-half",
+        placeholder: "file pattern (optional)",
+        value: evt.filePattern ?? "",
+        onChange: (e) => {
+          const fp = e.target.value;
+          updateEvent(i, fp ? { ...evt, filePattern: fp } : { name: evt.name, prompt: evt.prompt });
+        }
+      }
+    )), /* @__PURE__ */ import_react8.default.createElement(
+      PromptRefInput,
+      {
+        value: evt.prompt,
+        onChange: (v) => updateEvent(i, { ...evt, prompt: v }),
+        prompts,
+        placeholder: "Prompt URI or content"
+      }
+    ), /* @__PURE__ */ import_react8.default.createElement("button", { className: "cs-prop-remove-btn", onClick: () => removeEvent(i) }, "\u2715 Remove"))), /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-prop-section-header" }, /* @__PURE__ */ import_react8.default.createElement("span", null, "\u{1F550} Cron Jobs"), /* @__PURE__ */ import_react8.default.createElement("button", { className: "cs-prop-add-btn", onClick: addCron }, "+ Add")), actor.cronJobs.map((c, i) => /* @__PURE__ */ import_react8.default.createElement("div", { key: i, className: "cs-prop-list-item" }, /* @__PURE__ */ import_react8.default.createElement(
+      "input",
+      {
+        className: "cs-prop-input",
+        placeholder: "cron schedule (e.g. 0 9 * * 1-5)",
+        value: c.schedule,
+        onChange: (e) => updateCron(i, { schedule: e.target.value })
+      }
+    ), /* @__PURE__ */ import_react8.default.createElement(PromptRefInput, { value: c.prompt, onChange: (v) => updateCron(i, { prompt: v }), prompts }), /* @__PURE__ */ import_react8.default.createElement("button", { className: "cs-prop-remove-btn", onClick: () => removeCron(i) }, "\u2715 Remove"))), /* @__PURE__ */ import_react8.default.createElement("button", { className: "cs-prop-danger-btn", onClick: () => removeActor(actor.id) }, "Delete Actor"));
+  }
+  function EdgeProps_({ edge }) {
+    const { updateEdge, removeEdge, prompts, graph } = useStore3();
+    const up = (patch) => updateEdge(edge.id, patch);
+    const fromActor = graph.actors.find((a) => a.id === edge.from);
+    const availableEvents = fromActor?.promptEvents.map((e) => e.name) ?? [];
+    return /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-props-body" }, /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label" }, "Label", /* @__PURE__ */ import_react8.default.createElement("input", { className: "cs-prop-input", value: edge.label, onChange: (e) => up({ label: e.target.value }) })), /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label" }, "Target Event (optional)", /* @__PURE__ */ import_react8.default.createElement(
+      "select",
+      {
+        className: "cs-prop-select",
+        value: edge.targetEvent ?? "",
+        onChange: (e) => {
+          const te = e.target.value;
+          up(te ? { targetEvent: te } : {});
+        }
+      },
+      /* @__PURE__ */ import_react8.default.createElement("option", { value: "" }, "\u2014 default inbox \u2014"),
+      availableEvents.map((name) => /* @__PURE__ */ import_react8.default.createElement("option", { key: name }, name))
+    )), /* @__PURE__ */ import_react8.default.createElement("label", { className: "cs-prop-label" }, "Message Prompt", /* @__PURE__ */ import_react8.default.createElement(
+      PromptRefInput,
+      {
+        value: edge.prompt,
+        onChange: (v) => up({ prompt: v }),
+        prompts,
+        placeholder: "Use {output} as placeholder for the source actor's output"
+      }
+    )), /* @__PURE__ */ import_react8.default.createElement("button", { className: "cs-prop-danger-btn", onClick: () => removeEdge(edge.id) }, "Delete Edge"));
+  }
+  function ActorPropertiesPanel() {
+    const { selectedActorId, selectedEdgeId, graph } = useStore3();
+    const actor = selectedActorId ? graph.actors.find((a) => a.id === selectedActorId) : null;
+    const edge = selectedEdgeId ? graph.edges.find((e) => e.id === selectedEdgeId) : null;
+    if (!actor && !edge) {
+      return /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-props-empty" }, /* @__PURE__ */ import_react8.default.createElement("p", null, "Select an actor or edge to edit its properties."));
+    }
+    return /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-props-panel" }, /* @__PURE__ */ import_react8.default.createElement("div", { className: "cs-props-header" }, actor ? `Actor: ${actor.name}` : `Edge: ${edge?.label || "unnamed"}`), actor && /* @__PURE__ */ import_react8.default.createElement(ActorProps, { actor }), edge && /* @__PURE__ */ import_react8.default.createElement(EdgeProps_, { edge }));
+  }
+
+  // webview-src/components/GraphToolbar.tsx
+  var import_react9 = __toESM(require_react());
+  var vscode2 = acquireVsCodeApi();
+  function GraphToolbar() {
+    const { graph, addActor, explorerSide, setExplorerSide } = useStore3();
+    function handleSave() {
+      vscode2.postMessage({ type: "saveGraph", graph });
+    }
+    function handleAddActor() {
+      addActor({ x: 200 + Math.random() * 200, y: 100 + Math.random() * 200 });
+    }
+    function handleRefreshPrompts() {
+      vscode2.postMessage({ type: "refreshPrompts" });
+    }
+    function handleToggleSide() {
+      const next = explorerSide === "left" ? "right" : "left";
+      setExplorerSide(next);
+      vscode2.postMessage({ type: "explorerSideChanged", side: next });
+    }
+    return /* @__PURE__ */ import_react9.default.createElement("div", { className: "cs-toolbar" }, /* @__PURE__ */ import_react9.default.createElement("span", { className: "cs-toolbar-title" }, graph.name), /* @__PURE__ */ import_react9.default.createElement("div", { className: "cs-toolbar-actions" }, /* @__PURE__ */ import_react9.default.createElement("button", { className: "cs-toolbar-btn", onClick: handleAddActor, title: "Add AI Actor" }, /* @__PURE__ */ import_react9.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react9.default.createElement("path", { d: "M12 5v14M5 12h14" })), "Actor"), /* @__PURE__ */ import_react9.default.createElement("button", { className: "cs-toolbar-btn", onClick: handleSave, title: "Save graph to .vscode/actors.jsonld" }, /* @__PURE__ */ import_react9.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react9.default.createElement("path", { d: "M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" }), /* @__PURE__ */ import_react9.default.createElement("path", { d: "M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" }), /* @__PURE__ */ import_react9.default.createElement("path", { d: "M7 3v4a1 1 0 0 0 1 1h7" })), "Save"), /* @__PURE__ */ import_react9.default.createElement("button", { className: "cs-toolbar-btn", onClick: handleRefreshPrompts, title: "Refresh prompt list from Cantica servers" }, /* @__PURE__ */ import_react9.default.createElement("svg", { width: "13", height: "13", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react9.default.createElement("path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" }), /* @__PURE__ */ import_react9.default.createElement("path", { d: "M21 3v5h-5" }), /* @__PURE__ */ import_react9.default.createElement("path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" }), /* @__PURE__ */ import_react9.default.createElement("path", { d: "M8 16H3v5" })), "Refresh"), /* @__PURE__ */ import_react9.default.createElement("button", { className: "cs-toolbar-btn cs-toolbar-btn--side", onClick: handleToggleSide, title: "Toggle sidebar side" }, explorerSide === "left" ? "\u21E5" : "\u21E4")));
+  }
+
+  // webview-src/App.tsx
+  var vscode3 = acquireVsCodeApi();
+  var NODE_TYPES = { actorNode: ActorNode };
+  var EDGE_TYPES = { actorEdge: ActorEdge };
+  function Canvas() {
+    const store = useStore3();
+    const { screenToFlowPosition } = useReactFlow();
+    const rfNodes = store.graph.actors.map((a) => ({
+      id: a.id,
+      type: "actorNode",
+      position: a.position,
+      data: { actor: a },
+      selected: a.id === store.selectedActorId
+    }));
+    const rfEdges = store.graph.edges.map((e) => ({
+      id: e.id,
+      source: e.from,
+      target: e.to,
+      type: "actorEdge",
+      data: { edge: e },
+      selected: e.id === store.selectedEdgeId
+    }));
+    const [nodes, , onNodesChange] = useNodesState(rfNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(rfEdges);
+    (0, import_react10.useEffect)(() => {
+      for (const n of nodes) {
+        const actor = store.graph.actors.find((a) => a.id === n.id);
+        if (actor && (actor.position.x !== n.position.x || actor.position.y !== n.position.y)) {
+          store.updateActorPosition(n.id, n.position);
+        }
+      }
+    }, [nodes]);
+    const onConnect = (0, import_react10.useCallback)(
+      (conn) => {
+        setEdges((eds) => addEdge({ ...conn, type: "actorEdge" }, eds));
+        store.addEdge({
+          from: conn.source ?? "",
+          to: conn.target ?? "",
+          prompt: {},
+          label: "message"
+        });
+      },
+      [setEdges, store]
     );
-    const onDragOver = (0, import_react7.useCallback)((e) => {
+    const onNodeClick = (0, import_react10.useCallback)(
+      (_, node) => store.selectActor(node.id),
+      [store]
+    );
+    const onEdgeClick = (0, import_react10.useCallback)(
+      (_, edge) => store.selectEdge(edge.id),
+      [store]
+    );
+    const onPaneClick = (0, import_react10.useCallback)(() => {
+      store.selectActor(null);
+      store.selectEdge(null);
+    }, [store]);
+    const onDragOver = (0, import_react10.useCallback)((e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     }, []);
-    const onDrop = (0, import_react7.useCallback)(
+    const onDrop = (0, import_react10.useCallback)(
       (e) => {
         e.preventDefault();
-        const raw = e.dataTransfer.getData("application/cantica-agent");
-        if (!raw) return;
-        let payload;
-        try {
-          payload = JSON.parse(raw);
-        } catch {
-          return;
-        }
-        const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-        const data = {
-          label: payload.name,
-          namespace: payload.namespace,
-          name: payload.name,
-          ...payload.description !== void 0 ? { description: payload.description } : {}
-        };
-        setNodes((nds) => [
-          ...nds,
-          { id: nextId(), type: "agentNode", position, data }
-        ]);
+        const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+        store.addActor(pos);
       },
-      [screenToFlowPosition, setNodes]
+      [screenToFlowPosition, store]
     );
-    const handleSave = (0, import_react7.useCallback)(() => {
-      onSave(toObject());
-    }, [onSave, toObject]);
-    return /* @__PURE__ */ import_react7.default.createElement(
+    return /* @__PURE__ */ import_react10.default.createElement(
       index,
       {
-        nodes,
-        edges,
+        nodes: rfNodes,
+        edges: rfEdges,
         onNodesChange,
         onEdgesChange,
         onConnect,
+        onNodeClick,
+        onEdgeClick,
+        onPaneClick,
         onDrop,
         onDragOver,
         nodeTypes: NODE_TYPES,
+        edgeTypes: EDGE_TYPES,
         fitView: true,
         colorMode: "dark",
         deleteKeyCode: "Delete",
         proOptions: { hideAttribution: false }
       },
-      /* @__PURE__ */ import_react7.default.createElement(
-        Background,
-        {
-          variant: BackgroundVariant.Dots,
-          gap: 16,
-          size: 1,
-          className: "cs-rf-bg"
-        }
-      ),
-      /* @__PURE__ */ import_react7.default.createElement(Controls, { className: "cs-rf-controls" }),
-      /* @__PURE__ */ import_react7.default.createElement(
-        MiniMap,
-        {
-          className: "cs-rf-minimap",
-          nodeColor: "#7c3aed",
-          maskColor: "rgba(9,9,11,0.65)"
-        }
-      ),
-      /* @__PURE__ */ import_react7.default.createElement(Panel, { position: "top-right" }, /* @__PURE__ */ import_react7.default.createElement("button", { className: "cs-save-btn", onClick: handleSave }, /* @__PURE__ */ import_react7.default.createElement("svg", { width: "12", height: "12", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react7.default.createElement("path", { d: "M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" }), /* @__PURE__ */ import_react7.default.createElement("path", { d: "M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" }), /* @__PURE__ */ import_react7.default.createElement("path", { d: "M7 3v4a1 1 0 0 0 1 1h7" })), "Save")),
-      nodes.length === 0 && /* @__PURE__ */ import_react7.default.createElement(Panel, { position: "top-center", className: "cs-canvas-hint-panel" }, /* @__PURE__ */ import_react7.default.createElement("div", { className: "cs-canvas-hint" }, /* @__PURE__ */ import_react7.default.createElement("svg", { width: "28", height: "28", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react7.default.createElement("rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2" }), /* @__PURE__ */ import_react7.default.createElement("path", { d: "M7 11V7a5 5 0 0 1 10 0v4" })), /* @__PURE__ */ import_react7.default.createElement("p", null, "Drag AI actors from the explorer onto the canvas"), /* @__PURE__ */ import_react7.default.createElement("p", { className: "cs-canvas-hint-sub" }, "Connect actors to build a workflow")))
+      /* @__PURE__ */ import_react10.default.createElement(Background, { variant: BackgroundVariant.Dots, gap: 16, size: 1, className: "cs-rf-bg" }),
+      /* @__PURE__ */ import_react10.default.createElement(Controls, { className: "cs-rf-controls" }),
+      /* @__PURE__ */ import_react10.default.createElement(MiniMap, { className: "cs-rf-minimap", nodeColor: "#7c3aed", maskColor: "rgba(9,9,11,0.65)" }),
+      rfNodes.length === 0 && /* @__PURE__ */ import_react10.default.createElement("div", { className: "cs-canvas-empty" }, /* @__PURE__ */ import_react10.default.createElement("svg", { width: "32", height: "32", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, /* @__PURE__ */ import_react10.default.createElement("circle", { cx: "12", cy: "8", r: "4" }), /* @__PURE__ */ import_react10.default.createElement("path", { d: "M6 20v-2a6 6 0 0 1 12 0v2" }), /* @__PURE__ */ import_react10.default.createElement("path", { d: "M20 8h2M2 8h2M20 16l1.5 1.5M2 16l-1.5 1.5" })), /* @__PURE__ */ import_react10.default.createElement("p", null, "Click ", /* @__PURE__ */ import_react10.default.createElement("strong", null, "+ Actor"), " or drop from the explorer to add an AI actor"))
     );
   }
-  function WorkflowCanvas({ onSave }) {
-    return /* @__PURE__ */ import_react7.default.createElement("div", { className: "cs-canvas-root" }, /* @__PURE__ */ import_react7.default.createElement(WorkflowCanvasInner, { onSave }));
-  }
-
-  // webview-src/App.tsx
-  var vscode = acquireVsCodeApi();
   function App() {
-    const [namespaces, setNamespaces] = (0, import_react9.useState)([]);
-    const [prompts, setPrompts] = (0, import_react9.useState)([]);
-    const [error, setError] = (0, import_react9.useState)();
-    const [settings, setSettings] = (0, import_react9.useState)({
-      serverUrl: "http://localhost:8042",
-      authToken: "",
-      explorerSide: "left"
-    });
-    const [explorerSide, setExplorerSide] = (0, import_react9.useState)("left");
-    (0, import_react9.useEffect)(() => {
+    const store = useStore3();
+    (0, import_react10.useEffect)(() => {
       const handler = (event) => {
         const msg = event.data;
         switch (msg.type) {
-          case "updateAgents":
-            setNamespaces(msg.namespaces);
-            setPrompts(msg.prompts);
-            setError(void 0);
+          case "loadGraph":
+            store.setGraph(msg.graph);
+            break;
+          case "updatePrompts":
+            store.setPrompts(msg.prompts);
             break;
           case "updateSettings":
-            setSettings(msg.settings);
-            setExplorerSide(msg.settings.explorerSide);
+            store.setSettings(msg.settings);
+            break;
+          case "actorStatus":
+            store.setRunning(msg.name, msg.running);
+            break;
+          case "actorOutput":
+            store.setOutput(msg.name, msg.output);
+            store.setRunning(msg.name, false);
             break;
           case "error":
-            setError(msg.message);
+            console.error("[Cantica Studio]", msg.message);
             break;
           default: {
-            const _exhaustive = msg;
-            void _exhaustive;
+            const _x = msg;
+            void _x;
           }
         }
       };
       window.addEventListener("message", handler);
-      vscode.postMessage({ type: "ready" });
+      vscode3.postMessage({ type: "ready" });
       return () => window.removeEventListener("message", handler);
     }, []);
-    const toggleExplorerSide = (0, import_react9.useCallback)(() => {
-      const next = explorerSide === "left" ? "right" : "left";
-      setExplorerSide(next);
-      vscode.postMessage({ type: "explorerSideChanged", side: next });
-    }, [explorerSide]);
-    const onRefresh = (0, import_react9.useCallback)(() => {
-      vscode.postMessage({ type: "refresh" });
-    }, []);
-    const onOpenPrompt = (0, import_react9.useCallback)((namespace, name) => {
-      vscode.postMessage({ type: "openPrompt", namespace, name });
-    }, []);
-    const onSaveWorkflow = (0, import_react9.useCallback)((workflow) => {
-      vscode.postMessage({ type: "saveWorkflow", workflow });
-    }, []);
-    const explorer = /* @__PURE__ */ import_react9.default.createElement(
-      AgentTree,
+    const side = store.explorerSide;
+    const promptBrowser = /* @__PURE__ */ import_react10.default.createElement("aside", { className: "cs-explorer" }, /* @__PURE__ */ import_react10.default.createElement("div", { className: "cs-explorer-header" }, "Prompts"), /* @__PURE__ */ import_react10.default.createElement("ul", { className: "cs-prompt-list" }, store.prompts.map((p) => /* @__PURE__ */ import_react10.default.createElement(
+      "li",
       {
-        namespaces,
-        prompts,
-        ...error !== void 0 ? { error } : {},
-        onOpenPrompt
-      }
-    );
-    const canvas = /* @__PURE__ */ import_react9.default.createElement(ReactFlowProvider, null, /* @__PURE__ */ import_react9.default.createElement(
-      WorkflowCanvas,
-      {
-        namespaces,
-        prompts,
-        onSave: onSaveWorkflow
-      }
-    ));
-    return /* @__PURE__ */ import_react9.default.createElement("div", { className: "cs-root" }, /* @__PURE__ */ import_react9.default.createElement(
-      Toolbar,
-      {
-        explorerSide,
-        serverUrl: settings.serverUrl,
-        onToggleSide: toggleExplorerSide,
-        onRefresh
-      }
-    ), /* @__PURE__ */ import_react9.default.createElement("div", { className: "cs-workspace" }, explorerSide === "left" ? /* @__PURE__ */ import_react9.default.createElement(import_react9.default.Fragment, null, /* @__PURE__ */ import_react9.default.createElement("aside", { className: "cs-explorer" }, explorer), /* @__PURE__ */ import_react9.default.createElement("main", { className: "cs-canvas" }, canvas)) : /* @__PURE__ */ import_react9.default.createElement(import_react9.default.Fragment, null, /* @__PURE__ */ import_react9.default.createElement("main", { className: "cs-canvas" }, canvas), /* @__PURE__ */ import_react9.default.createElement("aside", { className: "cs-explorer cs-explorer--right" }, explorer))));
+        key: `${p._server}/${p.namespace}/${p.name}`,
+        className: "cs-prompt-item",
+        draggable: true,
+        onDragStart: (e) => {
+          e.dataTransfer.setData(
+            "application/cantica-prompt",
+            JSON.stringify({ uri: `cantica://${p.namespace}/${p.name}` })
+          );
+        },
+        title: p.description
+      },
+      /* @__PURE__ */ import_react10.default.createElement("span", { className: "cs-prompt-slug" }, p.namespace, "/", p.name),
+      p.description && /* @__PURE__ */ import_react10.default.createElement("span", { className: "cs-prompt-desc" }, p.description)
+    )), store.prompts.length === 0 && /* @__PURE__ */ import_react10.default.createElement("li", { className: "cs-prompt-empty" }, "No prompts loaded. Configure a Cantica server.")));
+    return /* @__PURE__ */ import_react10.default.createElement("div", { className: "cs-root" }, /* @__PURE__ */ import_react10.default.createElement(GraphToolbar, null), /* @__PURE__ */ import_react10.default.createElement("div", { className: "cs-workspace" }, side === "left" && promptBrowser, /* @__PURE__ */ import_react10.default.createElement("main", { className: "cs-canvas-root" }, /* @__PURE__ */ import_react10.default.createElement(ReactFlowProvider, null, /* @__PURE__ */ import_react10.default.createElement(Canvas, null))), /* @__PURE__ */ import_react10.default.createElement(ActorPropertiesPanel, null), side === "right" && promptBrowser));
   }
 
   // webview-src/index.tsx
   var rootEl = document.getElementById("root");
   if (rootEl) {
     (0, import_client.createRoot)(rootEl).render(
-      /* @__PURE__ */ import_react11.default.createElement(import_react11.default.StrictMode, null, /* @__PURE__ */ import_react11.default.createElement(App, null))
+      /* @__PURE__ */ import_react12.default.createElement(import_react12.default.StrictMode, null, /* @__PURE__ */ import_react12.default.createElement(App, null))
     );
   }
 })();

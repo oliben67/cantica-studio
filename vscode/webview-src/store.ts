@@ -16,6 +16,7 @@ function defaultActor(pos = { x: 100, y: 100 }): AIActorDef {
     position: pos,
     promptEvents: [],
     cronJobs: [],
+    resources: [],
   };
 }
 
@@ -38,6 +39,7 @@ interface GraphState {
   updateEdge: (id: string, patch: Partial<ActorEdgeDef>) => void;
   removeEdge: (id: string) => void;
   updateActorPosition: (id: string, pos: { x: number; y: number }) => void;
+  resetGraph: () => void;
 
   // Selection
   selectActor: (id: string | null) => void;
@@ -51,6 +53,40 @@ interface GraphState {
   setPrompts: (prompts: CanticaPrompt[]) => void;
   setSettings: (settings: ExtensionSettings) => void;
   setExplorerSide: (side: 'left' | 'right') => void;
+
+  // Modal UI state
+  eventsModalActorId: string | null;
+  cronsModalActorId: string | null;
+  openEventsModal: (actorId: string) => void;
+  closeEventsModal: () => void;
+  openCronsModal: (actorId: string) => void;
+  closeCronsModal: () => void;
+
+  providerMenuState: { actorId: string; x: number; y: number } | null;
+  openProviderMenu: (actorId: string, x: number, y: number) => void;
+  closeProviderMenu: () => void;
+
+  actorMenuState: { actorId: string; x: number; y: number } | null;
+  openActorMenu: (actorId: string, x: number, y: number) => void;
+  closeActorMenu: () => void;
+
+  propertiesModalActorId: string | null;
+  openPropertiesModal: (actorId: string) => void;
+  closePropertiesModal: () => void;
+
+  actorLogsVisible: Record<string, boolean>;
+  toggleLogs: (actorId: string) => void;
+
+  sendPromptActorId: string | null;
+  openSendPrompt: (actorId: string) => void;
+  clearSendPrompt: () => void;
+
+  resourcesModalActorId: string | null;
+  openResourcesModal: (actorId: string) => void;
+  closeResourcesModal: () => void;
+
+  minimapVisible: boolean;
+  toggleMinimap: () => void;
 }
 
 export const useStore = create<GraphState>((set) => ({
@@ -63,11 +99,18 @@ export const useStore = create<GraphState>((set) => ({
   settings: {
     servers: [], serverUrl: 'http://localhost:8042', authToken: '',
     explorerSide: 'left', canticaHome: '', studioPort: 8043,
-    autoStartStudio: true, graphFile: '.vscode/actors.jsonld',
+    autoStartStudio: true,
   },
   explorerSide: 'left',
 
   setGraph: (graph) => set({ graph }),
+
+  resetGraph: () =>
+    set((s) => ({
+      graph: { ...s.graph, actors: [], edges: [] },
+      selectedActorId: null,
+      selectedEdgeId: null,
+    })),
 
   addActor: (pos) =>
     set((s) => ({
@@ -145,4 +188,39 @@ export const useStore = create<GraphState>((set) => ({
   setPrompts: (prompts) => set({ prompts }),
   setSettings: (settings) => set({ settings, explorerSide: settings.explorerSide }),
   setExplorerSide: (side) => set({ explorerSide: side }),
+
+  eventsModalActorId: null,
+  cronsModalActorId: null,
+  openEventsModal: (actorId) => set({ eventsModalActorId: actorId }),
+  closeEventsModal: () => set({ eventsModalActorId: null }),
+  openCronsModal: (actorId) => set({ cronsModalActorId: actorId }),
+  closeCronsModal: () => set({ cronsModalActorId: null }),
+
+  providerMenuState: null,
+  openProviderMenu: (actorId, x, y) => set({ providerMenuState: { actorId, x, y } }),
+  closeProviderMenu: () => set({ providerMenuState: null }),
+
+  actorMenuState: null,
+  openActorMenu: (actorId, x, y) => set({ actorMenuState: { actorId, x, y } }),
+  closeActorMenu: () => set({ actorMenuState: null }),
+
+  propertiesModalActorId: null,
+  openPropertiesModal: (actorId) => set({ propertiesModalActorId: actorId }),
+  closePropertiesModal: () => set({ propertiesModalActorId: null }),
+
+  actorLogsVisible: {},
+  toggleLogs: (actorId) => set(s => ({
+    actorLogsVisible: { ...s.actorLogsVisible, [actorId]: !s.actorLogsVisible[actorId] },
+  })),
+
+  sendPromptActorId: null,
+  openSendPrompt: (actorId) => set({ sendPromptActorId: actorId }),
+  clearSendPrompt: () => set({ sendPromptActorId: null }),
+
+  resourcesModalActorId: null,
+  openResourcesModal: (actorId) => set({ resourcesModalActorId: actorId }),
+  closeResourcesModal: () => set({ resourcesModalActorId: null }),
+
+  minimapVisible: true,
+  toggleMinimap: () => set(s => ({ minimapVisible: !s.minimapVisible })),
 }));

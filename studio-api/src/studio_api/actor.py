@@ -13,28 +13,66 @@ _log = logging.getLogger(__name__)
 @dataclass
 class PromptEventDef:
     name: str
-    prompt: str                    # resolved content (not a URI at runtime)
+    prompt: str                     # resolved content (not a URI at runtime)
     file_pattern: str | None = None
+    target_actor: str | None = None  # route output to another actor
+    target_event: str | None = None  # fire a specific event on the target
 
 
 @dataclass
 class CronJobDef:
     schedule: str
-    prompt: str                    # resolved content
+    prompt: str                     # resolved content
+    target_actor: str | None = None
+    target_event: str | None = None
+
+
+@dataclass
+class AgentResource:
+    """An MCP-addressable resource owned by an actor."""
+
+    id: str
+    name: str
+    type: str                           # 'file' | 'api' | 'text' | 'other'
+    uri: str
+    description: str = ""
+    dynamic: bool = False               # True = created at runtime
+    shared_with: list[str] = field(default_factory=list)
+
+    @property
+    def locked(self) -> bool:
+        """Locked if static (not dynamic) or has been shared with another actor."""
+        return not self.dynamic or bool(self.shared_with)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "type": self.type,
+            "uri": self.uri,
+            "description": self.description,
+            "dynamic": self.dynamic,
+            "sharedWith": list(self.shared_with),
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "AgentResource":
+        return cls(
+            id=d["id"],
+            name=d.get("name", d["id"]),
+            type=d.get("type", "other"),
+            uri=d.get("uri", ""),
+            description=d.get("description", ""),
+            dynamic=d.get("dynamic", False),
+            shared_with=list(d.get("sharedWith", [])),
+        )
 
 
 class StudioActor(AIActor):
-    """AIActor subclass with prompt events, cron jobs, and actor-to-actor messaging.
+    """AIActor subclass with prompt events, cron jobs, and actor-to-actor messaging."""
 
-    Instances are created via runtime.ActorRuntime which dynamically builds a
-    subclass per actor definition so each actor has its own class-level config.
-    """
-
-    # All prompts are resolved to raw content before the actor starts —
-    # no Cantica server calls are made from within the actor threads.
     prompt_events: list[PromptEventDef] = field(default_factory=list)
     cron_jobs: list[CronJobDef] = field(default_factory=list)
-    # edge prompt templates: actor_name → template string with {output} placeholder
     outbox: dict[str, str] = field(default_factory=dict)
 
     def fire_event(self, event_name: str, context: str = "") -> str:

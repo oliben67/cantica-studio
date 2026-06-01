@@ -2,7 +2,7 @@
   "name": "cantica-studio",
   "displayName": "Cantica Studio",
   "description": "AI Actor Studio — build, connect, and run actor-ai agents backed by Cantica prompts",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "oliben67",
   "repository": {
     "type": "git",
@@ -10,6 +10,7 @@
     "directory": "cantica-studio/vscode"
   },
   "engines": { "vscode": "^1.90.0" },
+  "icon": "icons/icon.png",
   "categories": ["Other"],
   "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
@@ -21,33 +22,61 @@
     },
     "views": {
       "cantica-studio": [
-        { "id": "canticaScores.agentsView", "name": "AI Actors", "icon": "icons/activitybar.svg" }
+        { "id": "canticaScores.songbooksView", "name": "Songbooks" },
+        { "id": "canticaScores.serversView",   "name": "Servers" },
+        { "id": "canticaScores.studioView",    "name": "Studio" }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "canticaScores.agentsView",
-        "contents": "Start the local Studio API (Docker required).\n[Start Studio API](command:canticaScores.startLocalStudio)\nOr connect to an existing server.\n[Configure](command:canticaScores.configureServer)",
-        "when": "!canticaScores.hasAgents"
+        "view": "canticaScores.studioView",
+        "contents": "Manage the local Studio API and settings.\n[▶  Start Studio API](command:canticaScores.startLocalStudio)\n[■  Stop Studio API](command:canticaScores.stopLocalStudio)\n[⚙  Configure Settings](command:canticaScores.configureServer)"
       }
     ],
     "commands": [
-      { "command": "canticaScores.openPanel",        "title": "Open Actor Studio",   "category": "Cantica Studio", "icon": "$(open-preview)" },
-      { "command": "canticaScores.newActor",          "title": "Add AI Actor",        "category": "Cantica Studio", "icon": "$(add)" },
-      { "command": "canticaScores.saveGraph",         "title": "Save Actor Graph",    "category": "Cantica Studio", "icon": "$(save)" },
-      { "command": "canticaScores.loadGraph",         "title": "Reload Actor Graph",  "category": "Cantica Studio", "icon": "$(refresh)" },
-      { "command": "canticaScores.configureServer",   "title": "Configure Servers",   "category": "Cantica Studio", "icon": "$(settings-gear)" },
-      { "command": "canticaScores.startLocalStudio",  "title": "Start Studio API",    "category": "Cantica Studio", "icon": "$(play)" },
-      { "command": "canticaScores.stopLocalStudio",   "title": "Stop Studio API",     "category": "Cantica Studio", "icon": "$(debug-stop)" }
+      { "command": "canticaScores.openPanel",          "title": "Open Workspace",          "category": "Cantica Studio", "icon": "$(open-preview)" },
+      { "command": "canticaScores.newActor",            "title": "Add AI Actor",            "category": "Cantica Studio", "icon": "$(add)" },
+      { "command": "canticaScores.saveGraph",           "title": "Save Actor Graph",        "category": "Cantica Studio", "icon": "$(save)" },
+      { "command": "canticaScores.loadGraph",           "title": "Reload Actor Graph",      "category": "Cantica Studio", "icon": "$(refresh)" },
+      { "command": "canticaScores.configureServer",     "title": "Configure Servers",       "category": "Cantica Studio", "icon": "$(settings-gear)" },
+      { "command": "canticaScores.startLocalStudio",    "title": "Start Studio API",        "category": "Cantica Studio", "icon": "$(play)" },
+      { "command": "canticaScores.stopLocalStudio",     "title": "Stop Studio API",         "category": "Cantica Studio", "icon": "$(debug-stop)" },
+      { "command": "canticaScores.deleteActor",         "title": "Delete Selected",         "category": "Cantica Studio", "icon": "$(trash)" },
+      { "command": "canticaScores.resetGraph",          "title": "Reset Workspace",         "category": "Cantica Studio", "icon": "$(clear-all)" },
+      { "command": "canticaScores.editGraphFile",       "title": "Edit Actor Graph",        "category": "Cantica Studio", "icon": "$(edit)" },
+      { "command": "canticaScores.newSongbook",         "title": "New Songbook",            "category": "Cantica Studio", "icon": "$(new-file)" },
+      { "command": "canticaScores.saveAllSongbooks",    "title": "Save All Songbooks",      "category": "Cantica Studio", "icon": "$(save-all)" },
+      { "command": "canticaScores.closeAllSongbooks",   "title": "Close All Songbooks",     "category": "Cantica Studio", "icon": "$(close-all)" },
+      { "command": "canticaScores.newServer",           "title": "New Cantica Server",      "category": "Cantica Studio", "icon": "$(add)" },
+      { "command": "canticaScores.deleteServer",        "title": "Delete Cantica Server",   "category": "Cantica Studio", "icon": "$(trash)" },
+      { "command": "canticaScores.viewSongbook",        "title": "View Songbook",           "category": "Cantica Studio", "icon": "$(eye)" },
+      { "command": "canticaScores.editSongbook",        "title": "Edit Songbook",           "category": "Cantica Studio", "icon": "$(edit)" },
+      { "command": "canticaScores.deleteSongbook",      "title": "Delete Songbook",         "category": "Cantica Studio", "icon": "$(trash)" },
+      { "command": "canticaScores.exportSongbook",      "title": "Export",                  "category": "Cantica Studio", "icon": "$(cloud-upload)" }
     ],
     "menus": {
       "view/title": [
-        { "command": "canticaScores.openPanel",        "when": "view == canticaScores.agentsView", "group": "navigation@1" },
-        { "command": "canticaScores.newActor",         "when": "view == canticaScores.agentsView", "group": "navigation@2" },
-        { "command": "canticaScores.saveGraph",        "when": "view == canticaScores.agentsView", "group": "navigation@3" },
-        { "command": "canticaScores.configureServer",  "when": "view == canticaScores.agentsView", "group": "navigation@4" },
-        { "command": "canticaScores.startLocalStudio", "when": "view == canticaScores.agentsView", "group": "navigation@5" },
-        { "command": "canticaScores.stopLocalStudio",  "when": "view == canticaScores.agentsView", "group": "navigation@6" }
+        { "command": "canticaScores.newSongbook",       "when": "view == canticaScores.songbooksView", "group": "navigation@1" },
+        { "command": "canticaScores.saveAllSongbooks",  "when": "view == canticaScores.songbooksView", "group": "navigation@2" },
+        { "command": "canticaScores.closeAllSongbooks", "when": "view == canticaScores.songbooksView", "group": "navigation@3" },
+        { "command": "canticaScores.newServer",           "when": "view == canticaScores.serversView",   "group": "navigation@1" },
+        { "command": "canticaScores.deleteServer",      "when": "view == canticaScores.serversView",   "group": "navigation@2" },
+        { "command": "canticaScores.startLocalStudio",  "when": "view == canticaScores.studioView",    "group": "navigation@1" },
+        { "command": "canticaScores.stopLocalStudio",   "when": "view == canticaScores.studioView",    "group": "navigation@2" },
+        { "command": "canticaScores.configureServer",   "when": "view == canticaScores.studioView",    "group": "navigation@3" }
+      ],
+      "view/item/context": [
+        { "command": "canticaScores.viewSongbook",   "when": "view == canticaScores.songbooksView && viewItem == songbook", "group": "1_open@1" },
+        { "command": "canticaScores.editSongbook",   "when": "view == canticaScores.songbooksView && viewItem == songbook", "group": "1_open@2" },
+        { "command": "canticaScores.deleteSongbook", "when": "view == canticaScores.songbooksView && viewItem == songbook", "group": "2_manage@1" },
+        { "command": "canticaScores.exportSongbook", "when": "view == canticaScores.songbooksView && viewItem == songbook", "group": "2_manage@2" }
+      ],
+      "explorer/context": [
+        {
+          "command": "canticaScores.editGraphFile",
+          "when": "resourceExtname == .jsonld",
+          "group": "navigation"
+        }
       ]
     },
     "configuration": {
@@ -92,11 +121,6 @@
           "type": "boolean", "default": true,
           "markdownDescription": "Auto-start the Studio API container on activation.",
           "scope": "machine-overridable", "order": 7
-        },
-        "canticaScores.graphFile": {
-          "type": "string", "default": ".vscode/actors.jsonld",
-          "markdownDescription": "Workspace-relative path to the actor graph JSON-LD file.",
-          "scope": "resource", "order": 8
         }
       }
     }

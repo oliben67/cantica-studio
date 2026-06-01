@@ -39,7 +39,7 @@ export class StudioClient {
       const r = await fetch(this.url('/v1/graph'));
       if (!r.ok) return null;
       const raw = (await r.json()) as Record<string, unknown>;
-      return _parseGraph(raw);
+      return parseGraph(raw);
     } catch {
       return null;
     }
@@ -49,7 +49,7 @@ export class StudioClient {
     const r = await fetch(this.url('/v1/graph'), {
       method: 'PUT',
       headers: headers(),
-      body: JSON.stringify({ data: _serializeGraph(graph) }),
+      body: JSON.stringify({ data: serializeGraph(graph) }),
     });
     if (!r.ok) throw new Error(`Save failed: ${r.status}`);
   }
@@ -130,7 +130,7 @@ export class StudioClient {
 
 // ── JSON-LD ↔ ActorGraph conversion (host side) ───────────────────────────────
 
-function _parseGraph(raw: Record<string, unknown>): ActorGraph {
+export function parseGraph(raw: Record<string, unknown>): ActorGraph {
   const actors = ((raw['actors'] ?? []) as Record<string, unknown>[]).map(_parseActor);
   const edges = ((raw['edges'] ?? []) as Record<string, unknown>[]).map(_parseEdge);
   return {
@@ -145,16 +145,26 @@ function _parseActor(r: Record<string, unknown>): AIActorDef {
   const pos = (r['position'] as { x?: number; y?: number } | undefined) ?? {};
   const events: PromptEventDef[] = ((r['promptEvents'] ?? []) as Record<string, unknown>[]).map((e) => {
     const fp = e['filePattern'] as string | undefined;
+    const ta = e['targetActor'] as string | undefined;
+    const te = e['targetEvent'] as string | undefined;
     return {
       name: (e['name'] as string) ?? '',
       prompt: _parseRef(e['prompt']),
       ...(fp ? { filePattern: fp } : {}),
+      ...(ta ? { targetActor: ta } : {}),
+      ...(te ? { targetEvent: te } : {}),
     };
   });
-  const crons = ((r['cronJobs'] ?? []) as Record<string, unknown>[]).map((c) => ({
-    schedule: (c['schedule'] as string) ?? '',
-    prompt: _parseRef(c['prompt']),
-  }));
+  const crons = ((r['cronJobs'] ?? []) as Record<string, unknown>[]).map((c) => {
+    const ta = c['targetActor'] as string | undefined;
+    const te = c['targetEvent'] as string | undefined;
+    return {
+      schedule: (c['schedule'] as string) ?? '',
+      prompt: _parseRef(c['prompt']),
+      ...(ta ? { targetActor: ta } : {}),
+      ...(te ? { targetEvent: te } : {}),
+    };
+  });
   return {
     id: (r['@id'] as string) ?? '',
     name: (r['name'] as string) ?? '',
@@ -166,6 +176,15 @@ function _parseActor(r: Record<string, unknown>): AIActorDef {
     position: { x: (pos.x ?? 0), y: (pos.y ?? 0) },
     promptEvents: events,
     cronJobs: crons,
+    resources: ((r['resources'] ?? []) as Record<string, unknown>[]).map((res) => ({
+      id: (res['id'] as string) ?? '',
+      name: (res['name'] as string) ?? '',
+      type: (res['type'] as 'file' | 'api' | 'text' | 'other') ?? 'other',
+      uri: (res['uri'] as string) ?? '',
+      ...(res['description'] ? { description: res['description'] as string } : {}),
+      ...(res['dynamic'] !== undefined ? { dynamic: res['dynamic'] as boolean } : {}),
+      ...(res['sharedWith'] ? { sharedWith: res['sharedWith'] as string[] } : {}),
+    })),
   };
 }
 
@@ -192,7 +211,7 @@ function _parseRef(v: unknown): PromptRef {
   return {};
 }
 
-function _serializeGraph(g: ActorGraph): Record<string, unknown> {
+export function serializeGraph(g: ActorGraph): Record<string, unknown> {
   return {
     '@context': { '@vocab': 'https://cantica.dev/studio/', 'schema': 'http://schema.org/', 'name': 'schema:name' },
     '@type': 'ActorGraph',
@@ -219,11 +238,25 @@ function _serializeActor(a: AIActorDef): Record<string, unknown> {
       'name': e.name,
       'prompt': _serializeRef(e.prompt),
       ...(e.filePattern ? { 'filePattern': e.filePattern } : {}),
+      ...(e.targetActor ? { 'targetActor': e.targetActor } : {}),
+      ...(e.targetEvent ? { 'targetEvent': e.targetEvent } : {}),
     })),
     'cronJobs': a.cronJobs.map((c) => ({
       '@type': 'CronJob',
       'schedule': c.schedule,
       'prompt': _serializeRef(c.prompt),
+      ...(c.targetActor ? { 'targetActor': c.targetActor } : {}),
+      ...(c.targetEvent ? { 'targetEvent': c.targetEvent } : {}),
+    })),
+    'resources': (a.resources ?? []).map((res) => ({
+      '@type': 'AgentResource',
+      'id': res.id,
+      'name': res.name,
+      'type': res.type,
+      'uri': res.uri,
+      ...(res.description ? { 'description': res.description } : {}),
+      ...(res.dynamic !== undefined ? { 'dynamic': res.dynamic } : {}),
+      ...(res.sharedWith?.length ? { 'sharedWith': res.sharedWith } : {}),
     })),
   };
 }

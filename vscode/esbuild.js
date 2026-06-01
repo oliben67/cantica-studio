@@ -27,6 +27,7 @@ const webviewOptions = {
   target: ['chrome120'],
   sourcemap: !production,
   minify: production,
+  jsx: 'automatic',
   define: {
     'process.env.NODE_ENV': production ? '"production"' : '"development"',
   },

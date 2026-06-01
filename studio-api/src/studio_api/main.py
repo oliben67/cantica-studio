@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     from studio_api.api.v1 import prompts as prompts_ep  # noqa: PLC0415
     from studio_api.api.v1 import runtime as runtime_ep  # noqa: PLC0415
+    from studio_api.api.v1 import resources as resources_ep  # noqa: PLC0415
     from studio_api import mcp_server  # noqa: PLC0415
 
     settings = get_settings()
@@ -34,7 +35,8 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
 
     prompts_ep.init(connector)
     runtime_ep.init(rt, connector)
-    mcp_server.init(fs)
+    resources_ep.init(rt)
+    mcp_server.init(fs, rt)
 
     log.info("Configured %d Cantica server(s)", len(settings.cantica_servers))
 

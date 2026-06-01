@@ -38,6 +38,9 @@ def _cn() -> CanticaConnector:
 
 class StartActorRequest(BaseModel):
     name: str
+    actor_type: str = "ai"          # "ai" | "python" | "typescript"
+    script_path: str = ""           # required for python / typescript actors
+    script_command: str = ""        # optional runtime override (e.g. "ts-node", "bun")
     define_prompt: str = ""
     provider: str = "claude"
     model: str = "claude-sonnet-4-6"
@@ -46,6 +49,7 @@ class StartActorRequest(BaseModel):
     prompt_events: list[dict] = []
     cron_jobs: list[dict] = []
     outbox: dict[str, str] = {}
+    resources: list[dict] = []
 
 
 class InstructRequest(BaseModel):
@@ -66,6 +70,9 @@ async def start_actor(body: StartActorRequest) -> dict:
     defn = ActorDef(
         id=f"urn:cantica:studio:actor:{body.name}",
         name=body.name,
+        actor_type=body.actor_type,
+        script_path=body.script_path,
+        script_command=body.script_command,
         define_prompt=body.define_prompt,
         provider=body.provider,
         model=body.model,
@@ -74,6 +81,7 @@ async def start_actor(body: StartActorRequest) -> dict:
         prompt_events=body.prompt_events,
         cron_jobs=body.cron_jobs,
         outbox=body.outbox,
+        resources=body.resources,
     )
     try:
         loop = asyncio.get_event_loop()
@@ -82,7 +90,7 @@ async def start_actor(body: StartActorRequest) -> dict:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"name": body.name, "status": "running"}
+    return {"name": body.name, "status": "running", "actor_type": body.actor_type}
 
 
 @router.delete("/actors/{name}", status_code=204)
@@ -122,3 +130,44 @@ async def fire_event(name: str, event_name: str, body: EventRequest) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"name": name, "event": event_name, "output": output}
+
+
+@router.get("/actors/{name}/events")
+def list_actor_events(name: str) -> list[dict]:
+    """Return events declared by a code actor (empty for AI actors)."""
+    try:
+        return _rt().get_actor_events(name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/actors/{name}/crons")
+def list_actor_crons(name: str) -> list[dict]:
+    """Return cron jobs declared by a code actor (empty for AI actors)."""
+    try:
+        return _rt().get_actor_crons(name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/actors/{name}/logs")
+async def get_actor_logs(name: str) -> dict:
+    """Return captured log output from a code actor."""
+    try:
+        loop = asyncio.get_event_loop()
+        logs = await loop.run_in_executor(None, _rt().get_actor_logs, name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"name": name, "logs": logs}
+
+
+@router.get("/actors/{name}/type")
+def get_actor_type(name: str) -> dict:
+    """Return the type of a running actor: 'ai', 'python', or 'typescript'."""
+    try:
+        actor_type = _rt().get_actor_type(name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"name": name, "actor_type": actor_type}

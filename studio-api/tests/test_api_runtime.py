@@ -151,3 +151,118 @@ def test_fire_event_internal_error_returns_500(client: TestClient, mock_runtime:
     mock_runtime.fire_event = MagicMock(side_effect=RuntimeError("crash"))
     r = client.post("/v1/runtime/actors/bot/event/evt", json={})
     assert r.status_code == 500
+
+
+# ── GET /v1/runtime/actors/{name}/events ─────────────────────────────────────
+
+
+def test_list_actor_events_success(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_events.return_value = [{"name": "analyze"}, {"name": "review"}]
+    r = client.get("/v1/runtime/actors/bot/events")
+    assert r.status_code == 200
+    names = [e["name"] for e in r.json()]
+    assert "analyze" in names
+    assert "review" in names
+    mock_runtime.get_actor_events.assert_called_once_with("bot")
+
+
+def test_list_actor_events_empty(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_events.return_value = []
+    r = client.get("/v1/runtime/actors/ai-bot/events")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_list_actor_events_not_found_returns_404(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_events.side_effect = KeyError("not running")
+    r = client.get("/v1/runtime/actors/ghost/events")
+    assert r.status_code == 404
+
+
+# ── GET /v1/runtime/actors/{name}/crons ──────────────────────────────────────
+
+
+def test_list_actor_crons_success(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_crons.return_value = [{"name": "daily", "schedule": "0 9 * * *"}]
+    r = client.get("/v1/runtime/actors/bot/crons")
+    assert r.status_code == 200
+    assert r.json()[0]["name"] == "daily"
+    mock_runtime.get_actor_crons.assert_called_once_with("bot")
+
+
+def test_list_actor_crons_not_found_returns_404(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_crons.side_effect = KeyError("not running")
+    r = client.get("/v1/runtime/actors/ghost/crons")
+    assert r.status_code == 404
+
+
+# ── GET /v1/runtime/actors/{name}/logs ───────────────────────────────────────
+
+
+def test_get_actor_logs_success(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_logs.return_value = "line1\nline2"
+    r = client.get("/v1/runtime/actors/bot/logs")
+    assert r.status_code == 200
+    assert r.json()["logs"] == "line1\nline2"
+    assert r.json()["name"] == "bot"
+    mock_runtime.get_actor_logs.assert_called_once_with("bot")
+
+
+def test_get_actor_logs_not_found_returns_404(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_logs.side_effect = KeyError("not running")
+    r = client.get("/v1/runtime/actors/ghost/logs")
+    assert r.status_code == 404
+
+
+def test_get_actor_logs_error_returns_500(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_logs.side_effect = RuntimeError("timeout")
+    r = client.get("/v1/runtime/actors/bot/logs")
+    assert r.status_code == 500
+
+
+# ── GET /v1/runtime/actors/{name}/type ───────────────────────────────────────
+
+
+def test_get_actor_type_ai(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_type.return_value = "ai"
+    r = client.get("/v1/runtime/actors/ai-bot/type")
+    assert r.status_code == 200
+    assert r.json() == {"name": "ai-bot", "actor_type": "ai"}
+
+
+def test_get_actor_type_python(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_type.return_value = "python"
+    r = client.get("/v1/runtime/actors/worker/type")
+    assert r.status_code == 200
+    assert r.json()["actor_type"] == "python"
+
+
+def test_get_actor_type_not_found_returns_404(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_type.side_effect = KeyError("not running")
+    r = client.get("/v1/runtime/actors/ghost/type")
+    assert r.status_code == 404
+
+
+# ── POST /v1/runtime/actors — actor_type field ───────────────────────────────
+
+
+def test_start_actor_includes_actor_type_in_response(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.start = MagicMock()
+    r = client.post("/v1/runtime/actors", json={
+        "name": "worker", "actor_type": "python", "script_path": "/tmp/w.py",
+    })
+    assert r.status_code == 201
+    assert r.json()["actor_type"] == "python"
+
+
+def test_start_actor_passes_script_fields(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.start = MagicMock()
+    r = client.post("/v1/runtime/actors", json={
+        "name": "ts-worker", "actor_type": "typescript",
+        "script_path": "/app/worker.js", "script_command": "bun",
+    })
+    assert r.status_code == 201
+    call_args = mock_runtime.start.call_args[0][0]
+    assert call_args.actor_type == "typescript"
+    assert call_args.script_path == "/app/worker.js"
+    assert call_args.script_command == "bun"

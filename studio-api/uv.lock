@@ -4,7 +4,7 @@ requires-python = ">=3.14"
 
 [[package]]
 name = "actor-ai"
-version = "0.3.6"
+version = "0.3.7"
 source = { editable = "../../../actor-ai" }
 dependencies = [
     { name = "anthropic" },

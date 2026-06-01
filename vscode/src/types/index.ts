@@ -9,11 +9,25 @@ export interface PromptEventDef {
   name: string;
   prompt: PromptRef;
   filePattern?: string;
+  targetActor?: string;
+  targetEvent?: string;
 }
 
 export interface CronJobDef {
   schedule: string;
   prompt: PromptRef;
+  targetActor?: string;
+  targetEvent?: string;
+}
+
+export interface AgentResource {
+  id: string;
+  name: string;
+  type: 'file' | 'api' | 'text' | 'other';
+  uri: string;
+  description?: string;
+  dynamic?: boolean;       // true = created at runtime
+  sharedWith?: string[];   // actor names this resource is shared with
 }
 
 export interface AIActorDef {
@@ -27,6 +41,7 @@ export interface AIActorDef {
   position: { x: number; y: number };
   promptEvents: PromptEventDef[];
   cronJobs: CronJobDef[];
+  resources: AgentResource[];
 }
 
 export interface ActorEdgeDef {
@@ -77,7 +92,6 @@ export interface ExtensionSettings {
   canticaHome: string;
   studioPort: number;
   autoStartStudio: boolean;
-  graphFile: string;
 }
 
 // ── Webview message protocol ──────────────────────────────────────────────────
@@ -89,7 +103,10 @@ export type ToWebview =
   | { type: 'updateSettings'; settings: ExtensionSettings }
   | { type: 'actorStatus'; name: string; running: boolean }
   | { type: 'actorOutput'; name: string; output: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'deleteSelected' }
+  | { type: 'resetGraph' }
+  | { type: 'triggerSave' };
 
 /** Messages sent FROM the webview TO the extension host. */
 export type FromWebview =
@@ -100,7 +117,12 @@ export type FromWebview =
   | { type: 'fireEvent'; name: string; eventName: string; context: string }
   | { type: 'stopActor'; name: string }
   | { type: 'refreshPrompts' }
-  | { type: 'explorerSideChanged'; side: 'left' | 'right' };
+  | { type: 'explorerSideChanged'; side: 'left' | 'right' }
+  | { type: 'configureServer' }
+  | { type: 'startLocalStudio' }
+  | { type: 'stopLocalStudio' }
+  | { type: 'playSongbook' }
+  | { type: 'stopSongbook' };
 
 // Legacy alias so agents-panel.ts type annotation still resolves
 export type WebviewMessage = ToWebview;

@@ -63,12 +63,15 @@ def client(
     from studio_api.api.v1 import runtime as runtime_ep  # noqa: PLC0415
     import studio_api.mcp_server as mcp_mod  # noqa: PLC0415
 
+    from studio_api.api.v1 import resources as resources_ep  # noqa: PLC0415
+
     # Enter the TestClient context (this triggers lifespan and sets real singletons),
     # then immediately replace them with mocks so tests run against controlled fakes.
     with TestClient(app, raise_server_exceptions=True) as c:
         prompts_ep._connector = mock_connector
         runtime_ep._runtime = mock_runtime
         runtime_ep._connector = mock_connector
+        resources_ep._runtime = mock_runtime
         mcp_mod.init(WorkspaceFS(tmp_workspace))
         yield c
 
@@ -76,4 +79,5 @@ def client(
     prompts_ep._connector = None
     runtime_ep._runtime = None
     runtime_ep._connector = None
+    resources_ep._runtime = None
     mcp_mod._fs = None

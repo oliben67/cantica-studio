@@ -271,3 +271,218 @@ def test_cron_schedule_parsing_five_fields():
 
     assert rt._scheduler.get_jobs()  # at least one job registered
     rt.stop_all()
+
+
+# ── ActorDef None-field defaulting ────────────────────────────────────────────
+
+
+def test_actor_def_none_prompt_events_becomes_empty_list():
+    d = ActorDef(id="urn:x", name="b", define_prompt="p", prompt_events=None)
+    assert d.prompt_events == []
+
+
+def test_actor_def_none_cron_jobs_becomes_empty_list():
+    d = ActorDef(id="urn:x", name="b", define_prompt="p", cron_jobs=None)
+    assert d.cron_jobs == []
+
+
+def test_actor_def_none_outbox_becomes_empty_dict():
+    d = ActorDef(id="urn:x", name="b", define_prompt="p", outbox=None)
+    assert d.outbox == {}
+
+
+def test_actor_def_none_resources_becomes_empty_list():
+    d = ActorDef(id="urn:x", name="b", define_prompt="p", resources=None)
+    assert d.resources == []
+
+
+def test_actor_def_code_fields():
+    d = ActorDef(
+        id="urn:x", name="w", define_prompt="",
+        actor_type="python", script_path="/a/b.py", script_command="python3",
+    )
+    assert d.actor_type == "python"
+    assert d.script_path == "/a/b.py"
+    assert d.script_command == "python3"
+
+
+# ── fire_event routing to target actor ────────────────────────────────────────
+
+
+def test_fire_event_routes_output_to_target_actor():
+    """When an event has targetActor, the output is forwarded there."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_a = MagicMock()
+    proxy_a.fire_event.return_value.get.return_value = "source-output"
+    proxy_b = MagicMock()
+    proxy_b.instruct.return_value.get.return_value = "target-reply"
+
+    ref_a = MagicMock()
+    ref_a.proxy.return_value = proxy_a
+    ref_b = MagicMock()
+    ref_b.proxy.return_value = proxy_b
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", side_effect=[ref_a, ref_b]):
+        rt.start(
+            _actor_def(
+                "source",
+                prompt_events=[{"name": "process", "prompt": "p",
+                                "targetActor": "target", "targetEvent": ""}],
+            ),
+            connector,
+        )
+        rt.start(_actor_def("target"), connector)
+
+    result = rt.fire_event("source", "process", "ctx")
+    assert result == "target-reply"
+    proxy_b.instruct.assert_called_once_with("source-output")
+    rt.stop_all()
+
+
+def test_fire_event_routes_to_target_event():
+    """targetActor + targetEvent causes fire_event on the target."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_a = MagicMock()
+    proxy_a.fire_event.return_value.get.return_value = "a-output"
+    proxy_b = MagicMock()
+    proxy_b.fire_event.return_value.get.return_value = "b-event-reply"
+
+    ref_a = MagicMock()
+    ref_a.proxy.return_value = proxy_a
+    ref_b = MagicMock()
+    ref_b.proxy.return_value = proxy_b
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", side_effect=[ref_a, ref_b]):
+        rt.start(
+            _actor_def(
+                "source",
+                prompt_events=[{"name": "process", "prompt": "p",
+                                "targetActor": "target", "targetEvent": "on-input"}],
+            ),
+            connector,
+        )
+        rt.start(_actor_def("target"), connector)
+
+    result = rt.fire_event("source", "process", "ctx")
+    assert result == "b-event-reply"
+    rt.stop_all()
+
+
+def test_fire_event_unknown_actor_raises():
+    rt = ActorRuntime()
+    with pytest.raises(KeyError):
+        rt.fire_event("ghost", "event")
+    rt.stop_all()
+
+
+# ── Python code actor TypeScript branch ───────────────────────────────────────
+
+
+def test_start_typescript_code_actor(tmp_path):
+    """TypeScript actor path is exercised (subprocess is mocked)."""
+    import json, queue  # noqa: PLC0415
+    from unittest.mock import patch  # noqa: PLC0415
+
+    class _FakeProc:
+        def __init__(self):
+            self._q = queue.Queue()
+            self._q.put(json.dumps({"type": "ready", "events": [{"name": "ping"}], "crons": []}) + "\n")
+            self.stdin = self
+            self.stderr = __import__("io").StringIO("")
+        @property
+        def stdout(self): return self
+        def __iter__(self):
+            while True:
+                line = self._q.get()
+                if line is None: return
+                yield line
+        def write(self, d): pass
+        def flush(self): pass
+        def terminate(self): self._q.put(None)
+        def wait(self, timeout=None): return 0
+
+    proc = _FakeProc()
+    rt = ActorRuntime()
+    defn = ActorDef(
+        id="urn:x:ts",
+        name="ts-worker",
+        define_prompt="",
+        actor_type="typescript",
+        script_path="/fake/script.js",
+        script_command="node",
+    )
+    with patch("studio_api.code_actor.subprocess.Popen", return_value=proc):
+        rt.start(defn, MagicMock())
+
+    assert "ts-worker" in rt.list_running()
+    assert rt.get_actor_type("ts-worker") == "typescript"
+    events = rt.get_actor_events("ts-worker")
+    assert any(e["name"] == "ping" for e in events)
+    rt.stop_all()
+
+
+# ── Code cron registration ────────────────────────────────────────────────────
+
+
+def test_code_cron_invalid_schedule_warns(tmp_path):
+    """An invalid cron schedule is caught and logged as a warning (no crash)."""
+    p = tmp_path / "act.py"
+    p.write_text(
+        "from actor_ai.code_actor import cron\n"
+        "@cron('not-a-valid-cron')\ndef job(): return ''\n",
+        encoding="utf-8",
+    )
+    rt = ActorRuntime()
+    rt.start(
+        ActorDef(id="urn:x", name="bad-cron", define_prompt="", actor_type="python",
+                 script_path=str(p)),
+        MagicMock(),
+    )
+    # No exception raised — bad cron is warned and skipped
+    assert "bad-cron" in rt.list_running()
+    rt.stop_all()
+
+
+# ── get_actor_logs for AI actor returns empty string ─────────────────────────
+
+
+def test_get_actor_logs_ai_actor_returns_empty():
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_mock = MagicMock()
+    proxy_mock.get_logs.return_value.get.return_value = ""
+    started_ref = MagicMock()
+    started_ref.proxy.return_value = proxy_mock
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        rt.start(_actor_def(), connector)
+        result = rt.get_actor_logs("test-actor")
+
+    # get_logs is attempted; returns empty string
+    assert result == ""
+    rt.stop_all()
+
+
+# ── Invalid cron in AI actor schedule ────────────────────────────────────────
+
+
+def test_invalid_ai_cron_schedule_warns_not_raises():
+    rt = ActorRuntime()
+    connector = _mock_connector()
+    defn = _actor_def(cron_jobs=[{"schedule": "not-valid", "prompt": "p"}])
+
+    started_ref = MagicMock()
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        rt.start(defn, connector)  # must not raise
+
+    assert "test-actor" in rt.list_running()
+    rt.stop_all()

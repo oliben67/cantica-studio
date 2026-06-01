@@ -31,13 +31,19 @@
 button { font: inherit; cursor: pointer; }
 ul, li { list-style: none; }
 
+html, body { height: 100%; overflow: hidden; }
+
 body {
   font-family: var(--cs-font);
   font-size: var(--cs-font-size);
   background: var(--cs-bg);
   color: var(--cs-text);
-  height: 100vh;
-  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -46,71 +52,9 @@ body {
 .cs-root {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   Toolbar
-   ───────────────────────────────────────────────────────────── */
-.cs-toolbar {
-  flex-shrink: 0;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  background: var(--cs-bg-panel);
-  border-bottom: 1px solid var(--cs-border);
-}
-
-.cs-toolbar-brand {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--cs-text);
-  white-space: nowrap;
-}
-
-.cs-accent-icon { color: var(--cs-accent); flex-shrink: 0; }
-
-.cs-toolbar-server {
   flex: 1;
-  font-family: var(--cs-font-mono);
-  font-size: 11px;
-  color: var(--cs-text-muted);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 2px 8px;
-  background: var(--cs-accent-dim);
-  border: 1px solid var(--cs-accent-border);
-  border-radius: var(--cs-radius);
-  max-width: 320px;
 }
-
-.cs-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.cs-icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: var(--cs-radius);
-  background: transparent;
-  color: var(--cs-text-muted);
-  transition: background 0.15s, color 0.15s;
-}
-.cs-icon-btn:hover  { background: var(--cs-bg-hover); color: var(--cs-text); }
-.cs-icon-btn:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 1px; }
 
 /* ─────────────────────────────────────────────────────────────
    Workspace split
@@ -323,8 +267,10 @@ body {
 }
 
 .cs-canvas-root {
-  width: 100%;
-  height: 100%;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
 }
 
 /* Canvas empty hint (rendered as a React Flow Panel) */
@@ -372,6 +318,23 @@ body {
   background: var(--cs-bg-panel) !important;
   overflow: hidden;
 }
+
+/* Fix minimap to a known height so the toggle button can be positioned precisely */
+.cs-rf-minimap { height: 124px !important; }
+
+/* Minimap toggle button — overlaid at top-right corner of the minimap */
+.cs-minimap-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px;
+  background: var(--cs-bg-panel);
+  border: 1px solid var(--cs-border);
+  border-radius: 3px;
+  color: var(--cs-text-muted);
+  font-size: 12px; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  transition: color .15s, border-color .15s;
+}
+.cs-minimap-toggle:hover { color: var(--cs-accent); border-color: var(--cs-accent-border); }
 
 .react-flow__edge-path { stroke: var(--cs-accent) !important; stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path { stroke: #a78bfa !important; }
@@ -576,6 +539,25 @@ body {
 .cs-edge-event-badge {
   font-size: 10px; margin-right: 4px; color: #a78bfa;
 }
+.cs-edge-delete {
+  position: absolute;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--cs-border);
+  background: var(--cs-bg-panel);
+  color: var(--vscode-errorForeground, #f48771);
+  font-size: 13px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  pointer-events: all;
+  transition: background 0.1s, color 0.1s;
+}
+.cs-edge-delete:hover {
+  background: var(--vscode-errorForeground, #f48771);
+  color: #fff;
+  border-color: var(--vscode-errorForeground, #f48771);
+}
 
 /* ─────────────────────────────────────────────────────────────
    Properties Panel
@@ -654,16 +636,16 @@ body {
 .cs-prop-danger-btn:hover { background: #dc2626; color: #fff; }
 
 /* ─────────────────────────────────────────────────────────────
-   Toolbar (new)
+   Toolbar
    ───────────────────────────────────────────────────────────── */
 .cs-toolbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 4px 10px; background: var(--cs-bg);
+  padding: 4px 10px; background: var(--cs-bg-panel);
   border-bottom: 1px solid var(--cs-border);
   gap: 8px; flex-shrink: 0;
 }
 .cs-toolbar-title { font-size: 12px; font-weight: 600; color: var(--cs-text); flex: 1; }
-.cs-toolbar-actions { display: flex; gap: 4px; }
+.cs-toolbar-actions { display: flex; align-items: center; gap: 4px; }
 .cs-toolbar-btn {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; padding: 3px 8px;
@@ -671,7 +653,11 @@ body {
   border-radius: 3px; color: var(--cs-text); cursor: pointer;
 }
 .cs-toolbar-btn:hover { border-color: var(--cs-accent); color: var(--cs-accent); }
+.cs-toolbar-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 .cs-toolbar-btn--side { padding: 3px 6px; }
+.cs-toolbar-btn--danger:hover { border-color: #f87171; color: #f87171; }
+.cs-toolbar-btn--warn:hover { border-color: #fb923c; color: #fb923c; }
+.cs-toolbar-sep { width: 1px; background: var(--cs-border); align-self: stretch; margin: 2px 2px; }
 
 /* ─────────────────────────────────────────────────────────────
    Prompt browser (sidebar)
@@ -695,4 +681,255 @@ body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 10px; pointer-events: none;
   color: var(--cs-text-muted); font-size: 13px; text-align: center;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Actor node — header inline buttons + editable name
+   ───────────────────────────────────────────────────────────── */
+.cs-actor-node { padding: 0 !important; }
+
+.cs-actor-header {
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px !important;
+  flex-wrap: nowrap;
+}
+.cs-actor-name {
+  flex: 1;
+  cursor: text;
+  min-width: 0;
+}
+.cs-actor-name-input {
+  flex: 1; min-width: 0;
+  background: var(--cs-bg);
+  border: 1px solid var(--cs-accent);
+  border-radius: 3px;
+  color: var(--cs-text);
+  font-size: 12px; font-weight: 600;
+  padding: 1px 5px;
+  outline: none;
+}
+/* Gear icon — far left of header */
+.cs-actor-gear {
+  width: 16px; height: 16px; flex-shrink: 0;
+  border: none; border-radius: 3px;
+  background: transparent; color: var(--cs-text-muted);
+  font-size: 10px; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .1s, color .1s;
+}
+.cs-actor-gear:hover { background: var(--cs-bg-hover); color: var(--cs-accent); }
+
+/* Event/cron indicator icons in model row */
+.cs-actor-indicator {
+  border: none; background: none; padding: 0 1px;
+  font-size: 10px; cursor: pointer; color: var(--cs-accent);
+  opacity: 0.75; flex-shrink: 0; line-height: 1;
+}
+.cs-actor-indicator:hover { opacity: 1; }
+
+/* Context menu icon column */
+.cs-ctx-icon { display: inline-block; width: 16px; text-align: center; }
+
+/* Provider badge (clickable, no longer a column) */
+.cs-actor-provider { flex-shrink: 0; cursor: pointer; }
+.cs-actor-provider:hover .cs-actor-badge { filter: brightness(1.2); }
+
+/* Model name row below the header */
+.cs-actor-model-row {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 8px 4px;
+  border-bottom: 1px solid var(--cs-border);
+}
+.cs-actor-model {
+  flex: 1;                          /* pushes indicators to the right */
+  font-size: 10px; font-family: var(--cs-font-mono);
+  color: var(--cs-accent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Transparent overlay to capture outside-clicks without propagating to canvas */
+.cs-provider-overlay {
+  position: fixed; inset: 0;
+  z-index: 9998;
+}
+
+/* Provider / model dropdown */
+.cs-provider-menu {
+  position: fixed; z-index: 9999;
+  background: var(--cs-bg-panel);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  box-shadow: 0 6px 24px rgba(0,0,0,.55);
+  min-width: 200px; max-width: 260px;
+  max-height: 420px; overflow-y: auto;
+  padding: 4px 0;
+}
+.cs-provider-section {
+  padding-bottom: 4px; margin-bottom: 2px;
+  border-bottom: 1px solid var(--cs-border);
+}
+.cs-provider-section:last-child { border-bottom: none; margin-bottom: 0; }
+.cs-provider-section-header { padding: 5px 10px 3px; }
+.cs-provider-model-btn {
+  display: block; width: 100%;
+  padding: 3px 22px;
+  background: none; border: none; text-align: left;
+  font-size: 11px; font-family: var(--cs-font-mono);
+  color: var(--cs-text-muted); cursor: pointer;
+}
+.cs-provider-model-btn:hover { background: var(--cs-bg-hover); color: var(--cs-text); }
+
+/* Agent resource rows */
+.cs-resource-locked { opacity: 0.75; }
+.cs-resource-lock { font-size: 11px; flex-shrink: 0; }
+.cs-resource-type-badge {
+  font-size: 10px; flex-shrink: 0;
+  background: var(--cs-accent-dim); border: 1px solid var(--cs-accent-border);
+  border-radius: 3px; padding: 1px 5px; color: var(--cs-accent);
+}
+.cs-resource-uri {
+  display: flex; align-items: center; gap: 5px;
+  padding: 2px 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Context menu
+   ───────────────────────────────────────────────────────────── */
+.cs-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--cs-bg-panel);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,.45);
+  min-width: 160px;
+  padding: 3px 0;
+  overflow: hidden;
+}
+.cs-ctx-item {
+  display: block; width: 100%;
+  padding: 6px 14px;
+  background: none; border: none; text-align: left;
+  font-size: 12px; color: var(--cs-text); cursor: pointer;
+}
+.cs-ctx-item:hover { background: var(--cs-bg-hover); }
+.cs-ctx-item--danger { color: #f87171; }
+.cs-ctx-item--danger:hover { background: rgba(220,38,38,.15); }
+.cs-ctx-sep { height: 1px; background: var(--cs-border); margin: 3px 0; }
+
+/* ─────────────────────────────────────────────────────────────
+   Prompt modal
+   ───────────────────────────────────────────────────────────── */
+.cs-modal-overlay {
+  position: fixed; inset: 0;
+  z-index: 8000;
+  background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.cs-modal {
+  background: var(--cs-bg-panel);
+  border: 1px solid var(--cs-border);
+  border-radius: calc(var(--cs-radius) + 2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  width: 400px; max-width: 95vw;
+  display: flex; flex-direction: column;
+  max-height: 85vh; overflow: hidden;
+}
+.cs-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--cs-border);
+}
+.cs-modal-title { font-size: 13px; font-weight: 600; color: var(--cs-text); }
+.cs-modal-close {
+  background: none; border: none; color: var(--cs-text-muted);
+  font-size: 14px; cursor: pointer; padding: 2px 4px; border-radius: 3px;
+}
+.cs-modal-close:hover { color: var(--cs-text); background: var(--cs-bg-hover); }
+.cs-modal-body {
+  flex: 1; overflow-y: auto;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cs-modal-from {
+  display: flex; align-items: center;
+  font-size: 12px; color: var(--cs-text);
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--cs-border);
+}
+.cs-modal-textarea { resize: vertical; min-height: 72px; font-family: var(--cs-font-mono); font-size: 11px; }
+.cs-modal-footer {
+  display: flex; gap: 8px; justify-content: flex-end;
+  padding: 10px 14px;
+  border-top: 1px solid var(--cs-border);
+}
+.cs-modal-btn {
+  font-size: 12px; padding: 5px 14px;
+  border-radius: var(--cs-radius); border: 1px solid var(--cs-border);
+  background: var(--cs-bg-hover); color: var(--cs-text); cursor: pointer;
+}
+.cs-modal-btn:hover { border-color: var(--cs-accent-border); }
+.cs-modal-btn--primary {
+  background: var(--cs-accent); color: #fff; border-color: var(--cs-accent);
+}
+.cs-modal-btn--primary:hover { filter: brightness(1.15); }
+.cs-modal-btn--danger {
+  border-color: #f87171; color: #f87171;
+}
+.cs-modal-btn--danger:hover { background: rgba(220,38,38,.12); border-color: #dc2626; color: #dc2626; }
+
+/* Wide modal variant (events / crons) */
+.cs-modal--wide { width: 480px; }
+
+/* Events / cron item card */
+.cs-modal-event-item {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 10px 12px;
+  background: var(--cs-bg); border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+}
+.cs-modal-event-header {
+  display: flex; align-items: center; gap: 6px;
+}
+.cs-modal-event-name { flex: 1; font-weight: 600; }
+.cs-modal-event-section {
+  flex: 1; font-size: 11px; font-weight: 600;
+  color: var(--cs-text-muted); text-transform: uppercase; letter-spacing: .05em;
+}
+.cs-modal-remove-btn {
+  background: none; border: none;
+  color: var(--cs-text-muted); cursor: pointer;
+  font-size: 13px; padding: 1px 3px; border-radius: 3px;
+}
+.cs-modal-remove-btn:hover { color: #f87171; background: rgba(220,38,38,.15); }
+.cs-modal-hint { font-size: 10px; color: var(--cs-text-muted); font-style: italic; }
+.cs-modal-optional .cs-prop-input { font-size: 11px; }
+.cs-modal-empty {
+  font-size: 12px; color: var(--cs-text-muted);
+  text-align: center; padding: 16px 0;
+}
+
+/* Cron expression builder */
+.cs-cron-builder {
+  display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap;
+}
+.cs-cron-field {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.cs-cron-input {
+  width: 52px; text-align: center;
+  font-family: var(--cs-font-mono); font-size: 12px;
+}
+.cs-cron-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--cs-text-muted);
+}
+.cs-cron-expr {
+  font-family: var(--cs-font-mono); font-size: 11px;
+  color: var(--cs-accent); align-self: flex-end;
+  padding: 4px 6px; background: var(--cs-accent-dim);
+  border: 1px solid var(--cs-accent-border); border-radius: 3px;
+  white-space: nowrap;
 }

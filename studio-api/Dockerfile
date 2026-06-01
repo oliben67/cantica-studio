@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir /dist/*.whl
 
 # Install studio-api and its dependencies (actor-ai from PyPI, etc.)
 WORKDIR /app
-COPY cantica-studio/studio-api/pyproject.toml ./
+COPY cantica-studio/studio-api/pyproject.toml cantica-studio/studio-api/README.md ./
 COPY cantica-studio/studio-api/src ./src
 RUN pip install --no-cache-dir -e ".[actor-ai]" 2>/dev/null || pip install --no-cache-dir -e .
 

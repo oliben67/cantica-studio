@@ -1,0 +1,86 @@
+import React, { useState } from 'react';
+import { useStore } from '../store';
+import type { PromptRef } from '../types';
+
+export function PropertiesModal() {
+  const { graph, updateActor, propertiesModalActorId, closePropertiesModal } = useStore();
+  const actor = propertiesModalActorId ? graph.actors.find(a => a.id === propertiesModalActorId) : null;
+
+  const [defineUri, setDefineUri] = useState(() => actor?.definePrompt.uri ?? '');
+  const [defineContent, setDefineContent] = useState(() => actor?.definePrompt.content ?? '');
+  const [maxTokens, setMaxTokens] = useState(() => actor?.maxTokens ?? 4096);
+  const [maxHistory, setMaxHistory] = useState(() => actor?.maxHistory ?? 10);
+
+  if (!actor) return null;
+
+  function save() {
+    if (!actor) return;
+    const definePrompt: PromptRef = defineUri.trim() ? { uri: defineUri.trim() } : { content: defineContent };
+    updateActor(actor.id, { definePrompt, maxTokens, maxHistory });
+    closePropertiesModal();
+  }
+
+  return (
+    <div className="cs-modal-overlay" onMouseDown={closePropertiesModal}>
+      <div className="cs-modal" onMouseDown={e => e.stopPropagation()}>
+        <div className="cs-modal-header">
+          <span className="cs-modal-title">⚙ Properties — {actor.name}</span>
+          <button className="cs-modal-close" onClick={closePropertiesModal}>✕</button>
+        </div>
+
+        <div className="cs-modal-body">
+          <label className="cs-prop-label">
+            Role prompt URI
+            <input
+              className="cs-prop-input"
+              value={defineUri}
+              onChange={e => setDefineUri(e.target.value)}
+              placeholder="cantica://namespace/prompt"
+            />
+          </label>
+
+          <label className="cs-prop-label">
+            Role prompt <span className="cs-modal-hint">(inline — used when URI is empty)</span>
+            <textarea
+              className="cs-prop-input cs-modal-textarea"
+              value={defineContent}
+              onChange={e => setDefineContent(e.target.value)}
+              placeholder="Define what this actor does…"
+              rows={4}
+            />
+          </label>
+
+          <div className="cs-prop-row">
+            <label className="cs-prop-label cs-prop-half">
+              Max tokens
+              <input
+                className="cs-prop-input"
+                type="number"
+                value={maxTokens}
+                onChange={e => setMaxTokens(Math.max(1, Number(e.target.value)))}
+                min={1}
+                max={200000}
+              />
+            </label>
+            <label className="cs-prop-label cs-prop-half">
+              Max history turns
+              <input
+                className="cs-prop-input"
+                type="number"
+                value={maxHistory}
+                onChange={e => setMaxHistory(Math.max(0, Number(e.target.value)))}
+                min={0}
+                max={100}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="cs-modal-footer">
+          <button className="cs-modal-btn cs-modal-btn--primary" onClick={save}>Save</button>
+          <button className="cs-modal-btn" onClick={closePropertiesModal}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}

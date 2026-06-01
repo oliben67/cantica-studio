@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { ActorGraph, ExtensionSettings, ToWebview } from './types/index.js';
-import type { StudioClient } from './studio-client.js';
+import { serializeGraph, type StudioClient } from './studio-client.js';
 
 export class ActorsPanel {
   static readonly viewType = 'canticaScores.panel';
@@ -11,6 +11,7 @@ export class ActorsPanel {
   private settings: ExtensionSettings;
   private client: StudioClient;
   private fileSaveWatcher: vscode.Disposable | undefined;
+  private activeSongbookUri: vscode.Uri | undefined;
 
   static show(
     context: vscode.ExtensionContext,
@@ -25,8 +26,8 @@ export class ActorsPanel {
     }
     const panel = vscode.window.createWebviewPanel(
       ActorsPanel.viewType,
-      'Cantica Studio',
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+      'Songbook',
+      { viewColumn: vscode.ViewColumn.Two, preserveFocus: false },
       {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')],
@@ -70,11 +71,25 @@ export class ActorsPanel {
 
       case 'saveGraph': {
         const graph = raw['graph'] as ActorGraph;
+        const errs: string[] = [];
         try {
           await this.client.saveGraph(graph);
           await this.registerFileSaveWatcher(graph);
         } catch (err) {
-          void vscode.window.showErrorMessage(`Save failed: ${String(err)}`);
+          errs.push(`Studio API: ${String(err)}`);
+        }
+        const songbookUri = this.activeSongbookUri ?? await this.detectSongbookUri(graph);
+        if (songbookUri) {
+          try {
+            const content = Buffer.from(JSON.stringify(serializeGraph(graph), null, 2), 'utf-8');
+            await vscode.workspace.fs.writeFile(songbookUri, content);
+            if (!this.activeSongbookUri) this.setActiveSongbook(songbookUri);
+          } catch (err) {
+            errs.push(`File: ${String(err)}`);
+          }
+        }
+        if (errs.length > 0) {
+          void vscode.window.showErrorMessage(`Save failed: ${errs.join('; ')}`);
         }
         break;
       }
@@ -132,6 +147,46 @@ export class ActorsPanel {
         }
         break;
       }
+
+      case 'configureServer':
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'canticaScores');
+        break;
+
+      case 'startLocalStudio':
+        await vscode.commands.executeCommand('canticaScores.startLocalStudio');
+        break;
+
+      case 'stopLocalStudio':
+        await vscode.commands.executeCommand('canticaScores.stopLocalStudio');
+        break;
+
+      case 'playSongbook': {
+        const graph = await this.client.loadGraph();
+        if (graph) {
+          for (const actor of graph.actors) {
+            try {
+              await this.client.startActor(actor);
+              await this.post({ type: 'actorStatus', name: actor.name, running: true });
+            } catch {
+              // actor may already be running
+            }
+          }
+        }
+        break;
+      }
+
+      case 'stopSongbook': {
+        const running = await this.client.listRunning();
+        for (const name of running) {
+          try {
+            await this.client.stopActor(name);
+            await this.post({ type: 'actorStatus', name, running: false });
+          } catch {
+            // ignore
+          }
+        }
+        break;
+      }
     }
   }
 
@@ -150,6 +205,33 @@ export class ActorsPanel {
 
   async pushSettings(): Promise<void> {
     await this.post({ type: 'updateSettings', settings: this.settings });
+  }
+
+  setActiveSongbook(uri: vscode.Uri | undefined): void {
+    this.activeSongbookUri = uri;
+    const name = uri?.path.split('/').pop()?.replace(/\.jsonld$/i, '');
+    this.panel.title = name ? `${name} - Songbook` : 'Songbook';
+  }
+
+  private async detectSongbookUri(graph: ActorGraph): Promise<vscode.Uri | undefined> {
+    const home = (this.settings.canticaHome ?? '').trim() || `${process.env['HOME'] ?? '~'}/.cantica`;
+    const dir = vscode.Uri.file(`${home}/songbooks`);
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(dir);
+      const files = entries.filter(([n, t]) => t === vscode.FileType.File && n.endsWith('.jsonld'));
+      if (files.length === 1 && files[0]) {
+        return vscode.Uri.joinPath(dir, files[0][0]);
+      }
+      for (const [name] of files) {
+        const uri = vscode.Uri.joinPath(dir, name);
+        try {
+          const bytes = await vscode.workspace.fs.readFile(uri);
+          const raw = JSON.parse(Buffer.from(bytes).toString('utf-8')) as Record<string, unknown>;
+          if (raw['@id'] === graph.id || raw['name'] === graph.name) return uri;
+        } catch { /* skip */ }
+      }
+    } catch { /* directory not found */ }
+    return undefined;
   }
 
   updateSettings(settings: ExtensionSettings, client: StudioClient): void {
@@ -214,6 +296,7 @@ export class ActorsPanel {
         content="default-src 'none';
                  style-src ${wv.cspSource} 'unsafe-inline';
                  script-src 'nonce-${nonce}';
+                 font-src ${wv.cspSource} data:;
                  img-src ${wv.cspSource} data:;" />
   <link rel="stylesheet" href="${styleUri}" />
   <title>Cantica Studio</title>

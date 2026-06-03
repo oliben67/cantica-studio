@@ -83,6 +83,7 @@ export class StudioClient {
           actor_type: def.actorType,
           script_path: def.scriptPath ?? '',
           script_command: def.scriptCommand ?? '',
+          ...(def.directory ? { directory: def.directory } : {}),
         }
       : {
           name: def.name,
@@ -105,6 +106,7 @@ export class StudioClient {
             ...(c.targetEvent ? { targetEvent: c.targetEvent } : {}),
           })),
           outbox: {},
+          ...(def.directory ? { directory: def.directory } : {}),
         };
     const r = await fetch(this.url('/v1/runtime/actors'), {
       method: 'POST',
@@ -192,6 +194,7 @@ function _parseActor(r: Record<string, unknown>): AIActorDef {
     actorType,
     ...(r['scriptPath'] ? { scriptPath: r['scriptPath'] as string } : {}),
     ...(r['scriptCommand'] ? { scriptCommand: r['scriptCommand'] as string } : {}),
+    ...(r['directory'] ? { directory: r['directory'] as string } : {}),
     definePrompt: _parseRef(r['definePrompt']),
     provider: (r['provider'] as string) ?? 'claude',
     model: (r['model'] as string) ?? 'claude-sonnet-4-6',
@@ -257,6 +260,7 @@ function _serializeActor(a: AIActorDef): Record<string, unknown> {
     'actorType': a.actorType ?? 'ai',
     ...(a.scriptPath ? { 'scriptPath': a.scriptPath } : {}),
     ...(a.scriptCommand ? { 'scriptCommand': a.scriptCommand } : {}),
+    ...(a.directory ? { 'directory': a.directory } : {}),
     'definePrompt': _serializeRef(a.definePrompt),
     'provider': a.provider,
     'model': a.model,

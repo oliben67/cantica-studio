@@ -38,6 +38,7 @@ export interface AIActorDef {
   actorType: ActorType;
   scriptPath?: string;
   scriptCommand?: string;
+  directory?: string;
   definePrompt: PromptRef;
   provider: string;
   model: string;

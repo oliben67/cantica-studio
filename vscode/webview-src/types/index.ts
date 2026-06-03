@@ -38,6 +38,7 @@ export interface AIActorDef {
   actorType: ActorType;     // 'ai' (default) | 'python' | 'typescript'
   scriptPath?: string;      // code actors: path to the script
   scriptCommand?: string;   // code actors: runtime override (e.g. 'bun', 'ts-node')
+  directory?: string;       // optional working directory exposed via MCP filesystem
   definePrompt: PromptRef;
   provider: string;
   model: string;

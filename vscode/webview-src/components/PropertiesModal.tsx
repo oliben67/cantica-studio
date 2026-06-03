@@ -11,6 +11,7 @@ export function PropertiesModal() {
   const [defineContent, setDefineContent] = useState(() => actor?.definePrompt.content ?? '');
   const [scriptPath, setScriptPath] = useState(() => actor?.scriptPath ?? '');
   const [scriptCommand, setScriptCommand] = useState(() => actor?.scriptCommand ?? '');
+  const [directory, setDirectory] = useState(() => actor?.directory ?? '');
   const [maxTokens, setMaxTokens] = useState(() => actor?.maxTokens ?? 4096);
   const [maxHistory, setMaxHistory] = useState(() => actor?.maxHistory ?? 10);
 
@@ -18,11 +19,12 @@ export function PropertiesModal() {
 
   function save() {
     if (!actor) return;
+    const dir = directory.trim() || undefined;
     if (isCode) {
-      updateActor(actor.id, { scriptPath: scriptPath.trim(), scriptCommand: scriptCommand.trim() });
+      updateActor(actor.id, { scriptPath: scriptPath.trim(), scriptCommand: scriptCommand.trim(), directory: dir });
     } else {
       const definePrompt: PromptRef = defineUri.trim() ? { uri: defineUri.trim() } : { content: defineContent };
-      updateActor(actor.id, { definePrompt, maxTokens, maxHistory });
+      updateActor(actor.id, { definePrompt, maxTokens, maxHistory, directory: dir });
     }
     closePropertiesModal();
   }
@@ -106,6 +108,16 @@ export function PropertiesModal() {
               </div>
             </>
           )}
+
+          <label className="cs-prop-label">
+            Home directory <span className="cs-modal-hint">(optional — exposed as MCP filesystem resource)</span>
+            <input
+              className="cs-prop-input"
+              value={directory}
+              onChange={e => setDirectory(e.target.value)}
+              placeholder="src/  or  /absolute/path"
+            />
+          </label>
         </div>
 
         <div className="cs-modal-footer">

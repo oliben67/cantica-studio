@@ -313,3 +313,237 @@ def test_get_rt_raises_before_init():
             mcp_mod._get_rt()
     finally:
         mcp_mod._rt = original
+
+
+# ── on_stop exception handlers (lines 110-116) ────────────────────────────────
+
+
+class _MockProcWriteRaises(_MockProc):
+    """Proc whose stdin.write raises — tests on_stop line 110-111."""
+
+    def write(self, data: str) -> None:
+        raise BrokenPipeError("stdin broken")
+
+    def terminate(self) -> None:
+        self._out_q.put(None)   # let reader exit cleanly
+
+
+class _MockProcBothRaise(_MockProc):
+    """Proc where both write AND terminate raise — tests lines 115-116."""
+
+    def write(self, data: str) -> None:
+        raise BrokenPipeError("stdin broken")
+
+    def terminate(self) -> None:
+        self._out_q.put(None)   # reader exits first …
+        raise OSError("process already gone")  # … then terminate raises
+
+
+def test_on_stop_handles_send_raw_exception():
+    """on_stop catches exception from _send_raw (lines 110-111)."""
+    cls = type(
+        "SendRaiseActor",
+        (TypeScriptCodeActor,),
+        {"script_path": "/fake/s.js", "actor_name": "sraise", "script_command": "node"},
+    )
+    proc = _MockProcWriteRaises()
+    with patch("studio_api.code_actor.subprocess.Popen", return_value=proc):
+        ref = cls.start()
+    import time
+    time.sleep(0.05)
+    # Stop triggers on_stop → _send_raw raises → caught → no crash
+    with contextlib.suppress(pykka.ActorDeadError):
+        ref.stop()
+    pykka.ActorRegistry.stop_all()
+
+
+def test_on_stop_handles_terminate_exception():
+    """on_stop catches exception from _proc.terminate() (lines 115-116)."""
+    cls = type(
+        "TermRaiseActor",
+        (TypeScriptCodeActor,),
+        {"script_path": "/fake/s.js", "actor_name": "traise", "script_command": "node"},
+    )
+    proc = _MockProcBothRaise()
+    with patch("studio_api.code_actor.subprocess.Popen", return_value=proc):
+        ref = cls.start()
+    import time
+    time.sleep(0.05)
+    with contextlib.suppress(pykka.ActorDeadError):
+        ref.stop()
+    pykka.ActorRegistry.stop_all()
+
+
+# ── _read_stdout edge cases ────────────────────────────────────────────────────
+
+
+def test_read_stdout_skips_empty_lines():
+    """Blank/whitespace lines from stdout are stripped and skipped (line 126)."""
+    cls, proc = _make_cls()
+    with _started(cls, proc) as ref:
+        proc._out_q.put("\n")       # empty line
+        proc._out_q.put("   \n")    # whitespace only
+        import time; time.sleep(0.05)
+        events = ref.proxy().get_events().get(timeout=5)
+    assert events == []
+
+
+def test_read_stdout_ignores_non_json_line():
+    """Non-JSON stdout line is logged and skipped without crashing (lines 129-131)."""
+    cls, proc = _make_cls()
+    with _started(cls, proc) as ref:
+        proc._out_q.put("NOT-VALID-JSON\n")
+        import time; time.sleep(0.05)
+        result = ref.proxy().instruct("hello").get(timeout=5)
+    assert result == "mock-message"
+
+
+class _MockProcStdoutRaises(_MockProc):
+    """Proc whose stdout raises an exception after the ready message (lines 133-134)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._raise_next = False
+
+    def __iter__(self):
+        while True:
+            line = self._out_q.get()
+            if line is None:
+                return
+            yield line
+            # After yielding ready, mark that next get will raise
+            if not self._raise_next:
+                self._raise_next = True
+                # Put a sentinel that causes raise on next get
+                self._out_q.put("__RAISE__")
+            elif line == "__RAISE__":
+                raise IOError("stdout pipe closed")
+
+
+def test_read_stdout_outer_exception_is_logged():
+    """Exception during stdout iteration is caught by outer handler (lines 133-134)."""
+    import time  # noqa: PLC0415
+
+    cls = type(
+        "StdoutRaiseActor",
+        (TypeScriptCodeActor,),
+        {"script_path": "/fake/s.js", "actor_name": "straise", "script_command": "node"},
+    )
+    proc = _MockProcStdoutRaises()
+    with patch("studio_api.code_actor.subprocess.Popen", return_value=proc):
+        ref = cls.start()
+    time.sleep(0.3)  # let stdout thread hit the exception
+    # Actor may be alive or dead; just verify no unhandled exception escaped
+    with contextlib.suppress(pykka.ActorDeadError):
+        ref.stop()
+    pykka.ActorRegistry.stop_all()
+
+
+# ── _read_stderr edge cases ────────────────────────────────────────────────────
+
+
+def test_read_stderr_skips_blank_lines():
+    """Blank stderr lines are rstripped to '' and skipped (branch 140->138)."""
+    cls, proc = _make_cls(stderr_lines=["real error", ""])
+    with _started(cls, proc) as ref:
+        import time; time.sleep(0.1)
+        logs = ref.proxy().get_logs().get(timeout=5)
+    assert "real error" in logs
+    # The blank line must NOT appear as an entry
+    assert "" not in logs.split("\n")
+
+
+class _MockProcStderrRaises(_MockProc):
+    """Proc whose stderr raises during iteration (lines 142-143)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        class _Raising:
+            def __iter__(self):
+                raise IOError("stderr closed unexpectedly")
+
+        self.stderr = _Raising()
+
+
+def test_read_stderr_outer_exception_is_caught():
+    """Exception during stderr iteration is caught (lines 142-143)."""
+    import time  # noqa: PLC0415
+
+    cls = type(
+        "StderrRaiseActor",
+        (TypeScriptCodeActor,),
+        {"script_path": "/fake/s.js", "actor_name": "stderraise", "script_command": "node"},
+    )
+    proc = _MockProcStderrRaises()
+    with patch("studio_api.code_actor.subprocess.Popen", return_value=proc):
+        ref = cls.start()
+    time.sleep(0.15)
+    with contextlib.suppress(pykka.ActorDeadError):
+        ref.stop()
+    pykka.ActorRegistry.stop_all()
+
+
+# ── _dispatch edge cases ───────────────────────────────────────────────────────
+
+
+def test_dispatch_response_with_no_id_is_silently_ignored():
+    """response/error message without an 'id' field is ignored (branch 154->exit)."""
+    cls, proc = _make_cls()
+    with _started(cls, proc) as ref:
+        proc.push({"type": "response", "content": "orphan"})   # no "id"
+        import time; time.sleep(0.05)
+        events = ref.proxy().get_events().get(timeout=5)
+    assert events == []
+
+
+def test_dispatch_response_with_unknown_id_is_silently_ignored():
+    """response with an id not in _pending is silently dropped (branch 157->exit)."""
+    cls, proc = _make_cls()
+    with _started(cls, proc) as ref:
+        proc.push({"type": "response", "id": "unknown-id-xyz", "content": "lost"})
+        import time; time.sleep(0.05)
+        events = ref.proxy().get_events().get(timeout=5)
+    assert events == []
+
+
+# ── _request timeout (lines 179-180) ─────────────────────────────────────────
+
+
+def test_request_raises_timeout_error_when_subprocess_does_not_respond():
+    """_request raises TimeoutError when the subprocess is silent (lines 179-180)."""
+    import time  # noqa: PLC0415
+
+    # Build a subclass that uses a 0-second timeout so the test doesn't hang.
+    class _QuickTimeoutActor(TypeScriptCodeActor):
+        script_path = "/fake/s.js"
+        actor_name = "quick-timeout"
+        script_command = "node"
+
+        def instruct(self, text: str) -> str:
+            return self._request({"type": "message", "content": text}, timeout=0)
+
+    cls = _QuickTimeoutActor
+
+    class _NoReplyProc(_MockProc):
+        def write(self, data: str) -> None:
+            # Only handle kill so the reader thread can exit
+            for line in data.strip().split("\n"):
+                try:
+                    msg = json.loads(line)
+                    if msg.get("type") == "kill":
+                        self._out_q.put(None)
+                except Exception:
+                    pass
+
+    proc = _NoReplyProc()
+    with patch("studio_api.code_actor.subprocess.Popen", return_value=proc):
+        ref = cls.start()
+
+    time.sleep(0.05)
+    with pytest.raises(TimeoutError, match="did not respond"):
+        ref.proxy().instruct("slow").get(timeout=5)
+
+    with contextlib.suppress(pykka.ActorDeadError):
+        ref.stop()
+    pykka.ActorRegistry.stop_all()

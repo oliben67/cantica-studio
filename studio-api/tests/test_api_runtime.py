@@ -63,7 +63,7 @@ def test_start_actor_with_events_and_crons(client: TestClient, mock_runtime: Act
         "name": "complex-bot",
         "define_prompt": "p",
         "prompt_events": [{"name": "on-save", "prompt": "Check this"}],
-        "cron_jobs": [{"schedule": "0 9 * * 1-5", "prompt": "Morning brief"}],
+        "cron_jobs": [{"schedule": "0 9 * * 1-5", "prompt": "Morning brief", "name": "morning-brief"}],
         "outbox": {"reviewer": "Review: {output}"},
     }
     r = client.post("/v1/runtime/actors", json=body)
@@ -73,6 +73,28 @@ def test_start_actor_with_events_and_crons(client: TestClient, mock_runtime: Act
     assert len(call_args.prompt_events) == 1
     assert len(call_args.cron_jobs) == 1
     assert call_args.outbox == {"reviewer": "Review: {output}"}
+
+
+def test_start_actor_with_directory(client: TestClient, mock_runtime: ActorRuntime):
+    """directory field is forwarded to ActorDef and included in response."""
+    mock_runtime.start = MagicMock()
+    r = client.post("/v1/runtime/actors", json={
+        "name": "scoped-bot",
+        "define_prompt": "p",
+        "directory": "src/agents",
+    })
+    assert r.status_code == 201
+    defn = mock_runtime.start.call_args[0][0]
+    assert defn.directory == "src/agents"
+
+
+def test_start_actor_without_directory_defaults_to_empty(client: TestClient, mock_runtime: ActorRuntime):
+    """Omitting directory in the request leaves ActorDef.directory as ''."""
+    mock_runtime.start = MagicMock()
+    r = client.post("/v1/runtime/actors", json={"name": "plain-bot", "define_prompt": "p"})
+    assert r.status_code == 201
+    defn = mock_runtime.start.call_args[0][0]
+    assert defn.directory == ""
 
 
 # ── DELETE /v1/runtime/actors/{name} ─────────────────────────────────────────

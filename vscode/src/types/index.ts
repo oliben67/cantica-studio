@@ -9,11 +9,11 @@ export interface PromptEventDef {
   name: string;
   prompt: PromptRef;
   filePattern?: string;
-  targetActor?: string;
-  targetEvent?: string;
+  targetActors?: string[];   // empty = self; multiple = broadcast
 }
 
 export interface CronJobDef {
+  name?: string;
   schedule: string;
   prompt: PromptRef;
   targetActor?: string;
@@ -30,11 +30,16 @@ export interface AgentResource {
   sharedWith?: string[];   // actor names this resource is shared with
 }
 
+export type ActorType = 'ai' | 'python' | 'typescript';
+
 export interface AIActorDef {
-  id: string;            // urn:cantica:studio:actor:{uuid}
+  id: string;
   name: string;
+  actorType: ActorType;
+  scriptPath?: string;
+  scriptCommand?: string;
   definePrompt: PromptRef;
-  provider: string;      // "claude" | "gpt" | "gemini"
+  provider: string;
   model: string;
   maxTokens: number;
   maxHistory: number;
@@ -51,6 +56,7 @@ export interface ActorEdgeDef {
   targetEvent?: string;  // fires named event on target; undefined = default inbox
   prompt: PromptRef;
   label: string;
+  kind?: 'event' | 'cron';
 }
 
 export interface ActorGraph {

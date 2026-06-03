@@ -23,9 +23,10 @@ def test_prompt_event_def_with_file_pattern():
 
 
 def test_cron_job_def_fields():
-    cron = CronJobDef(schedule="0 9 * * 1-5", prompt="Daily standup prompt.")
+    cron = CronJobDef(schedule="0 9 * * 1-5", prompt="Daily standup prompt.", name="standup")
     assert cron.schedule == "0 9 * * 1-5"
     assert cron.prompt == "Daily standup prompt."
+    assert cron.name == "standup"
 
 
 # ── StudioActor ───────────────────────────────────────────────────────────────

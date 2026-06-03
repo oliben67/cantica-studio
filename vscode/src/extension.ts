@@ -138,7 +138,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('canticaScores.deleteActor', () => {
-      void ActorsPanel['current']?.['panel']?.webview.postMessage({ type: 'deleteSelected' });
+      void ActorsPanel.current?.['panel']?.webview.postMessage({ type: 'deleteSelected' });
     }),
 
     vscode.commands.registerCommand('canticaScores.resetGraph', async () => {
@@ -148,7 +148,7 @@ export function activate(context: vscode.ExtensionContext): void {
         'Reset',
       );
       if (answer === 'Reset') {
-        void ActorsPanel['current']?.['panel']?.webview.postMessage({ type: 'resetGraph' });
+        void ActorsPanel.current?.['panel']?.webview.postMessage({ type: 'resetGraph' });
       }
     }),
 
@@ -186,11 +186,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('canticaScores.saveAllSongbooks', () => {
-      void ActorsPanel['current']?.['panel']?.webview.postMessage({ type: 'triggerSave' });
+      void ActorsPanel.current?.['panel']?.webview.postMessage({ type: 'triggerSave' });
     }),
 
     vscode.commands.registerCommand('canticaScores.closeAllSongbooks', () => {
-      ActorsPanel['current']?.dispose();
+      ActorsPanel.current?.dispose();
     }),
 
     vscode.commands.registerCommand('canticaScores.viewSongbook', async (item?: SongbookItem) => {
@@ -331,13 +331,13 @@ export function activate(context: vscode.ExtensionContext): void {
       if (event.affectsConfiguration('canticaScores')) {
         settings = readSettings();
         client = new StudioClient(settings.studioPort);
-        ActorsPanel['current']?.updateSettings(settings, client);
+        ActorsPanel.current?.updateSettings(settings, client);
         refreshProviders();
       }
     }),
   );
 
-  // Watch the songbooks directory for new/deleted files
+  // Watch the songbooks directory for new/deleted files (refreshes the sidebar)
   const songbooksPattern = new vscode.RelativePattern(
     songbooksDir(settings.canticaHome),
     '*.jsonld',
@@ -346,6 +346,34 @@ export function activate(context: vscode.ExtensionContext): void {
   songbooksWatcher.onDidCreate(() => refreshProviders());
   songbooksWatcher.onDidDelete(() => refreshProviders());
   context.subscriptions.push(songbooksWatcher);
+
+  // Reload the workspace canvas when the user manually saves the active .jsonld
+  // file from the text editor.  We use onDidSaveTextDocument (not the FS watcher)
+  // because the workspace's own vscode.workspace.fs.writeFile does NOT fire this
+  // event, so there is no risk of an infinite reload loop.
+  let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(async (doc) => {
+      const panel = ActorsPanel.current;
+      if (!panel) return;
+      const activeSongbook = panel.activeSongbookUri;
+      if (!activeSongbook) return;
+      if (doc.uri.fsPath !== activeSongbook.fsPath) return;
+
+      // Debounce: wait 400 ms in case the user is still typing / auto-saving rapidly
+      clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(async () => {
+        try {
+          const raw = JSON.parse(doc.getText()) as Record<string, unknown>;
+          const graph = parseGraph(raw);
+          await client.saveGraph(graph);
+          await panel.pushGraph();
+        } catch {
+          // Ignore parse errors — the file may be mid-edit
+        }
+      }, 400);
+    }),
+  );
 
   // ── Initial load ───────────────────────────────────────────────────────────
 

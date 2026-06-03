@@ -50,6 +50,7 @@ class StartActorRequest(BaseModel):
     cron_jobs: list[dict] = []
     outbox: dict[str, str] = {}
     resources: list[dict] = []
+    directory: str = ""
 
 
 class InstructRequest(BaseModel):
@@ -82,6 +83,7 @@ async def start_actor(body: StartActorRequest) -> dict:
         cron_jobs=body.cron_jobs,
         outbox=body.outbox,
         resources=body.resources,
+        directory=body.directory,
     )
     try:
         loop = asyncio.get_event_loop()

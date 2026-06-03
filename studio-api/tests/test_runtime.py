@@ -25,7 +25,7 @@ def test_actor_def_stores_fields():
         id="urn:x", name="bot", define_prompt="p",
         provider="gpt", model="gpt-4o", max_tokens=2048, max_history=5,
         prompt_events=[{"name": "e", "prompt": "ep"}],
-        cron_jobs=[{"schedule": "* * * * *", "prompt": "cp"}],
+        cron_jobs=[{"schedule": "* * * * *", "prompt": "cp", "name": "tick"}],
         outbox={"other": "msg {output}"},
     )
     assert d.provider == "gpt"
@@ -244,7 +244,7 @@ def test_prompt_resolution_at_start():
     defn = _actor_def(
         define_prompt="cantica://ns/role@v1",
         prompt_events=[{"name": "e", "prompt": "cantica://ns/evt@v1"}],
-        cron_jobs=[{"schedule": "0 * * * *", "prompt": "cantica://ns/cron@v1"}],
+        cron_jobs=[{"schedule": "0 * * * *", "prompt": "cantica://ns/cron@v1", "name": "hourly"}],
     )
 
     started_ref = MagicMock()
@@ -262,7 +262,7 @@ def test_cron_schedule_parsing_five_fields():
     """Valid 5-field cron expression is registered without error."""
     rt = ActorRuntime()
     connector = _mock_connector()
-    defn = _actor_def(cron_jobs=[{"schedule": "30 8 * * 1-5", "prompt": "morning brief"}])
+    defn = _actor_def(cron_jobs=[{"schedule": "30 8 * * 1-5", "prompt": "morning brief", "name": "morning"}])
 
     started_ref = MagicMock()
     with patch("studio_api.runtime._make_provider", return_value=None), \
@@ -296,6 +296,68 @@ def test_actor_def_none_resources_becomes_empty_list():
     assert d.resources == []
 
 
+def test_actor_def_directory_defaults_to_empty_string():
+    d = ActorDef(id="urn:x", name="b", define_prompt="p")
+    assert d.directory == ""
+
+
+def test_actor_def_none_directory_becomes_empty_string():
+    d = ActorDef(id="urn:x", name="b", define_prompt="p", directory=None)
+    assert d.directory == ""
+
+
+def test_actor_def_stores_directory():
+    d = ActorDef(id="urn:x", name="b", define_prompt="p", directory="src/")
+    assert d.directory == "src/"
+
+
+def test_start_actor_with_directory_creates_directory_resource():
+    """Starting an actor with directory= prepends a static 'directory' resource."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+    ref = MagicMock()
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(_actor_def(directory="src/"), connector)
+
+    resources = rt.get_resources("test-actor")
+    assert len(resources) == 1
+    r = resources[0]
+    assert r["id"] == "directory"
+    assert r["type"] == "directory"
+    assert r["uri"] == "src/"
+    assert r["dynamic"] is False
+    rt.stop_all()
+
+
+def test_start_actor_without_directory_has_no_directory_resource():
+    """Starting an actor without directory= adds no automatic resource."""
+    rt = ActorRuntime()
+    ref = MagicMock()
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(_actor_def(), _mock_connector())
+
+    assert rt.get_resources("test-actor") == []
+    rt.stop_all()
+
+
+def test_directory_resource_name_uses_basename():
+    """The auto-created directory resource name is the path's basename."""
+    rt = ActorRuntime()
+    ref = MagicMock()
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(_actor_def(directory="projects/my-module"), _mock_connector())
+
+    r = rt.get_resources("test-actor")[0]
+    assert r["name"] == "my-module"
+    rt.stop_all()
+
+
 def test_actor_def_code_fields():
     d = ActorDef(
         id="urn:x", name="w", define_prompt="",
@@ -310,12 +372,12 @@ def test_actor_def_code_fields():
 
 
 def test_fire_event_routes_output_to_target_actor():
-    """When an event has targetActor, the output is forwarded there."""
+    """When an event has targetActors, instruct() runs on self then output is forwarded."""
     rt = ActorRuntime()
     connector = _mock_connector()
 
     proxy_a = MagicMock()
-    proxy_a.fire_event.return_value.get.return_value = "source-output"
+    proxy_a.instruct.return_value.get.return_value = "source-output"
     proxy_b = MagicMock()
     proxy_b.instruct.return_value.get.return_value = "target-reply"
 
@@ -330,47 +392,85 @@ def test_fire_event_routes_output_to_target_actor():
             _actor_def(
                 "source",
                 prompt_events=[{"name": "process", "prompt": "p",
-                                "targetActor": "target", "targetEvent": ""}],
+                                "targetActors": ["target"]}],
             ),
             connector,
         )
         rt.start(_actor_def("target"), connector)
 
     result = rt.fire_event("source", "process", "ctx")
-    assert result == "target-reply"
-    proxy_b.instruct.assert_called_once_with("source-output")
+    assert result == "source-output"          # returns self output
+    proxy_a.instruct.assert_called_once_with("p\n\nctx")
+    proxy_b.instruct.assert_called_once_with("source-output")  # forwarded to target
     rt.stop_all()
 
 
-def test_fire_event_routes_to_target_event():
-    """targetActor + targetEvent causes fire_event on the target."""
+def test_fire_event_routes_to_multiple_targets():
+    """Events are always direct: output forwarded to every actor in targetActors."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_src = MagicMock()
+    proxy_src.instruct.return_value.get.return_value = "src-out"
+    proxy_b = MagicMock()
+    proxy_b.instruct.return_value.get.return_value = "b-reply"
+    proxy_c = MagicMock()
+    proxy_c.instruct.return_value.get.return_value = "c-reply"
+
+    ref_src = MagicMock(); ref_src.proxy.return_value = proxy_src
+    ref_b = MagicMock();   ref_b.proxy.return_value = proxy_b
+    ref_c = MagicMock();   ref_c.proxy.return_value = proxy_c
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", side_effect=[ref_src, ref_b, ref_c]):
+        rt.start(
+            _actor_def(
+                "source",
+                prompt_events=[{"name": "broadcast", "prompt": "Announce:",
+                                "targetActors": ["bot-b", "bot-c"]}],
+            ),
+            connector,
+        )
+        rt.start(_actor_def("bot-b"), connector)
+        rt.start(_actor_def("bot-c"), connector)
+
+    result = rt.fire_event("source", "broadcast", "hello")
+    assert result == "src-out"
+    proxy_src.instruct.assert_called_once_with("Announce:\n\nhello")
+    proxy_b.instruct.assert_called_once_with("src-out")
+    proxy_c.instruct.assert_called_once_with("src-out")
+    rt.stop_all()
+
+
+def test_fire_event_legacy_single_target_actor_key():
+    """Old single-string targetActor key is promoted to targetActors list on start."""
     rt = ActorRuntime()
     connector = _mock_connector()
 
     proxy_a = MagicMock()
-    proxy_a.fire_event.return_value.get.return_value = "a-output"
+    proxy_a.instruct.return_value.get.return_value = "out"
     proxy_b = MagicMock()
-    proxy_b.fire_event.return_value.get.return_value = "b-event-reply"
+    proxy_b.instruct.return_value.get.return_value = "ok"
 
-    ref_a = MagicMock()
-    ref_a.proxy.return_value = proxy_a
-    ref_b = MagicMock()
-    ref_b.proxy.return_value = proxy_b
+    ref_a = MagicMock(); ref_a.proxy.return_value = proxy_a
+    ref_b = MagicMock(); ref_b.proxy.return_value = proxy_b
 
     with patch("studio_api.runtime._make_provider", return_value=None), \
          patch("pykka.ThreadingActor.start", side_effect=[ref_a, ref_b]):
         rt.start(
             _actor_def(
                 "source",
-                prompt_events=[{"name": "process", "prompt": "p",
-                                "targetActor": "target", "targetEvent": "on-input"}],
+                # legacy single-key format from old serialization
+                prompt_events=[{"name": "ping", "prompt": "p", "targetActor": "target"}],
             ),
             connector,
         )
         rt.start(_actor_def("target"), connector)
 
-    result = rt.fire_event("source", "process", "ctx")
-    assert result == "b-event-reply"
+    evts = rt._ai_events.get("source", [])
+    assert evts[0].target_actors == ["target"]   # promoted to list
+    rt.fire_event("source", "ping")
+    proxy_b.instruct.assert_called_once_with("out")
     rt.stop_all()
 
 
@@ -378,6 +478,89 @@ def test_fire_event_unknown_actor_raises():
     rt = ActorRuntime()
     with pytest.raises(KeyError):
         rt.fire_event("ghost", "event")
+    rt.stop_all()
+
+
+def test_ai_events_stored_on_start():
+    """Resolved AI actor events are saved in _ai_events on start."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+    defn = _actor_def(
+        prompt_events=[{"name": "on-review", "prompt": "Review this."}],
+    )
+
+    started_ref = MagicMock()
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        rt.start(defn, connector)
+
+    events = rt._ai_events.get("test-actor", [])
+    assert len(events) == 1
+    assert events[0].name == "on-review"
+    assert events[0].prompt == "Review this."
+    rt.stop_all()
+
+
+def test_fire_event_self_uses_instruct():
+    """Self-targeting event (no targetActor) calls proxy.instruct on the source actor."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_mock = MagicMock()
+    proxy_mock.instruct.return_value.get.return_value = "self-reply"
+    started_ref = MagicMock()
+    started_ref.proxy.return_value = proxy_mock
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        rt.start(
+            _actor_def(prompt_events=[{"name": "ping", "prompt": "pong"}]),
+            connector,
+        )
+        result = rt.fire_event("test-actor", "ping", "")
+
+    assert result == "self-reply"
+    proxy_mock.instruct.assert_called_once_with("pong")
+    rt.stop_all()
+
+
+def test_fire_event_self_with_context():
+    """Context is appended to the event prompt with a blank line separator."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_mock = MagicMock()
+    proxy_mock.instruct.return_value.get.return_value = "ok"
+    started_ref = MagicMock()
+    started_ref.proxy.return_value = proxy_mock
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        rt.start(
+            _actor_def(prompt_events=[{"name": "check", "prompt": "Analyse:"}]),
+            connector,
+        )
+        rt.fire_event("test-actor", "check", "main.py")
+
+    proxy_mock.instruct.assert_called_once_with("Analyse:\n\nmain.py")
+    rt.stop_all()
+
+
+def test_ai_events_cleared_on_stop():
+    """_ai_events entry is removed when the actor is stopped."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    started_ref = MagicMock()
+    started_ref.stop = MagicMock()
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        rt.start(_actor_def(prompt_events=[{"name": "e", "prompt": "p"}]), connector)
+        assert "test-actor" in rt._ai_events
+        rt.stop("test-actor")
+
+    assert "test-actor" not in rt._ai_events
     rt.stop_all()
 
 
@@ -477,7 +660,7 @@ def test_get_actor_logs_ai_actor_returns_empty():
 def test_invalid_ai_cron_schedule_warns_not_raises():
     rt = ActorRuntime()
     connector = _mock_connector()
-    defn = _actor_def(cron_jobs=[{"schedule": "not-valid", "prompt": "p"}])
+    defn = _actor_def(cron_jobs=[{"schedule": "not-valid", "prompt": "p", "name": "bad"}])
 
     started_ref = MagicMock()
     with patch("studio_api.runtime._make_provider", return_value=None), \

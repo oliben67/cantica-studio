@@ -1,10 +1,46 @@
 import React from 'react';
+import dagre from '@dagrejs/dagre';
 import { useStore } from '../store';
 import { vscode } from '../vscode';
+import type { AIActorDef, ActorEdgeDef } from '../types';
+
+// Approximate dimensions of one actor card in the canvas
+const NODE_W = 230;
+const NODE_H = 140;
+
+function applyDagreLayout(
+  actors: AIActorDef[],
+  edges: ActorEdgeDef[],
+): Map<string, { x: number; y: number }> {
+  const g = new dagre.graphlib.Graph({ multigraph: true });
+  g.setGraph({ rankdir: 'LR', nodesep: 70, ranksep: 120, marginx: 40, marginy: 40 });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  for (const a of actors) {
+    g.setNode(a.id, { width: NODE_W, height: NODE_H });
+  }
+  for (const e of edges) {
+    if (e.from !== e.to) {
+      // multigraph: use edge id as name to allow parallel edges
+      g.setEdge(e.from, e.to, {}, e.id);
+    }
+  }
+
+  dagre.layout(g);
+
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const a of actors) {
+    const n = g.node(a.id);
+    if (n) {
+      positions.set(a.id, { x: n.x - NODE_W / 2, y: n.y - NODE_H / 2 });
+    }
+  }
+  return positions;
+}
 
 export function GraphToolbar() {
-  const { graph, addActor, removeActor, removeEdge, resetGraph, explorerSide, setExplorerSide,
-          selectedActorId, selectedEdgeId } = useStore();
+  const { graph, addActor, addCodeActor, removeActor, removeEdge, resetGraph, explorerSide, setExplorerSide,
+          selectedActorId, selectedEdgeId, updateActorPosition } = useStore();
 
   const hasSelection = selectedActorId !== null || selectedEdgeId !== null;
 
@@ -44,6 +80,14 @@ export function GraphToolbar() {
     vscode.postMessage({ type: 'stopSongbook' });
   }
 
+  function handleReorganize() {
+    if (graph.actors.length === 0) return;
+    const positions = applyDagreLayout(graph.actors, graph.edges);
+    for (const [id, pos] of positions) {
+      updateActorPosition(id, pos);
+    }
+  }
+
   return (
     <div className="cs-toolbar">
       <span className="cs-toolbar-title">{graph.name}</span>
@@ -51,7 +95,15 @@ export function GraphToolbar() {
       <div className="cs-toolbar-actions">
         <button className="cs-toolbar-btn" onClick={handleAddActor} title="Add AI Actor">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-          Actor
+          AI Actor
+        </button>
+        <button className="cs-toolbar-btn" onClick={() => addCodeActor('python', { x: 200 + Math.random() * 200, y: 100 + Math.random() * 200 })} title="Add Python code actor">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Python
+        </button>
+        <button className="cs-toolbar-btn" onClick={() => addCodeActor('typescript', { x: 200 + Math.random() * 200, y: 100 + Math.random() * 200 })} title="Add TypeScript code actor">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          TS
         </button>
 
         <button
@@ -74,6 +126,11 @@ export function GraphToolbar() {
         <button className="cs-toolbar-btn" onClick={handleRefreshPrompts} title="Refresh prompts from Cantica servers">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
           Refresh
+        </button>
+
+        <button className="cs-toolbar-btn" onClick={handleReorganize} title="Auto-layout: arrange actors to minimise edge crossings">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4"/></svg>
+          Reorganize
         </button>
 
         <button className="cs-toolbar-btn cs-toolbar-btn--warn" onClick={handleReset} title="Clear all actors and edges">

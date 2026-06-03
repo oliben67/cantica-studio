@@ -13,16 +13,16 @@ _log = logging.getLogger(__name__)
 @dataclass
 class PromptEventDef:
     name: str
-    prompt: str                     # resolved content (not a URI at runtime)
+    prompt: str                          # resolved content (not a URI at runtime)
     file_pattern: str | None = None
-    target_actor: str | None = None  # route output to another actor
-    target_event: str | None = None  # fire a specific event on the target
+    target_actors: list[str] = field(default_factory=list)  # actors to route output to (empty = self)
 
 
 @dataclass
 class CronJobDef:
     schedule: str
     prompt: str                     # resolved content
+    name: str                        # human-readable label, required
     target_actor: str | None = None
     target_event: str | None = None
 

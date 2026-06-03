@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -34,6 +35,7 @@ class ActorDef:
     cron_jobs: list[dict] = field(default_factory=list)
     outbox: dict[str, str] = field(default_factory=dict)
     resources: list[dict] = field(default_factory=list)
+    directory: str = ""                  # optional working directory exposed via MCP filesystem
 
     def __post_init__(self) -> None:
         if self.prompt_events is None:
@@ -44,6 +46,8 @@ class ActorDef:
             self.outbox = {}
         if self.resources is None:
             self.resources = []
+        if self.directory is None:
+            self.directory = ""
 
 
 def _make_provider(provider: str, model: str) -> Any:
@@ -70,10 +74,11 @@ class ActorRuntime:
 
     def __init__(self) -> None:
         self._refs: dict[str, Any] = {}
-        self._defs: dict[str, ActorDef] = {}                  # name → ActorDef
-        self._resources: dict[str, list[AgentResource]] = {}  # name → resources
-        self._code_events: dict[str, list[dict]] = {}         # name → discovered events
-        self._code_crons: dict[str, list[dict]] = {}          # name → discovered crons
+        self._defs: dict[str, ActorDef] = {}                         # name → ActorDef
+        self._resources: dict[str, list[AgentResource]] = {}         # name → resources
+        self._ai_events: dict[str, list[PromptEventDef]] = {}        # name → resolved AI events
+        self._code_events: dict[str, list[dict]] = {}                # name → discovered events
+        self._code_crons: dict[str, list[dict]] = {}                 # name → discovered crons
         self._scheduler = BackgroundScheduler()
         self._scheduler.start()
 
@@ -96,8 +101,10 @@ class ActorRuntime:
                 name=e["name"],
                 prompt=_resolve(e.get("prompt", ""), connector),
                 file_pattern=e.get("filePattern"),
-                target_actor=e.get("targetActor") or None,
-                target_event=e.get("targetEvent") or None,
+                # Support both new targetActors[] and legacy single targetActor string.
+                target_actors=e.get("targetActors") or (
+                    [e["targetActor"]] if e.get("targetActor") else []
+                ),
             )
             for e in defn.prompt_events
         ]
@@ -106,6 +113,7 @@ class ActorRuntime:
             CronJobDef(
                 schedule=c["schedule"],
                 prompt=_resolve(c.get("prompt", ""), connector),
+                name=c["name"],
                 target_actor=c.get("targetActor") or None,
                 target_event=c.get("targetEvent") or None,
             )
@@ -130,7 +138,8 @@ class ActorRuntime:
         ref = actor_cls.start()
         self._refs[defn.name] = ref
         self._defs[defn.name] = defn
-        self._resources[defn.name] = [AgentResource.from_dict(r) for r in defn.resources]
+        self._resources[defn.name] = self._build_resources(defn)
+        self._ai_events[defn.name] = resolved_events
         self._register_crons(defn.name, resolved_crons)
         _log.info("Started AI actor %r", defn.name)
 
@@ -157,7 +166,7 @@ class ActorRuntime:
         ref = actor_cls.start()
         self._refs[defn.name] = ref
         self._defs[defn.name] = defn
-        self._resources[defn.name] = [AgentResource.from_dict(r) for r in defn.resources]
+        self._resources[defn.name] = self._build_resources(defn)
 
         # Discover events and crons from the running actor (available after on_start).
         proxy = ref.proxy()
@@ -172,6 +181,7 @@ class ActorRuntime:
         if ref is None:
             raise KeyError(f"Actor {name!r} is not running")
         self._defs.pop(name, None)
+        self._ai_events.pop(name, None)
         self._code_events.pop(name, None)
         self._code_crons.pop(name, None)
         try:
@@ -204,19 +214,21 @@ class ActorRuntime:
         return proxy.instruct(text).get(timeout=120)
 
     def fire_event(self, name: str, event_name: str, context: str = "") -> str:
-        """Fire a named event on an actor, routing to a target actor if configured."""
-        defn = self._defs.get(name)
-        if defn and defn.actor_type == "ai":
-            for e in defn.prompt_events:
-                if e["name"] == event_name:
-                    target_actor = (e.get("targetActor") or "").strip()
-                    target_event = (e.get("targetEvent") or "").strip()
-                    if target_actor and target_actor in self._refs:
-                        output = self._get_proxy(name).fire_event(event_name, context).get(timeout=120)
-                        if target_event:
-                            return self.fire_event(target_actor, target_event, output)
-                        return self.instruct(target_actor, output)
-                    break
+        """Fire a named event on an actor, routing output to all configured target actors.
+
+        For AI actors: runs the event's resolved prompt via instruct() on self, then
+        forwards the output to every target actor listed in target_actors.  If no
+        target actors are configured the output is returned to the caller (self-loop).
+        For code actors (or when the event is not found) delegates to proxy.fire_event.
+        """
+        for evt in self._ai_events.get(name, []):
+            if evt.name == event_name:
+                instruction = f"{evt.prompt}\n\n{context}" if context else evt.prompt
+                output = self._get_proxy(name).instruct(instruction).get(timeout=120)
+                for target in evt.target_actors:
+                    if target and target in self._refs:
+                        self.instruct(target, output)
+                return output
         return self._get_proxy(name).fire_event(event_name, context).get(timeout=120)
 
     def list_running(self) -> list[str]:
@@ -310,6 +322,22 @@ class ActorRuntime:
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
+    def _build_resources(self, defn: ActorDef) -> list[AgentResource]:
+        """Build the initial resource list, prepending a directory resource when configured."""
+        resources = [AgentResource.from_dict(r) for r in defn.resources]
+        if defn.directory:
+            dir_name = Path(defn.directory).name or "workspace"
+            resources.insert(0, AgentResource(
+                id="directory",
+                name=dir_name,
+                type="directory",
+                uri=defn.directory,
+                description=f"Working directory: {defn.directory}",
+                dynamic=False,
+                shared_with=[],
+            ))
+        return resources
+
     def _get_proxy(self, name: str) -> Any:
         ref = self._refs.get(name)
         if ref is None:
@@ -318,7 +346,8 @@ class ActorRuntime:
 
     def _register_crons(self, name: str, crons: list[CronJobDef]) -> None:
         for i, cron in enumerate(crons):
-            job_id = f"cron-{name}-{i}"
+            label = cron.name
+            job_id = f"cron-{name}-{i}-{label}"
             try:
                 parts = cron.schedule.split()
                 trigger = CronTrigger(

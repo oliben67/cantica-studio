@@ -76,24 +76,36 @@ export class StudioClient {
   }
 
   async startActor(def: AIActorDef): Promise<void> {
-    const body = {
-      name: def.name,
-      define_prompt: def.definePrompt.uri ?? def.definePrompt.content ?? '',
-      provider: def.provider,
-      model: def.model,
-      max_tokens: def.maxTokens,
-      max_history: def.maxHistory,
-      prompt_events: def.promptEvents.map((e) => ({
-        name: e.name,
-        prompt: e.prompt.uri ?? e.prompt.content ?? '',
-        filePattern: e.filePattern,
-      })),
-      cron_jobs: def.cronJobs.map((c) => ({
-        schedule: c.schedule,
-        prompt: c.prompt.uri ?? c.prompt.content ?? '',
-      })),
-      outbox: {},
-    };
+    const isCode = def.actorType === 'python' || def.actorType === 'typescript';
+    const body = isCode
+      ? {
+          name: def.name,
+          actor_type: def.actorType,
+          script_path: def.scriptPath ?? '',
+          script_command: def.scriptCommand ?? '',
+        }
+      : {
+          name: def.name,
+          define_prompt: def.definePrompt.uri ?? def.definePrompt.content ?? '',
+          provider: def.provider,
+          model: def.model,
+          max_tokens: def.maxTokens,
+          max_history: def.maxHistory,
+          prompt_events: def.promptEvents.map((e) => ({
+            name: e.name,
+            prompt: e.prompt.uri ?? e.prompt.content ?? '',
+            ...(e.filePattern ? { filePattern: e.filePattern } : {}),
+            ...(e.targetActors?.length ? { targetActors: e.targetActors } : {}),
+          })),
+          cron_jobs: def.cronJobs.map((c) => ({
+            ...(c.name ? { name: c.name } : {}),
+            schedule: c.schedule,
+            prompt: c.prompt.uri ?? c.prompt.content ?? '',
+            ...(c.targetActor ? { targetActor: c.targetActor } : {}),
+            ...(c.targetEvent ? { targetEvent: c.targetEvent } : {}),
+          })),
+          outbox: {},
+        };
     const r = await fetch(this.url('/v1/runtime/actors'), {
       method: 'POST',
       headers: headers(),
@@ -132,7 +144,12 @@ export class StudioClient {
 
 export function parseGraph(raw: Record<string, unknown>): ActorGraph {
   const actors = ((raw['actors'] ?? []) as Record<string, unknown>[]).map(_parseActor);
-  const edges = ((raw['edges'] ?? []) as Record<string, unknown>[]).map(_parseEdge);
+  // Drop: kindless legacy edges AND self-loop edges.
+  // Self-targeting is stored purely in actor.promptEvents / actor.cronJobs;
+  // no edge is created or preserved for it.
+  const edges = ((raw['edges'] ?? []) as Record<string, unknown>[])
+    .map(_parseEdge)
+    .filter((e): e is ActorEdgeDef => e !== null && e.from !== e.to);
   return {
     id: (raw['@id'] as string | undefined) ?? 'urn:cantica:studio:graph:default',
     name: (raw['name'] as string | undefined) ?? 'Workflow',
@@ -145,29 +162,36 @@ function _parseActor(r: Record<string, unknown>): AIActorDef {
   const pos = (r['position'] as { x?: number; y?: number } | undefined) ?? {};
   const events: PromptEventDef[] = ((r['promptEvents'] ?? []) as Record<string, unknown>[]).map((e) => {
     const fp = e['filePattern'] as string | undefined;
-    const ta = e['targetActor'] as string | undefined;
-    const te = e['targetEvent'] as string | undefined;
+    // Support both new targetActors[] and legacy single targetActor string.
+    const tas = e['targetActors'] as string[] | undefined;
+    const oldTa = e['targetActor'] as string | undefined;
+    const targetActors = tas ?? (oldTa ? [oldTa] : undefined);
     return {
       name: (e['name'] as string) ?? '',
       prompt: _parseRef(e['prompt']),
       ...(fp ? { filePattern: fp } : {}),
-      ...(ta ? { targetActor: ta } : {}),
-      ...(te ? { targetEvent: te } : {}),
+      ...(targetActors?.length ? { targetActors } : {}),
     };
   });
   const crons = ((r['cronJobs'] ?? []) as Record<string, unknown>[]).map((c) => {
+    const cn = c['name'] as string | undefined;
     const ta = c['targetActor'] as string | undefined;
     const te = c['targetEvent'] as string | undefined;
     return {
+      ...(cn ? { name: cn } : {}),
       schedule: (c['schedule'] as string) ?? '',
       prompt: _parseRef(c['prompt']),
       ...(ta ? { targetActor: ta } : {}),
       ...(te ? { targetEvent: te } : {}),
     };
   });
+  const actorType = ((r['actorType'] as string | undefined) ?? 'ai') as 'ai' | 'python' | 'typescript';
   return {
     id: (r['@id'] as string) ?? '',
     name: (r['name'] as string) ?? '',
+    actorType,
+    ...(r['scriptPath'] ? { scriptPath: r['scriptPath'] as string } : {}),
+    ...(r['scriptCommand'] ? { scriptCommand: r['scriptCommand'] as string } : {}),
     definePrompt: _parseRef(r['definePrompt']),
     provider: (r['provider'] as string) ?? 'claude',
     model: (r['model'] as string) ?? 'claude-sonnet-4-6',
@@ -188,7 +212,9 @@ function _parseActor(r: Record<string, unknown>): AIActorDef {
   };
 }
 
-function _parseEdge(r: Record<string, unknown>): ActorEdgeDef {
+function _parseEdge(r: Record<string, unknown>): ActorEdgeDef | null {
+  const kind = r['kind'] as 'event' | 'cron' | undefined;
+  if (!kind) return null;  // drop legacy kindless edges (old outbox 'message' edges)
   const te = r['targetEvent'] as string | null | undefined;
   return {
     id: (r['@id'] as string) ?? '',
@@ -197,6 +223,7 @@ function _parseEdge(r: Record<string, unknown>): ActorEdgeDef {
     ...(te ? { targetEvent: te } : {}),
     prompt: _parseRef(r['prompt']),
     label: (r['label'] as string) ?? '',
+    kind,
   };
 }
 
@@ -208,7 +235,7 @@ function _parseRef(v: unknown): PromptRef {
     const content = o['content'] as string | undefined;
     return { ...(uri ? { uri } : {}), ...(content ? { content } : {}) };
   }
-  return {};
+  return {};  // null or {} both produce an empty PromptRef
 }
 
 export function serializeGraph(g: ActorGraph): Record<string, unknown> {
@@ -224,9 +251,12 @@ export function serializeGraph(g: ActorGraph): Record<string, unknown> {
 
 function _serializeActor(a: AIActorDef): Record<string, unknown> {
   return {
-    '@type': 'AIActor',
+    '@type': a.actorType === 'ai' ? 'AIActor' : 'CodeActor',
     '@id': a.id,
     'name': a.name,
+    'actorType': a.actorType ?? 'ai',
+    ...(a.scriptPath ? { 'scriptPath': a.scriptPath } : {}),
+    ...(a.scriptCommand ? { 'scriptCommand': a.scriptCommand } : {}),
     'definePrompt': _serializeRef(a.definePrompt),
     'provider': a.provider,
     'model': a.model,
@@ -238,11 +268,11 @@ function _serializeActor(a: AIActorDef): Record<string, unknown> {
       'name': e.name,
       'prompt': _serializeRef(e.prompt),
       ...(e.filePattern ? { 'filePattern': e.filePattern } : {}),
-      ...(e.targetActor ? { 'targetActor': e.targetActor } : {}),
-      ...(e.targetEvent ? { 'targetEvent': e.targetEvent } : {}),
+      ...(e.targetActors?.length ? { 'targetActors': e.targetActors } : {}),
     })),
     'cronJobs': a.cronJobs.map((c) => ({
       '@type': 'CronJob',
+      ...(c.name ? { 'name': c.name } : {}),
       'schedule': c.schedule,
       'prompt': _serializeRef(c.prompt),
       ...(c.targetActor ? { 'targetActor': c.targetActor } : {}),
@@ -267,14 +297,15 @@ function _serializeEdge(e: ActorEdgeDef): Record<string, unknown> {
     '@id': e.id,
     'from': e.from,
     'to': e.to,
-    ...(e.targetEvent ? { 'targetEvent': e.targetEvent } : { 'targetEvent': null }),
+    ...(e.targetEvent ? { 'targetEvent': e.targetEvent } : {}),
     'prompt': _serializeRef(e.prompt),
     'label': e.label,
+    'kind': e.kind,
   };
 }
 
-function _serializeRef(r: PromptRef): string | Record<string, unknown> {
+function _serializeRef(r: PromptRef): string | null {
   if (r.uri) return r.uri;
   if (r.content) return r.content;
-  return {};
+  return null;
 }

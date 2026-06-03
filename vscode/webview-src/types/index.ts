@@ -9,11 +9,11 @@ export interface PromptEventDef {
   name: string;
   prompt: PromptRef;
   filePattern?: string;
-  targetActor?: string;
-  targetEvent?: string;
+  targetActors?: string[];   // empty = self; multiple = broadcast
 }
 
 export interface CronJobDef {
+  name?: string;       // human-readable label; falls back to schedule in the UI
   schedule: string;
   prompt: PromptRef;
   targetActor?: string;
@@ -30,9 +30,14 @@ export interface AgentResource {
   sharedWith?: string[];
 }
 
+export type ActorType = 'ai' | 'python' | 'typescript';
+
 export interface AIActorDef {
   id: string;
   name: string;
+  actorType: ActorType;     // 'ai' (default) | 'python' | 'typescript'
+  scriptPath?: string;      // code actors: path to the script
+  scriptCommand?: string;   // code actors: runtime override (e.g. 'bun', 'ts-node')
   definePrompt: PromptRef;
   provider: string;
   model: string;
@@ -51,6 +56,18 @@ export interface ActorEdgeDef {
   targetEvent?: string;
   prompt: PromptRef;
   label: string;
+  kind?: 'event' | 'cron';
+}
+
+export type HandleSide = 'left' | 'right' | 'top' | 'bottom';
+
+/** Slim descriptor of one edge that a node needs to render its handle. */
+export interface EdgeHandleInfo {
+  id: string;
+  label: string;
+  kind?: 'event' | 'cron';
+  isSelf: boolean;
+  side: HandleSide;   // which side of this node the handle sits on
 }
 
 export interface ActorGraph {

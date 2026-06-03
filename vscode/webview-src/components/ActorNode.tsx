@@ -1,30 +1,76 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import type { AIActorDef } from '../types';
+import type { AIActorDef, EdgeHandleInfo, HandleSide } from '../types';
 import { useStore } from '../store';
 import { vscode } from '../vscode';
 import { PROVIDERS } from './ProviderMenu';
 
-export type ActorNodeData = { actor: AIActorDef };
+export type ActorNodeData = {
+  actor: AIActorDef;
+  outEdges: EdgeHandleInfo[];  // edges leaving this node → source handles on right
+  inEdges: EdgeHandleInfo[];   // edges entering this node → target handles on left
+};
 export type ActorNodeType = { id: string; type: 'actorNode'; position: { x: number; y: number }; data: ActorNodeData };
 
+// Distribute n handles evenly (never at 0% or 100%)
+const pct = (i: number, n: number) => `${((i + 1) / (n + 1)) * 100}%`;
+
+const SIDE_POSITION: Record<HandleSide, Position> = {
+  left: Position.Left, right: Position.Right, top: Position.Top, bottom: Position.Bottom,
+};
+// top/bottom handles offset by left%, left/right handles by top%
+const handleStyle = (side: HandleSide, i: number, n: number) =>
+  side === 'top' || side === 'bottom' ? { left: pct(i, n) } : { top: pct(i, n) };
+
+function Handles({ edges, type }: { edges: EdgeHandleInfo[]; type: 'source' | 'target' }) {
+  const prefix = type === 'source' ? 'out' : 'in';
+  const sides: HandleSide[] = ['right', 'left', 'top', 'bottom'];
+  const byClass = type === 'source' ? 'cs-handle--out' : 'cs-handle--in';
+  if (edges.length === 0) {
+    const fallbackPos = type === 'source' ? Position.Right : Position.Left;
+    return <Handle type={type} position={fallbackPos} className={`cs-handle ${byClass} cs-handle--default`} />;
+  }
+  return (
+    <>
+      {sides.map(side => {
+        const group = edges.filter(e => e.side === side);
+        return group.map((e, i) => (
+          <Handle
+            key={`${prefix}-${e.id}`}
+            id={`${prefix}-${e.id}`}
+            type={type}
+            position={SIDE_POSITION[side]}
+            className={`cs-handle ${byClass} cs-handle--${e.kind ?? 'default'}`}
+            style={handleStyle(side, i, group.length)}
+            title={e.label}
+          />
+        ));
+      })}
+    </>
+  );
+}
+
 export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) {
-  const actor = (data as ActorNodeData).actor;
+  const { actor, outEdges = [], inEdges = [] } = data as ActorNodeData;
   const [editing, setEditing] = useState(false);
   const [nameVal, setNameVal] = useState(actor.name);
+  const [promptText, setPromptText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLInputElement>(null);
 
   const {
     runningActors, actorOutputs, selectActor, updateActor,
     openEventsModal, openCronsModal, openActorMenu, openProviderMenu,
-    actorLogsVisible,
+    actorLogsVisible, toggleLogs,
   } = useStore();
 
+  const isCode = actor.actorType === 'python' || actor.actorType === 'typescript';
   const running = runningActors.has(actor.name);
   const output = actorOutputs.get(actor.name);
   const logsVisible = actorLogsVisible[actor.id] ?? false;
   const providerInfo = PROVIDERS[actor.provider];
-  const color = providerInfo?.color ?? '#6b7280';
+  const color = providerInfo?.color ?? (isCode ? '#0ea5e9' : '#6b7280');
+  const typeLabel = isCode ? actor.actorType!.toUpperCase() : (providerInfo?.label ?? actor.provider);
 
   useEffect(() => { if (!editing) setNameVal(actor.name); }, [actor.name, editing]);
   useEffect(() => {
@@ -43,13 +89,23 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     vscode.postMessage({ type: 'stopActor', name: actor.name });
   }
 
+  function sendPrompt(e: React.MouseEvent) {
+    e.stopPropagation();
+    const text = promptText.trim();
+    if (!text) return;
+    vscode.postMessage({ type: 'runActor', name: actor.name, instruction: text });
+    setPromptText('');
+    if (!logsVisible) toggleLogs(actor.id);
+  }
+
   return (
     <div
       className={`cs-actor-node${selected ? ' cs-actor-node--selected' : ''}${running ? ' cs-actor-node--running' : ''}`}
       onClick={() => selectActor(actor.id)}
     >
-      <Handle type="target" position={Position.Left} className="cs-handle cs-handle--target" />
-      <Handle type="source" position={Position.Right} className="cs-handle cs-handle--source" />
+      {/* Per-side handles — one per incoming/outgoing edge on the nearest face */}
+      <Handles edges={inEdges} type="target" />
+      <Handles edges={outEdges} type="source" />
 
       {/* ── Header: status | provider | name | gear ── */}
       <div className="cs-actor-header">
@@ -60,12 +116,10 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
 
         <div
           className="cs-actor-provider"
-          onClick={e => { e.stopPropagation(); openProviderMenu(actor.id, e.clientX, e.clientY); }}
-          title="Click to change provider / model"
+          onClick={e => { e.stopPropagation(); if (!isCode) openProviderMenu(actor.id, e.clientX, e.clientY); }}
+          title={isCode ? actor.actorType : 'Click to change provider / model'}
         >
-          <span className="cs-actor-badge" style={{ background: color }}>
-            {providerInfo?.label ?? actor.provider}
-          </span>
+          <span className="cs-actor-badge" style={{ background: color }}>{typeLabel}</span>
         </div>
 
         {editing ? (
@@ -97,53 +151,109 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
         >⚙</button>
       </div>
 
-      {/* ── Model row: model name | indicators (right) ── */}
-      <div className="cs-actor-model-row">
-        <span className="cs-actor-section-label">model</span>
-        <span className="cs-actor-model">{actor.model}</span>
-        {actor.promptEvents.length > 0 && (
-          <button
-            className="cs-actor-indicator"
-            title={`${actor.promptEvents.length} event(s) — click to edit`}
-            onClick={e => { e.stopPropagation(); openEventsModal(actor.id); }}
-          >⚡</button>
-        )}
-        {actor.cronJobs.length > 0 && (
-          <button
-            className="cs-actor-indicator"
-            title={`${actor.cronJobs.length} cron job(s) — click to edit`}
-            onClick={e => { e.stopPropagation(); openCronsModal(actor.id); }}
-          >⏱</button>
-        )}
-      </div>
+      {isCode ? (
+        <>
+          {/* ── Code actor: script path ── */}
+          <div className="cs-actor-model-row">
+            <span className="cs-actor-section-label">script</span>
+            <span className="cs-actor-model" title={actor.scriptPath}>
+              {actor.scriptPath ? actor.scriptPath.split('/').pop() : <em style={{ opacity: 0.45 }}>no script</em>}
+            </span>
+            {outEdges.length > 0 && <span className="cs-actor-indicator" title={`${outEdges.length} connections`}>⇢</span>}
+          </div>
 
-      {/* ── Define prompt ── */}
-      {(actor.definePrompt.uri || actor.definePrompt.content) && (
-        <div className="cs-actor-define-prompt">
-          <span className="cs-actor-section-label">role</span>
-          <span className="cs-actor-prompt-ref">
-            {actor.definePrompt.uri ?? (actor.definePrompt.content ?? '').slice(0, 50)}
-          </span>
-        </div>
-      )}
-
-      {/* ── Inline logs (toggled from ActorMenu) ── */}
-      {logsVisible && (
-        <div className="cs-actor-output">
-          <span className="cs-actor-section-label">logs</span>
-          {output ? (
-            <p className="cs-actor-output-text">{output.slice(0, 240)}{output.length > 240 ? '…' : ''}</p>
-          ) : (
-            <p className="cs-actor-output-text" style={{ opacity: 0.45 }}>no output yet</p>
+          {logsVisible && (
+            <div className="cs-actor-output">
+              <span className="cs-actor-section-label">logs</span>
+              {output ? (
+                <p className="cs-actor-output-text">{output.slice(0, 240)}{output.length > 240 ? '…' : ''}</p>
+              ) : (
+                <p className="cs-actor-output-text" style={{ opacity: 0.45 }}>not started</p>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      {/* ── Stop button when running ── */}
-      {running && (
-        <div className="cs-actor-footer">
-          <button className="cs-actor-btn cs-actor-btn--stop" onClick={handleStop}>Stop</button>
-        </div>
+          {/* ── Code actor: start / stop only ── */}
+          <div className="cs-actor-prompt-row" onClick={e => e.stopPropagation()}>
+            {!running ? (
+              <button
+                className="cs-actor-btn cs-actor-btn--prompt"
+                style={{ flex: 1 }}
+                onClick={e => { e.stopPropagation(); vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' }); if (!logsVisible) toggleLogs(actor.id); }}
+                title="Start code actor"
+              >▶ Start</button>
+            ) : (
+              <button
+                className="cs-actor-btn cs-actor-btn--stop"
+                style={{ flex: 1 }}
+                onClick={handleStop}
+                title="Stop code actor"
+              >■ Stop</button>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* ── AI actor: model row | indicators ── */}
+          <div className="cs-actor-model-row">
+            <span className="cs-actor-section-label">model</span>
+            <span className="cs-actor-model">{actor.model}</span>
+            {actor.promptEvents.length > 0 && (
+              <button
+                className="cs-actor-indicator"
+                title={`${actor.promptEvents.length} event(s) — click to edit`}
+                onClick={e => { e.stopPropagation(); openEventsModal(actor.id); }}
+              >⚡</button>
+            )}
+            {actor.cronJobs.length > 0 && (
+              <button
+                className="cs-actor-indicator"
+                title={`${actor.cronJobs.length} cron job(s) — click to edit`}
+                onClick={e => { e.stopPropagation(); openCronsModal(actor.id); }}
+              >⏱</button>
+            )}
+          </div>
+
+          {(actor.definePrompt.uri || actor.definePrompt.content) && (
+            <div className="cs-actor-define-prompt">
+              <span className="cs-actor-section-label">role</span>
+              <span className="cs-actor-prompt-ref">
+                {actor.definePrompt.uri ?? (actor.definePrompt.content ?? '').slice(0, 50)}
+              </span>
+            </div>
+          )}
+
+          {logsVisible && (
+            <div className="cs-actor-output">
+              <span className="cs-actor-section-label">logs</span>
+              {output ? (
+                <p className="cs-actor-output-text">{output.slice(0, 240)}{output.length > 240 ? '…' : ''}</p>
+              ) : (
+                <p className="cs-actor-output-text" style={{ opacity: 0.45 }}>no output yet</p>
+              )}
+            </div>
+          )}
+
+          {/* ── AI actor: prompt input ── */}
+          <div className="cs-actor-prompt-row" onClick={e => e.stopPropagation()}>
+            <input
+              ref={promptRef}
+              className="cs-actor-prompt-input"
+              placeholder="Send a prompt…"
+              value={promptText}
+              onChange={e => setPromptText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); sendPrompt(e as unknown as React.MouseEvent); }
+                e.stopPropagation();
+              }}
+              onClick={e => e.stopPropagation()}
+            />
+            <button className="cs-actor-btn cs-actor-btn--prompt" onClick={sendPrompt} title="Send prompt">Prompt</button>
+            {running && (
+              <button className="cs-actor-btn cs-actor-btn--stop" onClick={handleStop} title="Stop actor">■</button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

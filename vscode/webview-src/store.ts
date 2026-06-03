@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings } from './types';
+import type { AIActorDef, ActorEdgeDef, ActorGraph, ActorType, CanticaPrompt, ExtensionSettings } from './types';
 
 let _idSeq = 0;
 const nextId = (prefix: string) => `${prefix}-${Date.now()}-${++_idSeq}`;
@@ -8,11 +8,32 @@ function defaultActor(pos = { x: 100, y: 100 }): AIActorDef {
   return {
     id: `urn:cantica:studio:actor:${nextId('actor')}`,
     name: `actor-${_idSeq}`,
+    actorType: 'ai',
     definePrompt: {},
     provider: 'claude',
     model: 'claude-sonnet-4-6',
     maxTokens: 4096,
     maxHistory: 10,
+    position: pos,
+    promptEvents: [],
+    cronJobs: [],
+    resources: [],
+  };
+}
+
+function defaultCodeActor(type: 'python' | 'typescript', pos = { x: 100, y: 100 }): AIActorDef {
+  const seq = ++_idSeq;
+  return {
+    id: `urn:cantica:studio:actor:${nextId('code')}`,
+    name: `${type}-${seq}`,
+    actorType: type,
+    scriptPath: '',
+    scriptCommand: '',
+    definePrompt: {},
+    provider: '',
+    model: '',
+    maxTokens: 0,
+    maxHistory: 0,
     position: pos,
     promptEvents: [],
     cronJobs: [],
@@ -33,11 +54,13 @@ interface GraphState {
   // Graph mutations
   setGraph: (graph: ActorGraph) => void;
   addActor: (pos?: { x: number; y: number }) => void;
+  addCodeActor: (type: 'python' | 'typescript', pos?: { x: number; y: number }) => void;
   updateActor: (id: string, patch: Partial<AIActorDef>) => void;
   removeActor: (id: string) => void;
   addEdge: (edge: Omit<ActorEdgeDef, 'id'>) => void;
   updateEdge: (id: string, patch: Partial<ActorEdgeDef>) => void;
   removeEdge: (id: string) => void;
+  replaceActorEdges: (actorId: string, edges: Omit<ActorEdgeDef, 'id'>[]) => void;
   updateActorPosition: (id: string, pos: { x: number; y: number }) => void;
   resetGraph: () => void;
 
@@ -56,10 +79,12 @@ interface GraphState {
 
   // Modal UI state
   eventsModalActorId: string | null;
+  eventsModalFocusLabel: string | null;  // event name to scroll to on open
   cronsModalActorId: string | null;
-  openEventsModal: (actorId: string) => void;
+  cronsModalFocusLabel: string | null;   // cron schedule to scroll to on open
+  openEventsModal: (actorId: string, focusLabel?: string) => void;
   closeEventsModal: () => void;
-  openCronsModal: (actorId: string) => void;
+  openCronsModal: (actorId: string, focusLabel?: string) => void;
   closeCronsModal: () => void;
 
   providerMenuState: { actorId: string; x: number; y: number } | null;
@@ -70,16 +95,16 @@ interface GraphState {
   openActorMenu: (actorId: string, x: number, y: number) => void;
   closeActorMenu: () => void;
 
+  edgeMenuState: { edgeId: string; x: number; y: number } | null;
+  openEdgeMenu: (edgeId: string, x: number, y: number) => void;
+  closeEdgeMenu: () => void;
+
   propertiesModalActorId: string | null;
   openPropertiesModal: (actorId: string) => void;
   closePropertiesModal: () => void;
 
   actorLogsVisible: Record<string, boolean>;
   toggleLogs: (actorId: string) => void;
-
-  sendPromptActorId: string | null;
-  openSendPrompt: (actorId: string) => void;
-  clearSendPrompt: () => void;
 
   resourcesModalActorId: string | null;
   openResourcesModal: (actorId: string) => void;
@@ -115,6 +140,11 @@ export const useStore = create<GraphState>((set) => ({
   addActor: (pos) =>
     set((s) => ({
       graph: { ...s.graph, actors: [...s.graph.actors, defaultActor(pos)] },
+    })),
+
+  addCodeActor: (type, pos) =>
+    set((s) => ({
+      graph: { ...s.graph, actors: [...s.graph.actors, defaultCodeActor(type, pos)] },
     })),
 
   updateActor: (id, patch) =>
@@ -160,6 +190,17 @@ export const useStore = create<GraphState>((set) => ({
       selectedEdgeId: s.selectedEdgeId === id ? null : s.selectedEdgeId,
     })),
 
+  replaceActorEdges: (actorId, edges) =>
+    set((s) => ({
+      graph: {
+        ...s.graph,
+        edges: [
+          ...s.graph.edges.filter((e) => e.from !== actorId),
+          ...edges.map((e) => ({ ...e, id: `urn:cantica:studio:edge:${nextId('edge')}` })),
+        ],
+      },
+    })),
+
   updateActorPosition: (id, pos) =>
     set((s) => ({
       graph: {
@@ -190,11 +231,13 @@ export const useStore = create<GraphState>((set) => ({
   setExplorerSide: (side) => set({ explorerSide: side }),
 
   eventsModalActorId: null,
+  eventsModalFocusLabel: null,
   cronsModalActorId: null,
-  openEventsModal: (actorId) => set({ eventsModalActorId: actorId }),
-  closeEventsModal: () => set({ eventsModalActorId: null }),
-  openCronsModal: (actorId) => set({ cronsModalActorId: actorId }),
-  closeCronsModal: () => set({ cronsModalActorId: null }),
+  cronsModalFocusLabel: null,
+  openEventsModal: (actorId, focusLabel) => set({ eventsModalActorId: actorId, eventsModalFocusLabel: focusLabel ?? null }),
+  closeEventsModal: () => set({ eventsModalActorId: null, eventsModalFocusLabel: null }),
+  openCronsModal: (actorId, focusLabel) => set({ cronsModalActorId: actorId, cronsModalFocusLabel: focusLabel ?? null }),
+  closeCronsModal: () => set({ cronsModalActorId: null, cronsModalFocusLabel: null }),
 
   providerMenuState: null,
   openProviderMenu: (actorId, x, y) => set({ providerMenuState: { actorId, x, y } }),
@@ -204,6 +247,10 @@ export const useStore = create<GraphState>((set) => ({
   openActorMenu: (actorId, x, y) => set({ actorMenuState: { actorId, x, y } }),
   closeActorMenu: () => set({ actorMenuState: null }),
 
+  edgeMenuState: null,
+  openEdgeMenu: (edgeId, x, y) => set({ edgeMenuState: { edgeId, x, y } }),
+  closeEdgeMenu: () => set({ edgeMenuState: null }),
+
   propertiesModalActorId: null,
   openPropertiesModal: (actorId) => set({ propertiesModalActorId: actorId }),
   closePropertiesModal: () => set({ propertiesModalActorId: null }),
@@ -212,10 +259,6 @@ export const useStore = create<GraphState>((set) => ({
   toggleLogs: (actorId) => set(s => ({
     actorLogsVisible: { ...s.actorLogsVisible, [actorId]: !s.actorLogsVisible[actorId] },
   })),
-
-  sendPromptActorId: null,
-  openSendPrompt: (actorId) => set({ sendPromptActorId: actorId }),
-  clearSendPrompt: () => set({ sendPromptActorId: null }),
 
   resourcesModalActorId: null,
   openResourcesModal: (actorId) => set({ resourcesModalActorId: actorId }),

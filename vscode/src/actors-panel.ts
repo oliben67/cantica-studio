@@ -4,25 +4,27 @@ import { serializeGraph, type StudioClient } from './studio-client.js';
 
 export class ActorsPanel {
   static readonly viewType = 'canticaScores.panel';
-  private static current: ActorsPanel | undefined;
+  private static _current: ActorsPanel | undefined;
+  static get current(): ActorsPanel | undefined { return ActorsPanel._current; }
 
   private readonly panel: vscode.WebviewPanel;
   private readonly disposables: vscode.Disposable[] = [];
   private settings: ExtensionSettings;
   private client: StudioClient;
   private fileSaveWatcher: vscode.Disposable | undefined;
-  private activeSongbookUri: vscode.Uri | undefined;
+  private _activeSongbookUri: vscode.Uri | undefined;
+  get activeSongbookUri(): vscode.Uri | undefined { return this._activeSongbookUri; }
 
   static show(
     context: vscode.ExtensionContext,
     client: StudioClient,
     settings: ExtensionSettings,
   ): ActorsPanel {
-    if (ActorsPanel.current !== undefined) {
-      ActorsPanel.current.panel.reveal(vscode.ViewColumn.Beside, true);
-      ActorsPanel.current.client = client;
-      ActorsPanel.current.settings = settings;
-      return ActorsPanel.current;
+    if (ActorsPanel._current !== undefined) {
+      ActorsPanel._current.panel.reveal(vscode.ViewColumn.Beside, true);
+      ActorsPanel._current.client = client;
+      ActorsPanel._current.settings = settings;
+      return ActorsPanel._current;
     }
     const panel = vscode.window.createWebviewPanel(
       ActorsPanel.viewType,
@@ -34,8 +36,8 @@ export class ActorsPanel {
         retainContextWhenHidden: true,
       },
     );
-    ActorsPanel.current = new ActorsPanel(panel, context, client, settings);
-    return ActorsPanel.current;
+    ActorsPanel._current = new ActorsPanel(panel, context, client, settings);
+    return ActorsPanel._current;
   }
 
   private constructor(
@@ -78,12 +80,12 @@ export class ActorsPanel {
         } catch (err) {
           errs.push(`Studio API: ${String(err)}`);
         }
-        const songbookUri = this.activeSongbookUri ?? await this.detectSongbookUri(graph);
+        const songbookUri = this._activeSongbookUri ?? await this.detectSongbookUri(graph);
         if (songbookUri) {
           try {
             const content = Buffer.from(JSON.stringify(serializeGraph(graph), null, 2), 'utf-8');
             await vscode.workspace.fs.writeFile(songbookUri, content);
-            if (!this.activeSongbookUri) this.setActiveSongbook(songbookUri);
+            if (!this._activeSongbookUri) this.setActiveSongbook(songbookUri);
           } catch (err) {
             errs.push(`File: ${String(err)}`);
           }
@@ -208,7 +210,7 @@ export class ActorsPanel {
   }
 
   setActiveSongbook(uri: vscode.Uri | undefined): void {
-    this.activeSongbookUri = uri;
+    this._activeSongbookUri = uri;
     const name = uri?.path.split('/').pop()?.replace(/\.jsonld$/i, '');
     this.panel.title = name ? `${name} - Songbook` : 'Songbook';
   }
@@ -309,7 +311,7 @@ export class ActorsPanel {
   }
 
   dispose(): void {
-    ActorsPanel.current = undefined;
+    ActorsPanel._current = undefined;
     this.fileSaveWatcher?.dispose();
     this.panel.dispose();
     for (const d of this.disposables) d.dispose();

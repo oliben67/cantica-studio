@@ -69,6 +69,81 @@ def search_files(pattern: str) -> list[str]:
 
 # ── Agent resource tools ──────────────────────────────────────────────────────
 
+# ── Code-actor lifecycle tools ────────────────────────────────────────────────
+
+@mcp.tool()
+def start_code_actor(
+    actor_name: str,
+    script_path: str,
+    actor_type: str = "python",
+    script_command: str = "",
+) -> str:
+    """Start a Python or TypeScript code actor.
+
+    actor_name:     unique name for this actor instance
+    script_path:    path to the script file (absolute or workspace-relative)
+    actor_type:     "python" or "typescript" (default "python")
+    script_command: optional runtime override (e.g. "bun", "ts-node")
+    """
+    from studio_api.runtime import ActorDef  # noqa: PLC0415
+    defn = ActorDef(
+        id=f"urn:cantica:studio:actor:{actor_name}",
+        name=actor_name,
+        define_prompt="",
+        actor_type=actor_type,
+        script_path=script_path,
+        script_command=script_command,
+    )
+    rt = _get_rt()
+    rt.start(defn, None)  # type: ignore[arg-type]
+    return f"Started {actor_type} code actor '{actor_name}'"
+
+
+@mcp.tool()
+def stop_code_actor(actor_name: str) -> str:
+    """Stop a running code actor.
+
+    actor_name: the name used when starting the actor
+    """
+    _get_rt().stop(actor_name)
+    return f"Stopped code actor '{actor_name}'"
+
+
+@mcp.tool()
+def list_code_actor_events(actor_name: str) -> list[dict]:
+    """Return the events exposed by a running code actor.
+
+    These are the event names the code actor handles internally; AI actors can
+    fire them via fire_event().
+    """
+    return _get_rt().get_actor_events(actor_name)
+
+
+@mcp.tool()
+def list_code_actor_crons(actor_name: str) -> list[dict]:
+    """Return the cron jobs registered by a running code actor."""
+    return _get_rt().get_actor_crons(actor_name)
+
+
+# ── Event tools ───────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def fire_event(actor_name: str, event_name: str, context: str = "") -> str:
+    """Fire a named event on an actor.
+
+    Runs the event's configured prompt on the actor and forwards the output
+    to all target actors defined for that event.  Call this from within an
+    actor's own instruction to trigger configured event routing.
+
+    actor_name: name of the actor that owns the event
+    event_name: name of the event to fire
+    context:    optional extra context appended to the event's prompt
+    """
+    return _get_rt().fire_event(actor_name, event_name, context)
+
+
+# ── Agent resource tools ──────────────────────────────────────────────────────
+
 @mcp.tool()
 def list_actor_resources(actor_name: str) -> list[dict]:
     """List all MCP resources accessible to an actor (owned + shared with it)."""
@@ -79,10 +154,11 @@ def list_actor_resources(actor_name: str) -> list[dict]:
 def read_actor_resource(actor_name: str, resource_id: str) -> str:
     """Read the content of an actor resource by ID.
 
-    - file  → returns workspace file content
-    - text  → returns the uri field as inline content
-    - api   → returns the URI so the agent can call it
-    - other → returns the URI
+    - file      → returns workspace file content
+    - directory → returns a newline-separated listing of directory entries
+    - text      → returns the uri field as inline content
+    - api       → returns the URI so the agent can call it
+    - other     → returns the URI
     """
     resources = _get_rt().get_accessible_resources(actor_name)
     match = next((r for r in resources if r["id"] == resource_id), None)
@@ -92,6 +168,8 @@ def read_actor_resource(actor_name: str, resource_id: str) -> str:
     uri = match.get("uri", "")
     if rtype == "file":
         return _get_fs().read(uri)
+    if rtype == "directory":
+        return "\n".join(_get_fs().list(uri))
     return uri  # text inline / api URL / other URI
 
 

@@ -209,6 +209,46 @@ async def test_read_actor_resource_not_found_raises(mcp_with_rt):
             )
 
 
+async def test_read_actor_resource_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """read_actor_resource for type='directory' returns a newline-separated file listing."""
+    from studio_api.runtime import ActorRuntime, ActorDef  # noqa: PLC0415
+    from unittest.mock import MagicMock, patch  # noqa: PLC0415
+
+    # Create a workspace sub-directory with known files
+    sub = tmp_path / "docs"
+    sub.mkdir()
+    (sub / "readme.md").write_text("hello", encoding="utf-8")
+    (sub / "guide.txt").write_text("world", encoding="utf-8")
+
+    rt = ActorRuntime()
+    defn = ActorDef(
+        id="urn:x:dir",
+        name="dir-actor",
+        define_prompt="",
+        directory="docs",
+    )
+    ref = MagicMock()
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, MagicMock())
+
+    ws = WorkspaceFS(tmp_path)
+    mcp_mod.init(ws, rt)
+    try:
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "read_actor_resource",
+                {"actor_name": "dir-actor", "resource_id": "directory"},
+            )
+        entries = result.data.split("\n") if result.data else []
+        assert any("readme.md" in e for e in entries)
+        assert any("guide.txt" in e for e in entries)
+    finally:
+        mcp_mod._fs = None
+        mcp_mod._rt = None
+        rt.stop_all()
+
+
 async def test_add_actor_resource_via_mcp(mcp_with_rt):
     async with Client(mcp) as client:
         result = await client.call_tool(

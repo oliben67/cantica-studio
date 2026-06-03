@@ -322,7 +322,7 @@ body {
 /* Fix minimap to a known height so the toggle button can be positioned precisely */
 .cs-rf-minimap { height: 124px !important; }
 
-/* Minimap toggle button — overlaid at top-right corner of the minimap */
+/* Minimap toggle button — hangs 8 px outside both the top and right edges of the minimap */
 .cs-minimap-toggle {
   display: flex; align-items: center; justify-content: center;
   width: 20px; height: 20px;
@@ -510,15 +510,55 @@ body {
   padding: 5px 10px 6px;
 }
 .cs-actor-btn {
-  font-size: 11px; padding: 2px 10px; border-radius: 3px; cursor: pointer; border: none;
+  font-size: 11px; padding: 2px 8px; border-radius: 3px; cursor: pointer; border: none; white-space: nowrap;
 }
-.cs-actor-btn--run  { background: var(--cs-accent); color: #fff; }
+.cs-actor-btn--run    { background: var(--cs-accent); color: #fff; }
 .cs-actor-btn--run:hover { filter: brightness(1.15); }
-.cs-actor-btn--stop { background: #dc2626; color: #fff; }
+.cs-actor-btn--stop   { background: #dc2626; color: #fff; }
 .cs-actor-btn--stop:hover { filter: brightness(1.15); }
+.cs-actor-btn--prompt { background: var(--cs-accent); color: #fff; }
+.cs-actor-btn--prompt:hover { filter: brightness(1.15); }
 
-/* Handles */
+/* Prompt input row at the bottom of every actor node */
+.cs-actor-prompt-row {
+  display: flex; gap: 4px; align-items: center;
+  padding: 5px 8px 6px;
+  border-top: 1px solid var(--cs-border);
+}
+.cs-actor-prompt-input {
+  flex: 1; min-width: 0;
+  background: var(--cs-bg-input); border: 1px solid var(--cs-border); border-radius: 3px;
+  color: var(--cs-text); font-size: 11px; padding: 2px 6px; outline: none;
+}
+.cs-actor-prompt-input:focus { border-color: var(--cs-accent); }
+
+/* Actor-checks: checkbox list for event target actors */
+.cs-actor-checks {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 4px 0 2px;
+}
+.cs-actor-check-label {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; cursor: pointer; color: var(--cs-text);
+}
+.cs-actor-check-label input[type="checkbox"] { margin: 0; cursor: pointer; }
+.cs-modal-self-note {
+  font-size: 11px; opacity: 0.6; margin-top: 2px; display: block;
+}
+
+/* Handles — per-edge connection points */
 .cs-handle { width: 10px !important; height: 10px !important; border-radius: 50% !important; }
+
+/* Direction variants */
+.cs-handle--out { border-width: 2px !important; }
+.cs-handle--in  { border-width: 2px !important; }
+
+/* Kind colours */
+.cs-handle--event   { background: #a78bfa !important; border-color: #7c3aed !important; }
+.cs-handle--cron    { background: #f59e0b !important; border-color: #b45309 !important; }
+.cs-handle--default { background: var(--cs-bg-panel) !important; border-color: var(--cs-accent-border) !important; }
+
+/* Legacy aliases kept for any external references */
 .cs-handle--source { background: var(--cs-accent) !important; border-color: var(--cs-accent) !important; }
 .cs-handle--target { background: var(--cs-bg-panel) !important; border-color: var(--cs-accent-border) !important; }
 
@@ -904,7 +944,22 @@ body {
   font-size: 13px; padding: 1px 3px; border-radius: 3px;
 }
 .cs-modal-remove-btn:hover { color: #f87171; background: rgba(220,38,38,.15); }
+.cs-modal-save-btn {
+  background: none; border: none;
+  color: var(--cs-text-muted); cursor: pointer;
+  font-size: 13px; padding: 1px 4px; border-radius: 3px;
+}
+.cs-modal-save-btn:hover { color: var(--cs-accent); background: rgba(124,58,237,.15); }
 .cs-modal-hint { font-size: 10px; color: var(--cs-text-muted); font-style: italic; }
+
+.cs-modal-event-item--focused {
+  border-color: var(--cs-accent) !important;
+  animation: cs-focus-flash 0.6s ease forwards;
+}
+@keyframes cs-focus-flash {
+  0%   { background: rgba(124,58,237,0.18); }
+  100% { background: transparent; }
+}
 .cs-modal-optional .cs-prop-input { font-size: 11px; }
 .cs-modal-empty {
   font-size: 12px; color: var(--cs-text-muted);

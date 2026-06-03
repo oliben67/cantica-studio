@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
+import { computeActorEdges } from '../edgeUtils';
 import type { AIActorDef } from '../types';
 
 const CRON_FIELDS = ['min', 'hour', 'day', 'month', 'weekday'] as const;
@@ -34,18 +35,23 @@ function CronBuilder({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-type Draft = { id: string; schedule: string; promptContent: string; targetActor: string; targetEvent: string };
+type Draft = { id: string; name: string; schedule: string; promptContent: string; targetActor: string; targetEvent: string };
 
 let _seq = 0;
 const uid = () => `c${Date.now()}${++_seq}`;
 
-function Inner({ actor }: { actor: AIActorDef }) {
-  const { graph, updateActor, addEdge, closeCronsModal } = useStore();
+function Inner({ actor, focusLabel }: { actor: AIActorDef; focusLabel: string | null }) {
+  const { graph, updateActor, replaceActorEdges, closeCronsModal } = useStore();
   const allActors = graph.actors;
+  const focusRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusRef.current) focusRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
 
   const [drafts, setDrafts] = useState<Draft[]>(() =>
     actor.cronJobs.map(c => ({
       id: uid(),
+      name: c.name ?? '',
       schedule: c.schedule,
       promptContent: c.prompt.content ?? c.prompt.uri ?? '',
       targetActor: c.targetActor ?? '',
@@ -54,50 +60,41 @@ function Inner({ actor }: { actor: AIActorDef }) {
   );
 
   function add() {
-    setDrafts(prev => [...prev, { id: uid(), schedule: '* * * * *', promptContent: '', targetActor: '', targetEvent: '' }]);
+    setDrafts(prev => [...prev, { id: uid(), name: '', schedule: '* * * * *', promptContent: '', targetActor: '', targetEvent: '' }]);
   }
+  function setName(id: string, v: string)     { setDrafts(p => p.map(d => d.id === id ? { ...d, name: v } : d)); }
   function setSchedule(id: string, v: string) { setDrafts(p => p.map(d => d.id === id ? { ...d, schedule: v } : d)); }
-  function setPrompt(id: string, v: string) { setDrafts(p => p.map(d => d.id === id ? { ...d, promptContent: v } : d)); }
+  function setPrompt(id: string, v: string)   { setDrafts(p => p.map(d => d.id === id ? { ...d, promptContent: v } : d)); }
   function setTarget(id: string, v: string) {
     setDrafts(p => p.map(d => d.id === id ? { ...d, targetActor: v, targetEvent: '' } : d));
   }
   function setTargetEvent(id: string, v: string) { setDrafts(p => p.map(d => d.id === id ? { ...d, targetEvent: v } : d)); }
   function remove(id: string) { setDrafts(p => p.filter(d => d.id !== id)); }
 
-  function save() {
-    const crons = drafts
+  function buildCrons() {
+    return drafts
       .filter(d => d.schedule.trim())
       .map(d => ({
+        ...(d.name.trim() ? { name: d.name.trim() } : {}),
         schedule: d.schedule.trim(),
         prompt: d.promptContent.trim() ? { content: d.promptContent.trim() } : { content: '' },
         ...(d.targetActor.trim() ? { targetActor: d.targetActor.trim() } : {}),
         ...(d.targetEvent.trim() ? { targetEvent: d.targetEvent.trim() } : {}),
       }));
-    updateActor(actor.id, { cronJobs: crons });
-
-    // Ensure graph edges exist for cross-actor targets
-    for (const d of drafts) {
-      if (!d.schedule.trim() || !d.targetActor.trim()) continue;
-      const targetActorDef = allActors.find(a => a.name === d.targetActor.trim());
-      if (!targetActorDef || targetActorDef.id === actor.id) continue;
-      const label = `cron:${d.schedule.trim()}`;
-      const edgeExists = graph.edges.some(
-        e => e.from === actor.id && e.to === targetActorDef.id && e.label === label
-      );
-      if (!edgeExists) {
-        const edge: Parameters<typeof addEdge>[0] = {
-          from: actor.id,
-          to: targetActorDef.id,
-          label,
-          prompt: d.promptContent.trim() ? { content: d.promptContent.trim() } : { content: '' },
-        };
-        if (d.targetEvent.trim()) edge.targetEvent = d.targetEvent.trim();
-        addEdge(edge);
-      }
-    }
-
-    closeCronsModal();
   }
+
+  function commitCrons() {
+    const crons = buildCrons();
+    const updatedActor = { ...actor, cronJobs: crons };
+    updateActor(actor.id, { cronJobs: crons });
+    replaceActorEdges(actor.id, computeActorEdges(updatedActor, allActors));
+  }
+
+  // 💾 per-entry: persist current state, keep modal open
+  function saveEntry() { commitCrons(); }
+
+  // Save All: persist and close
+  function save() { commitCrons(); closeCronsModal(); }
 
   return (
     <div className="cs-modal-overlay" onMouseDown={closeCronsModal}>
@@ -116,19 +113,31 @@ function Inner({ actor }: { actor: AIActorDef }) {
             const targetActorDef = crossActor
               ? allActors.find(a => a.name === d.targetActor.trim())
               : null;
+            const isFocused = !!focusLabel && d.schedule === focusLabel;
 
             return (
-              <div key={d.id} className="cs-modal-event-item">
+              <div
+                key={d.id}
+                ref={isFocused ? focusRef : null}
+                className={`cs-modal-event-item${isFocused ? ' cs-modal-event-item--focused' : ''}`}
+              >
                 <div className="cs-modal-event-header">
-                  <span className="cs-modal-event-section">Schedule</span>
+                  <input
+                    className="cs-prop-input cs-modal-event-name"
+                    value={d.name}
+                    onChange={e => setName(d.id, e.target.value)}
+                    placeholder="cron-name (optional label)"
+                    autoComplete="off"
+                  />
+                  <button className="cs-modal-save-btn" title="Save (keep open)" onClick={saveEntry}>💾</button>
                   <button className="cs-modal-remove-btn" onClick={() => remove(d.id)}>✕</button>
                 </div>
 
                 <CronBuilder value={d.schedule} onChange={v => setSchedule(d.id, v)} />
 
                 <label className="cs-prop-label" style={{ marginTop: 6 }}>
-                  Send to
-                  <span className="cs-modal-hint"> — target actor (empty = self)</span>
+                  Route to
+                  <span className="cs-modal-hint"> — target actor (empty = self, creates a graph edge)</span>
                   <select className="cs-prop-select" value={d.targetActor} onChange={e => setTarget(d.id, e.target.value)}>
                     <option value="">self (default)</option>
                     {allActors.filter(a => a.id !== actor.id).map(a => (
@@ -168,7 +177,7 @@ function Inner({ actor }: { actor: AIActorDef }) {
 
         <div className="cs-modal-footer">
           <button className="cs-modal-btn" style={{ marginRight: 'auto' }} onClick={add}>+ Add Cron</button>
-          <button className="cs-modal-btn cs-modal-btn--primary" onClick={save}>Save</button>
+          <button className="cs-modal-btn cs-modal-btn--primary" onClick={save}>Save All</button>
           <button className="cs-modal-btn" onClick={closeCronsModal}>Cancel</button>
         </div>
       </div>
@@ -177,9 +186,9 @@ function Inner({ actor }: { actor: AIActorDef }) {
 }
 
 export function CronModal() {
-  const { graph, cronsModalActorId } = useStore();
+  const { graph, cronsModalActorId, cronsModalFocusLabel } = useStore();
   if (!cronsModalActorId) return null;
   const actor = graph.actors.find(a => a.id === cronsModalActorId);
   if (!actor) return null;
-  return <Inner key={cronsModalActorId} actor={actor} />;
+  return <Inner key={cronsModalActorId} actor={actor} focusLabel={cronsModalFocusLabel} />;
 }

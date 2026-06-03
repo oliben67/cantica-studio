@@ -10,6 +10,12 @@ export class SongbookItem extends vscode.TreeItem {
     this.description = vscode.workspace.asRelativePath(uri, false);
     this.tooltip = uri.fsPath;
     this.contextValue = 'songbook';
+    // Single-click opens the canvas workspace, not the raw JSON file
+    this.command = {
+      command: 'canticaScores.viewSongbook',
+      title: 'Open Songbook',
+      arguments: [this],
+    };
   }
 }
 

@@ -67,10 +67,22 @@ def test_make_provider_gemini(monkeypatch: pytest.MonkeyPatch):
     assert isinstance(p, Gemini)
 
 
-def test_make_provider_unknown_falls_back_to_claude():
-    from actor_ai import Claude  # noqa: PLC0415
-    p = _make_provider("unknown-provider", "some-model")
-    assert isinstance(p, Claude)
+def test_make_provider_copilot():
+    from actor_ai import Copilot  # noqa: PLC0415
+    p = _make_provider("copilot", "gpt-4o")
+    assert isinstance(p, Copilot)
+
+
+def test_make_provider_mistral(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-for-unit-tests")
+    from actor_ai import Mistral  # noqa: PLC0415
+    p = _make_provider("mistral", "mistral-large-latest")
+    assert isinstance(p, Mistral)
+
+
+def test_make_provider_unknown_raises():
+    with pytest.raises(ValueError, match="Unknown provider"):
+        _make_provider("unknown-provider", "some-model")
 
 
 # ── _resolve ──────────────────────────────────────────────────────────────────

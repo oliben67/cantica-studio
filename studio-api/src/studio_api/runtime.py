@@ -51,7 +51,7 @@ class ActorDef:
 
 
 def _make_provider(provider: str, model: str) -> Any:
-    from actor_ai import Claude, GPT, Gemini  # noqa: PLC0415
+    from actor_ai import Claude, Copilot, Gemini, GPT, Mistral  # noqa: PLC0415
 
     p = provider.lower()
     if p == "claude":
@@ -60,7 +60,14 @@ def _make_provider(provider: str, model: str) -> Any:
         return GPT(model)
     if p == "gemini":
         return Gemini(model)
-    return Claude(model)
+    if p == "copilot":
+        return Copilot(model)
+    if p == "mistral":
+        return Mistral(model)
+    raise ValueError(
+        f"Unknown provider {provider!r}. "
+        "Expected one of: claude, gpt, openai, gemini, copilot, mistral."
+    )
 
 
 def _resolve(prompt: str, connector: CanticaConnector) -> str:

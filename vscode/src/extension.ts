@@ -46,9 +46,28 @@ async function findSongbooks(canticaHome: string): Promise<{ label: string; uri:
   const dir = songbooksDir(canticaHome);
   try {
     const entries = await vscode.workspace.fs.readDirectory(dir);
-    return entries
-      .filter(([name, type]) => type === vscode.FileType.File && name.endsWith('.jsonld'))
-      .map(([name]) => ({ label: name, uri: vscode.Uri.joinPath(dir, name) }));
+    const results: { label: string; uri: vscode.Uri }[] = [];
+
+    for (const [name, type] of entries) {
+      if (type === vscode.FileType.File && name.endsWith('.jsonld')) {
+        results.push({ label: name, uri: vscode.Uri.joinPath(dir, name) });
+      } else if (type === vscode.FileType.Directory) {
+        // One level deep: include any .jsonld files inside named sub-directories
+        try {
+          const subEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.joinPath(dir, name));
+          for (const [subName, subType] of subEntries) {
+            if (subType === vscode.FileType.File && subName.endsWith('.jsonld')) {
+              results.push({
+                label: `${name}/${subName}`,
+                uri: vscode.Uri.joinPath(dir, name, subName),
+              });
+            }
+          }
+        } catch { /* skip unreadable sub-dirs */ }
+      }
+    }
+
+    return results;
   } catch {
     return [];
   }
@@ -340,7 +359,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Watch the songbooks directory for new/deleted files (refreshes the sidebar)
   const songbooksPattern = new vscode.RelativePattern(
     songbooksDir(settings.canticaHome),
-    '*.jsonld',
+    '**/*.jsonld',
   );
   const songbooksWatcher = vscode.workspace.createFileSystemWatcher(songbooksPattern);
   songbooksWatcher.onDidCreate(() => refreshProviders());

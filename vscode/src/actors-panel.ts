@@ -105,40 +105,55 @@ export class ActorsPanel {
         const instruction = raw['instruction'] as string;
         const isStartOnly = instruction === '__start__';
 
-        // Ensure the actor is started on the backend before instructing
+        // ── 1. Check whether the actor is already running on the backend ──────
         let alreadyRunning = false;
         try {
           const runningNames = await this.client.listRunning();
           alreadyRunning = runningNames.includes(name);
-        } catch { /* assume not running */ }
+        } catch (err) {
+          await this.post({
+            type: 'actorOutput', name,
+            output: `⚠ Studio API not reachable at :${this['client']['port'] ?? 8043} — ${String(err)}`,
+          });
+          break;
+        }
 
+        // ── 2. Start the actor if not yet running ─────────────────────────────
         if (!alreadyRunning) {
           const graph = await this.client.loadGraph();
           const def = graph?.actors.find(a => a.name === name);
           if (!def) {
-            await this.post({ type: 'actorOutput', name, output: `⚠ Actor "${name}" not found in graph.` });
+            await this.post({
+              type: 'actorOutput', name,
+              output: `⚠ Actor "${name}" not found in the graph — open the songbook first.`,
+            });
             break;
           }
+          const tag = def.actorType === 'ai'
+            ? `${def.provider} / ${def.model}`
+            : def.actorType;
+          await this.post({ type: 'actorOutput', name, output: `⏳ Initialising ${tag}…` });
           try {
             await this.client.startActor(def);
-            const tag = def.actorType === 'ai'
-              ? `${def.provider}/${def.model}`
-              : `${def.actorType}`;
-            await this.post({ type: 'actorOutput', name, output: `▶ Started · ${tag}` });
+            await this.post({ type: 'actorOutput', name, output: `✓ Ready · ${tag}` });
             await this.post({ type: 'actorStatus', name, running: true });
           } catch (err) {
-            await this.post({ type: 'actorOutput', name, output: `⚠ Failed to start: ${String(err)}` });
+            await this.post({ type: 'actorOutput', name, output: `⚠ Start failed: ${String(err)}` });
             break;
           }
+        } else if (isStartOnly) {
+          await this.post({ type: 'actorOutput', name, output: `ℹ ${name} is already running` });
+          await this.post({ type: 'actorStatus', name, running: true });
         }
 
         if (isStartOnly) break;
 
+        // ── 3. Send the instruction ───────────────────────────────────────────
         try {
           const output = await this.client.instructActor(name, instruction);
           await this.post({ type: 'actorOutput', name, output });
         } catch (err) {
-          await this.post({ type: 'actorOutput', name, output: `⚠ ${String(err)}` });
+          await this.post({ type: 'actorOutput', name, output: `⚠ Prompt failed: ${String(err)}` });
         }
         break;
       }

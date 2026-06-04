@@ -91,8 +91,11 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
 
   function startActor(e: React.MouseEvent) {
     e.stopPropagation();
-    vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' });
+    // Open the log panel immediately and write a placeholder so the user sees
+    // something right away, before the async round-trip to the extension host.
     if (!logsVisible) toggleLogs(actor.id);
+    useStore.getState().appendOutput(actor.name, `⏳ Starting ${actor.name}…`);
+    vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' });
   }
 
   function sendPrompt(e: React.MouseEvent) {

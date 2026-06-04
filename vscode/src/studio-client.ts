@@ -113,7 +113,11 @@ export class StudioClient {
       headers: headers(),
       body: JSON.stringify(body),
     });
-    if (!r.ok) throw new Error(`Failed to start actor: ${r.status}`);
+    if (!r.ok) {
+      let detail = '';
+      try { detail = await r.text(); } catch { /* ignore */ }
+      throw new Error(`Failed to start actor [${r.status}]${detail ? `: ${detail}` : ''}`);
+    }
   }
 
   async stopActor(name: string): Promise<void> {
@@ -126,7 +130,11 @@ export class StudioClient {
       headers: headers(),
       body: JSON.stringify({ instruction }),
     });
-    if (!r.ok) throw new Error(`Instruct failed: ${r.status}`);
+    if (!r.ok) {
+      let detail = '';
+      try { detail = await r.text(); } catch { /* ignore */ }
+      throw new Error(`Instruct failed [${r.status}]${detail ? `: ${detail}` : ''}`);
+    }
     const data = (await r.json()) as { output: string };
     return data.output;
   }

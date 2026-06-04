@@ -18,6 +18,10 @@ LABEL org.opencontainers.image.source="https://github.com/oliben67/cantica"
 COPY --from=cantica-wheel /dist /dist
 RUN pip install --no-cache-dir /dist/*.whl
 
+# Pin the Copilot SDK before actor-ai so pip does not upgrade to 1.x which
+# dropped ExternalServerConfig (actor-ai 0.3.x depends on 0.3.0 behaviour).
+RUN pip install --no-cache-dir "github-copilot-sdk==0.3.0"
+
 # Install studio-api and its dependencies (actor-ai from PyPI, etc.)
 WORKDIR /app
 COPY cantica-studio/studio-api/pyproject.toml cantica-studio/studio-api/README.md ./

@@ -253,11 +253,12 @@ function Canvas() {
 export function App() {
   const store = useStore();
 
-  // Auto-save: any graph mutation → debounced write to .jsonld
+  // Auto-save: user-initiated graph mutations → debounced write to .jsonld.
+  // Remote loads (loadGraph messages) set remoteLoad=true to suppress this.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const unsub = useStore.subscribe((state, prev) => {
-      if (state.graph !== prev.graph) {
+      if (state.graph !== prev.graph && !state.remoteLoad) {
         clearTimeout(timer);
         timer = setTimeout(() => {
           vscode.postMessage({ type: 'saveGraph', graph: useStore.getState().graph });
@@ -265,14 +266,14 @@ export function App() {
       }
     });
     return () => { clearTimeout(timer); unsub(); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Message handler from extension
   useEffect(() => {
     const handler = (event: MessageEvent<IncomingMessage>) => {
       const msg = event.data;
       switch (msg.type) {
-        case 'loadGraph':      store.setGraph(msg.graph); break;
+        case 'loadGraph':      store.loadGraphFromRemote(msg.graph); break;
         case 'updatePrompts':  store.setPrompts(msg.prompts); break;
         case 'updateSettings': store.setSettings(msg.settings); break;
         case 'actorStatus':    store.setRunning(msg.name, msg.running); break;

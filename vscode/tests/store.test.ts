@@ -30,6 +30,7 @@ function emptyGraph(actors: AIActorDef[] = []): ActorGraph {
 beforeEach(() => {
   useStore.setState({
     graph: emptyGraph(),
+    remoteLoad: false,
     selectedActorId: null,
     selectedEdgeId: null,
     runningActors: new Set(),
@@ -94,6 +95,35 @@ describe('graph mutations', () => {
     useStore.getState().removeActor('urn:x:a1');
     expect(useStore.getState().graph.actors).toHaveLength(1);
     expect(useStore.getState().graph.actors[0]!.name).toBe('a2');
+  });
+
+  it('loadGraphFromRemote replaces graph and leaves remoteLoad false', () => {
+    const g = emptyGraph([makeActor()]);
+    useStore.getState().loadGraphFromRemote(g);
+    expect(useStore.getState().graph.actors).toHaveLength(1);
+    // remoteLoad must be cleared after the call so subsequent user edits save normally
+    expect(useStore.getState().remoteLoad).toBe(false);
+  });
+
+  it('remoteLoad flag is false after loadGraphFromRemote — auto-save not triggered', () => {
+    // Simulate a subscription: record whether a save would fire
+    let wouldSave = false;
+    const unsub = useStore.subscribe((state, prev) => {
+      if (state.graph !== prev.graph && !state.remoteLoad) wouldSave = true;
+    });
+    useStore.getState().loadGraphFromRemote(emptyGraph([makeActor()]));
+    unsub();
+    expect(wouldSave).toBe(false);
+  });
+
+  it('user mutations (addActor) do trigger the auto-save subscription', () => {
+    let wouldSave = false;
+    const unsub = useStore.subscribe((state, prev) => {
+      if (state.graph !== prev.graph && !state.remoteLoad) wouldSave = true;
+    });
+    useStore.getState().addActor();
+    unsub();
+    expect(wouldSave).toBe(true);
   });
 
   it('resetGraph clears all actors and edges', () => {

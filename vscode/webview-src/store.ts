@@ -43,6 +43,8 @@ function defaultCodeActor(type: 'python' | 'typescript', pos = { x: 100, y: 100 
 
 interface GraphState {
   graph: ActorGraph;
+  /** True while the graph is being replaced by a server push — suppresses auto-save. */
+  remoteLoad: boolean;
   selectedActorId: string | null;
   selectedEdgeId: string | null;
   runningActors: Set<string>;
@@ -53,6 +55,8 @@ interface GraphState {
 
   // Graph mutations
   setGraph: (graph: ActorGraph) => void;
+  /** Load a graph pushed by the extension host — does NOT trigger auto-save. */
+  loadGraphFromRemote: (graph: ActorGraph) => void;
   addActor: (pos?: { x: number; y: number }) => void;
   addCodeActor: (type: 'python' | 'typescript', pos?: { x: number; y: number }) => void;
   updateActor: (id: string, patch: Partial<AIActorDef>) => void;
@@ -121,6 +125,7 @@ interface GraphState {
 
 export const useStore = create<GraphState>((set) => ({
   graph: { id: 'urn:cantica:studio:graph:default', name: 'New Workflow', actors: [], edges: [] },
+  remoteLoad: false,
   selectedActorId: null,
   selectedEdgeId: null,
   runningActors: new Set(),
@@ -134,6 +139,13 @@ export const useStore = create<GraphState>((set) => ({
   explorerSide: 'left',
 
   setGraph: (graph) => set({ graph }),
+
+  loadGraphFromRemote: (graph) => {
+    // Set remoteLoad=true, replace graph, then clear the flag.
+    // The auto-save subscription checks remoteLoad and skips saving.
+    set({ remoteLoad: true, graph });
+    set({ remoteLoad: false });
+  },
 
   resetGraph: () =>
     set((s) => ({

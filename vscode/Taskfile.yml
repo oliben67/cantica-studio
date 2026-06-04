@@ -54,20 +54,31 @@ tasks:
       - task: package
       - code --install-extension dist/cantica-studio.vsix
 
+  # ── Testing ───────────────────────────────────────────────────────────────
+  test:
+    desc: Run the Vitest test suite (store, studio-client, components)
+    cmd: npm test
+
+  test:coverage:
+    desc: Run tests with V8 coverage report
+    cmd: npm run test:coverage
+
   # ── Combined workflows ────────────────────────────────────────────────────
   check:
-    desc: Run all quality gates — typecheck + lint + compile
+    desc: Run all quality gates — typecheck + lint + test + compile
     cmds:
       - task: typecheck
       - task: lint
+      - task: test
       - task: compile
 
   ci:
-    desc: Full CI pipeline — install → typecheck → lint → production build
+    desc: Full CI pipeline — install → typecheck → lint → test → production build
     cmds:
       - task: install
       - task: typecheck
       - task: lint
+      - task: test
       - task: compile:prod
 
   # ── Clean ─────────────────────────────────────────────────────────────────

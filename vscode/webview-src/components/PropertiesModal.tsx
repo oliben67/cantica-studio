@@ -19,12 +19,13 @@ export function PropertiesModal() {
 
   function save() {
     if (!actor) return;
-    const dir = directory.trim() || undefined;
+    const dir = directory.trim();
+    const patch = dir ? { directory: dir } : {};
     if (isCode) {
-      updateActor(actor.id, { scriptPath: scriptPath.trim(), scriptCommand: scriptCommand.trim(), directory: dir });
+      updateActor(actor.id, { scriptPath: scriptPath.trim(), scriptCommand: scriptCommand.trim(), ...patch });
     } else {
       const definePrompt: PromptRef = defineUri.trim() ? { uri: defineUri.trim() } : { content: defineContent };
-      updateActor(actor.id, { definePrompt, maxTokens, maxHistory, directory: dir });
+      updateActor(actor.id, { definePrompt, maxTokens, maxHistory, ...patch });
     }
     closePropertiesModal();
   }

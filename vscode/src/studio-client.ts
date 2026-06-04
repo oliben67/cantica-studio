@@ -1,7 +1,5 @@
 import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, CanticaServer, PromptEventDef, PromptRef } from './types/index.js';
 
-const STUDIO_BASE = 'http://localhost:8043';
-
 function studioUrl(path: string, port: number): string {
   return `http://localhost:${port}${path}`;
 }
@@ -56,7 +54,7 @@ export class StudioClient {
 
   // ── Prompts ──────────────────────────────────────────────────────────────────
 
-  async fetchPrompts(servers: CanticaServer[]): Promise<CanticaPrompt[]> {
+  async fetchPrompts(_servers: CanticaServer[]): Promise<CanticaPrompt[]> {
     // Ask the studio API which aggregates from all configured Cantica servers
     try {
       const r = await fetch(this.url('/v1/prompts'), { signal: AbortSignal.timeout(8000) });

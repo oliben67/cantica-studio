@@ -106,7 +106,7 @@ export class ActorsPanel {
         const isStartOnly = instruction === '__start__';
 
         // ── 1. Check whether the actor is already running on the backend ──────
-        let alreadyRunning = false;
+        let alreadyRunning: boolean;
         try {
           const runningNames = await this.client.listRunning();
           alreadyRunning = runningNames.includes(name);

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AIActorDef, ActorEdgeDef, ActorGraph, ActorType, CanticaPrompt, ExtensionSettings } from './types';
+import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings } from './types';
 
 let _idSeq = 0;
 const nextId = (prefix: string) => `${prefix}-${Date.now()}-${++_idSeq}`;
@@ -220,7 +220,7 @@ export const useStore = create<GraphState>((set) => ({
   setRunning: (name, running) =>
     set((s) => {
       const next = new Set(s.runningActors);
-      running ? next.add(name) : next.delete(name);
+      if (running) { next.add(name); } else { next.delete(name); }
       return { runningActors: next };
     }),
 

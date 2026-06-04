@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState, useCallback } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { AIActorDef, EdgeHandleInfo, HandleSide } from '../types';
 import { useStore } from '../store';
@@ -102,6 +102,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   const color = providerInfo?.color ?? (isCode ? '#0ea5e9' : '#6b7280');
   const typeLabel = isCode ? actor.actorType!.toUpperCase() : (providerInfo?.label ?? actor.provider);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (!editing) setNameVal(actor.name); }, [actor.name, editing]);
   useEffect(() => {
     if (editing) { inputRef.current?.focus(); inputRef.current?.select(); }

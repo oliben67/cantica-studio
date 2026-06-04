@@ -76,13 +76,17 @@ export const PROVIDERS: Record<string, { label: string; color: string; models: s
 };
 
 export function ProviderMenu() {
-  const { providerMenuState, closeProviderMenu, updateActor } = useStore();
+  const { providerMenuState, closeProviderMenu, updateActor, graph, runningActors } = useStore();
 
   if (!providerMenuState) return null;
 
   const { actorId, x, y } = providerMenuState;
+  const actor = graph.actors.find(a => a.id === actorId);
+  const currentProvider = actor?.provider ?? '';
+  const isRunning = actor ? runningActors.has(actor.name) : false;
 
   function select(provider: string, model: string) {
+    if (isRunning && provider !== currentProvider) return;
     updateActor(actorId, { provider, model });
     closeProviderMenu();
   }
@@ -96,18 +100,33 @@ export function ProviderMenu() {
       />
 
       <div className="cs-provider-menu" style={{ left: x, top: y }}>
-        {Object.entries(PROVIDERS).map(([key, { label, color, models }]) => (
-          <div key={key} className="cs-provider-section">
-            <div className="cs-provider-section-header">
-              <span className="cs-actor-badge" style={{ background: color }}>{label}</span>
-            </div>
-            {models.map(model => (
-              <button key={model} className="cs-provider-model-btn" onClick={() => select(key, model)}>
-                {model}
-              </button>
-            ))}
+        {isRunning && (
+          <div className="cs-provider-notice">
+            🔒 Running — only <strong>{PROVIDERS[currentProvider]?.label ?? currentProvider}</strong> models available
           </div>
-        ))}
+        )}
+        {Object.entries(PROVIDERS).map(([key, { label, color, models }]) => {
+          const locked = isRunning && key !== currentProvider;
+          return (
+            <div key={key} className={`cs-provider-section${locked ? ' cs-provider-section--locked' : ''}`}>
+              <div className="cs-provider-section-header">
+                <span className="cs-actor-badge" style={{ background: color }}>{label}</span>
+                {locked && <span className="cs-provider-lock-icon">🔒</span>}
+              </div>
+              {models.map(model => (
+                <button
+                  key={model}
+                  className="cs-provider-model-btn"
+                  disabled={locked}
+                  title={locked ? `Stop the actor to switch to ${label}` : undefined}
+                  onClick={() => select(key, model)}
+                >
+                  {model}
+                </button>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </>
   );

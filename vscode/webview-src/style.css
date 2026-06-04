@@ -884,7 +884,17 @@ body {
   font-size: 11px; font-family: var(--cs-font-mono);
   color: var(--cs-text-muted); cursor: pointer;
 }
-.cs-provider-model-btn:hover { background: var(--cs-bg-hover); color: var(--cs-text); }
+.cs-provider-model-btn:hover:not(:disabled) { background: var(--cs-bg-hover); color: var(--cs-text); }
+.cs-provider-model-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.cs-provider-section--locked { opacity: 0.45; }
+.cs-provider-section--locked .cs-provider-section-header { display: flex; align-items: center; gap: 6px; }
+.cs-provider-lock-icon { font-size: 10px; opacity: 0.8; }
+.cs-provider-notice {
+  padding: 6px 10px 5px;
+  font-size: 11px; color: var(--cs-text-muted);
+  border-bottom: 1px solid var(--cs-border);
+  background: rgba(250,204,21,.06);
+}
 
 /* Agent resource rows */
 .cs-resource-locked { opacity: 0.75; }

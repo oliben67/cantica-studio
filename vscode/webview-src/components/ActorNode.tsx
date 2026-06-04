@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState, useCallback } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { AIActorDef, EdgeHandleInfo, HandleSide } from '../types';
 import { useStore } from '../store';
@@ -50,6 +50,34 @@ function Handles({ edges, type }: { edges: EdgeHandleInfo[]; type: 'source' | 't
   );
 }
 
+function ActivityPanel({
+  outputLines, scrollRef, onExpand, emptyLabel,
+}: {
+  outputLines: string[];
+  scrollRef: React.RefObject<HTMLDivElement>;
+  onExpand: (e: React.MouseEvent) => void;
+  emptyLabel: string;
+}) {
+  const lastTen = outputLines.slice(-10);
+  return (
+    <div className="cs-actor-output">
+      <div className="cs-actor-output-header">
+        <span className="cs-actor-section-label">activities</span>
+        <button className="cs-actor-expand-btn" onClick={onExpand} title="Expand activities">⤢</button>
+      </div>
+      {lastTen.length > 0 ? (
+        <div className="cs-actor-output-lines" ref={scrollRef}>
+          {lastTen.map((line, i) => (
+            <p key={i} className="cs-actor-output-text">{line}</p>
+          ))}
+        </div>
+      ) : (
+        <p className="cs-actor-output-text" style={{ opacity: 0.45 }}>{emptyLabel}</p>
+      )}
+    </div>
+  );
+}
+
 export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) {
   const { actor, outEdges = [], inEdges = [] } = data as ActorNodeData;
   const [editing, setEditing] = useState(false);
@@ -57,17 +85,19 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   const [promptText, setPromptText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLInputElement>(null);
+  const activitiesScrollRef = useRef<HTMLDivElement>(null);
 
   const {
     runningActors, actorOutputs, selectActor, updateActor,
     openEventsModal, openCronsModal, openActorMenu, openProviderMenu,
-    actorLogsVisible, toggleLogs,
+    actorActivitiesVisible, toggleActivities, openActivityModal,
   } = useStore();
 
   const isCode = actor.actorType === 'python' || actor.actorType === 'typescript';
   const running = runningActors.has(actor.name);
   const output = actorOutputs.get(actor.name);
-  const logsVisible = actorLogsVisible[actor.id] ?? false;
+  const activitiesVisible = actorActivitiesVisible[actor.id] ?? false;
+  const outputLines = output ? output.split('\n').filter(l => l.trim()) : [];
   const providerInfo = PROVIDERS[actor.provider];
   const color = providerInfo?.color ?? (isCode ? '#0ea5e9' : '#6b7280');
   const typeLabel = isCode ? actor.actorType!.toUpperCase() : (providerInfo?.label ?? actor.provider);
@@ -76,6 +106,12 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   useEffect(() => {
     if (editing) { inputRef.current?.focus(); inputRef.current?.select(); }
   }, [editing]);
+
+  useEffect(() => {
+    if (activitiesScrollRef.current) {
+      activitiesScrollRef.current.scrollTop = activitiesScrollRef.current.scrollHeight;
+    }
+  }, [output]);
 
   function commitName() {
     const trimmed = nameVal.trim();
@@ -93,7 +129,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     e.stopPropagation();
     // Open the log panel immediately and write a placeholder so the user sees
     // something right away, before the async round-trip to the extension host.
-    if (!logsVisible) toggleLogs(actor.id);
+    if (!activitiesVisible) toggleActivities(actor.id);
     useStore.getState().appendOutput(actor.name, `⏳ Starting ${actor.name}…`);
     vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' });
   }
@@ -105,7 +141,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     useStore.getState().appendOutput(actor.name, `> ${text}`);
     vscode.postMessage({ type: 'runActor', name: actor.name, instruction: text });
     setPromptText('');
-    if (!logsVisible) toggleLogs(actor.id);
+    if (!activitiesVisible) toggleActivities(actor.id);
   }
 
   return (
@@ -172,15 +208,13 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             {outEdges.length > 0 && <span className="cs-actor-indicator" title={`${outEdges.length} connections`}>⇢</span>}
           </div>
 
-          {logsVisible && (
-            <div className="cs-actor-output">
-              <span className="cs-actor-section-label">logs</span>
-              {output ? (
-                <p className="cs-actor-output-text">{output.slice(0, 240)}{output.length > 240 ? '…' : ''}</p>
-              ) : (
-                <p className="cs-actor-output-text" style={{ opacity: 0.45 }}>not started</p>
-              )}
-            </div>
+          {activitiesVisible && (
+            <ActivityPanel
+              outputLines={outputLines}
+              scrollRef={activitiesScrollRef}
+              onExpand={e => { e.stopPropagation(); openActivityModal(actor.id); }}
+              emptyLabel="not started"
+            />
           )}
 
           {/* ── Code actor: start / stop only ── */}
@@ -189,7 +223,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
               <button
                 className="cs-actor-btn cs-actor-btn--prompt"
                 style={{ flex: 1 }}
-                onClick={e => { e.stopPropagation(); vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' }); if (!logsVisible) toggleLogs(actor.id); }}
+                onClick={e => { e.stopPropagation(); vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' }); if (!activitiesVisible) toggleActivities(actor.id); }}
                 title="Start code actor"
               >▶ Start</button>
             ) : (
@@ -233,15 +267,13 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             </div>
           )}
 
-          {logsVisible && (
-            <div className="cs-actor-output">
-              <span className="cs-actor-section-label">logs</span>
-              {output ? (
-                <p className="cs-actor-output-text">{output.slice(0, 240)}{output.length > 240 ? '…' : ''}</p>
-              ) : (
-                <p className="cs-actor-output-text" style={{ opacity: 0.45 }}>no output yet</p>
-              )}
-            </div>
+          {activitiesVisible && (
+            <ActivityPanel
+              outputLines={outputLines}
+              scrollRef={activitiesScrollRef}
+              onExpand={e => { e.stopPropagation(); openActivityModal(actor.id); }}
+              emptyLabel="no activity yet"
+            />
           )}
 
           {/* ── AI actor: start / prompt / stop ── */}

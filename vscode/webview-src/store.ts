@@ -104,8 +104,12 @@ interface GraphState {
   openPropertiesModal: (actorId: string) => void;
   closePropertiesModal: () => void;
 
-  actorLogsVisible: Record<string, boolean>;
-  toggleLogs: (actorId: string) => void;
+  actorActivitiesVisible: Record<string, boolean>;
+  toggleActivities: (actorId: string) => void;
+
+  activityModalActorId: string | null;
+  openActivityModal: (actorId: string) => void;
+  closeActivityModal: () => void;
 
   resourcesModalActorId: string | null;
   openResourcesModal: (actorId: string) => void;
@@ -264,10 +268,14 @@ export const useStore = create<GraphState>((set) => ({
   openPropertiesModal: (actorId) => set({ propertiesModalActorId: actorId }),
   closePropertiesModal: () => set({ propertiesModalActorId: null }),
 
-  actorLogsVisible: {},
-  toggleLogs: (actorId) => set(s => ({
-    actorLogsVisible: { ...s.actorLogsVisible, [actorId]: !s.actorLogsVisible[actorId] },
+  actorActivitiesVisible: {},
+  toggleActivities: (actorId) => set(s => ({
+    actorActivitiesVisible: { ...s.actorActivitiesVisible, [actorId]: !s.actorActivitiesVisible[actorId] },
   })),
+
+  activityModalActorId: null,
+  openActivityModal: (actorId) => set({ activityModalActorId: actorId }),
+  closeActivityModal: () => set({ activityModalActorId: null }),
 
   resourcesModalActorId: null,
   openResourcesModal: (actorId) => set({ resourcesModalActorId: actorId }),

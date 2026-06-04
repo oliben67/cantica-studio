@@ -5,14 +5,14 @@ export function ActorMenu() {
   const {
     graph, actorMenuState, closeActorMenu,
     openEventsModal, openCronsModal, openPropertiesModal,
-    toggleLogs, actorLogsVisible,
+    toggleActivities, actorActivitiesVisible, openActivityModal,
     openResourcesModal,
   } = useStore();
 
   if (!actorMenuState) return null;
 
   const { actorId, x, y } = actorMenuState;
-  const logsOn = actorLogsVisible[actorId] ?? false;
+  const activitiesOn = actorActivitiesVisible[actorId] ?? false;
   const actor = graph.actors.find(a => a.id === actorId);
   const isCode = actor?.actorType === 'python' || actor?.actorType === 'typescript';
 
@@ -35,8 +35,11 @@ export function ActorMenu() {
             </button>
           </>
         )}
-        <button className="cs-ctx-item" onClick={() => run(() => toggleLogs(actorId))}>
-          <span className="cs-ctx-icon">📋</span> {logsOn ? 'Hide Logs' : 'Logs'}
+        <button className="cs-ctx-item" onClick={() => run(() => toggleActivities(actorId))}>
+          <span className="cs-ctx-icon">📋</span> {activitiesOn ? 'Hide Activities' : 'Activities'}
+        </button>
+        <button className="cs-ctx-item" onClick={() => run(() => openActivityModal(actorId))}>
+          <span className="cs-ctx-icon">⤢</span> Expand Activities
         </button>
         <div className="cs-ctx-sep" />
         <button className="cs-ctx-item" onClick={() => run(() => openResourcesModal(actorId))}>

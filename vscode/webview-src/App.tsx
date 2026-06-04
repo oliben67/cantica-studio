@@ -26,6 +26,7 @@ import { ActorMenu } from './components/ActorMenu';
 import { EdgeMenu } from './components/EdgeMenu';
 import { PropertiesModal } from './components/PropertiesModal';
 import { ResourcesModal } from './components/ResourcesModal';
+import { ActivityModal } from './components/ActivityModal';
 import { useStore } from './store';
 import type { ActorEdgeDef, EdgeHandleInfo, HandleSide, IncomingMessage } from './types';
 import { vscode } from './vscode';
@@ -314,6 +315,7 @@ export function App() {
       {store.cronsModalActorId && <CronModal />}
       {store.propertiesModalActorId && <PropertiesModal />}
       {store.resourcesModalActorId && <ResourcesModal />}
+      {store.activityModalActorId && <ActivityModal />}
       <ProviderMenu />
       <ActorMenu />
       <EdgeMenu />

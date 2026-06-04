@@ -500,10 +500,75 @@ body {
   border-top: 1px solid var(--cs-border);
   background: rgba(0,0,0,.2);
 }
+.cs-actor-output-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 3px;
+}
+.cs-actor-expand-btn {
+  background: none; border: none; color: var(--cs-text-muted);
+  font-size: 11px; cursor: pointer; padding: 0 2px; line-height: 1;
+  border-radius: 2px; flex-shrink: 0;
+}
+.cs-actor-expand-btn:hover { color: var(--cs-accent); background: var(--cs-bg-hover); }
+.cs-actor-output-lines {
+  max-height: 88px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 1px;
+}
 .cs-actor-output-text {
   font-size: 11px; color: var(--cs-text-muted); margin: 0;
   white-space: pre-wrap; word-break: break-word;
 }
+
+/* ── Activity modal (chat dialog) ─────────────────────────────────── */
+.cs-modal--activity { width: 560px; max-width: 95vw; max-height: 78vh; }
+.cs-chat-body {
+  flex: 1; overflow-y: auto;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 180px;
+}
+.cs-chat-empty {
+  color: var(--cs-text-muted); font-size: 12px; margin: auto; text-align: center;
+  padding: 24px 0;
+}
+.cs-chat-row { display: flex; }
+.cs-chat-row--user    { justify-content: flex-end; }
+.cs-chat-row--ai      { justify-content: flex-start; }
+.cs-chat-row--system  { justify-content: center; }
+.cs-chat-bubble {
+  font-size: 12px; padding: 6px 10px; border-radius: 10px;
+  max-width: 82%; white-space: pre-wrap; word-break: break-word;
+  line-height: 1.45;
+}
+.cs-chat-bubble--user {
+  background: var(--cs-accent); color: #fff;
+  border-bottom-right-radius: 3px;
+  border: none; cursor: pointer; text-align: left;
+}
+.cs-chat-bubble--user:hover { filter: brightness(1.18); }
+.cs-chat-bubble--ai {
+  background: var(--cs-bg-hover); color: var(--cs-text);
+  border: 1px solid var(--cs-border);
+  border-bottom-left-radius: 3px;
+}
+.cs-chat-bubble--system {
+  background: transparent; color: var(--cs-text-muted);
+  font-size: 11px; font-family: var(--cs-font-mono);
+  padding: 2px 6px;
+}
+.cs-chat-input-row {
+  display: flex; gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--cs-border);
+}
+.cs-chat-input {
+  flex: 1; font-size: 12px;
+  padding: 5px 8px;
+  background: var(--cs-bg); color: var(--cs-text);
+  border: 1px solid var(--cs-border); border-radius: var(--cs-radius);
+}
+.cs-chat-input:focus { outline: none; border-color: var(--cs-accent-border); }
+.cs-chat-input:disabled { opacity: 0.45; }
 
 .cs-actor-footer {
   display: flex; justify-content: flex-end;

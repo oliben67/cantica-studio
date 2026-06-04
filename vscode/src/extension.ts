@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ActorsPanel } from './actors-panel.js';
-import { SongbooksProvider, SongbookItem } from './songbooks-provider.js';
+import { SongbooksProvider, SongbookItem, SongbookRawEntry } from './songbooks-provider.js';
 import { ServersProvider, ServerItem } from './servers-provider.js';
 import { StudioProvider } from './studio-provider.js';
 import { StudioClient, parseGraph } from './studio-client.js';
@@ -42,26 +42,29 @@ function songbooksDir(canticaHome: string): vscode.Uri {
   return vscode.Uri.file(`${home}/songbooks`);
 }
 
-async function findSongbooks(canticaHome: string): Promise<{ label: string; uri: vscode.Uri }[]> {
+const SONGBOOK_EXTS = new Set(['.json', '.jsonld', '.yaml', '.yml']);
+function isSongbookFile(name: string): boolean {
+  const dot = name.lastIndexOf('.');
+  return dot !== -1 && SONGBOOK_EXTS.has(name.slice(dot));
+}
+
+async function findSongbooks(canticaHome: string): Promise<SongbookRawEntry[]> {
   const dir = songbooksDir(canticaHome);
   try {
     const entries = await vscode.workspace.fs.readDirectory(dir);
-    const results: { label: string; uri: vscode.Uri }[] = [];
+    const results: SongbookRawEntry[] = [];
 
     for (const [name, type] of entries) {
-      if (type === vscode.FileType.File && name.endsWith('.jsonld')) {
-        results.push({ label: name, uri: vscode.Uri.joinPath(dir, name) });
+      if (type === vscode.FileType.File && isSongbookFile(name)) {
+        results.push({ kind: 'file', label: name, uri: vscode.Uri.joinPath(dir, name) });
       } else if (type === vscode.FileType.Directory) {
-        // One level deep: include any .jsonld files inside named sub-directories
         try {
           const subEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.joinPath(dir, name));
-          for (const [subName, subType] of subEntries) {
-            if (subType === vscode.FileType.File && subName.endsWith('.jsonld')) {
-              results.push({
-                label: `${name}/${subName}`,
-                uri: vscode.Uri.joinPath(dir, name, subName),
-              });
-            }
+          const children = subEntries
+            .filter(([n, t]) => t === vscode.FileType.File && isSongbookFile(n))
+            .map(([n]) => ({ kind: 'file' as const, label: n, uri: vscode.Uri.joinPath(dir, name, n) }));
+          if (children.length > 0) {
+            results.push({ kind: 'folder', label: name, children });
           }
         } catch { /* skip unreadable sub-dirs */ }
       }
@@ -108,7 +111,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function refreshProviders(): void {
     serversProvider.update(settings.servers);
-    void findSongbooks(settings.canticaHome).then((items) => songbooksProvider.update(items));
+    void findSongbooks(settings.canticaHome).then((entries) => songbooksProvider.update(entries));
   }
 
   refreshProviders();
@@ -212,8 +215,23 @@ export function activate(context: vscode.ExtensionContext): void {
       ActorsPanel.current?.dispose();
     }),
 
+    vscode.commands.registerCommand('canticaScores.songbookViewTree', () => {
+      void vscode.commands.executeCommand('setContext', 'canticaScores.songbookViewMode', 'tree');
+      songbooksProvider.setMode('tree');
+    }),
+
+    vscode.commands.registerCommand('canticaScores.songbookViewList', () => {
+      void vscode.commands.executeCommand('setContext', 'canticaScores.songbookViewMode', 'list');
+      songbooksProvider.setMode('list');
+    }),
+
     vscode.commands.registerCommand('canticaScores.viewSongbook', async (item?: SongbookItem) => {
       if (!item) return;
+      const fsPath = item.uri.fsPath;
+      if (fsPath.endsWith('.yaml') || fsPath.endsWith('.yml')) {
+        await vscode.window.showTextDocument(item.uri, { viewColumn: vscode.ViewColumn.One, preview: false });
+        return;
+      }
       try {
         const bytes = await vscode.workspace.fs.readFile(item.uri);
         const raw = JSON.parse(Buffer.from(bytes).toString('utf-8')) as Record<string, unknown>;
@@ -356,15 +374,18 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // Watch the songbooks directory for new/deleted files (refreshes the sidebar)
-  const songbooksPattern = new vscode.RelativePattern(
-    songbooksDir(settings.canticaHome),
-    '**/*.jsonld',
-  );
-  const songbooksWatcher = vscode.workspace.createFileSystemWatcher(songbooksPattern);
-  songbooksWatcher.onDidCreate(() => refreshProviders());
-  songbooksWatcher.onDidDelete(() => refreshProviders());
-  context.subscriptions.push(songbooksWatcher);
+  // Set initial view-mode context so the toggle button renders correctly from the start
+  void vscode.commands.executeCommand('setContext', 'canticaScores.songbookViewMode', 'list');
+
+  // Watch the songbooks directory for new/deleted files (all supported extensions)
+  for (const ext of ['jsonld', 'json', 'yaml', 'yml']) {
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(songbooksDir(settings.canticaHome), `**/*.${ext}`),
+    );
+    watcher.onDidCreate(() => refreshProviders());
+    watcher.onDidDelete(() => refreshProviders());
+    context.subscriptions.push(watcher);
+  }
 
   // Reload the workspace canvas when the user manually saves the active .jsonld
   // file from the text editor.  We use onDidSaveTextDocument (not the FS watcher)

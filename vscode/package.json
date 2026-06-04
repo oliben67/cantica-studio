@@ -166,6 +166,18 @@
         "title": "Export",
         "category": "Cantica Studio",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "canticaScores.songbookViewTree",
+        "title": "Switch to Tree View",
+        "category": "Cantica Studio",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "canticaScores.songbookViewList",
+        "title": "Switch to List View",
+        "category": "Cantica Studio",
+        "icon": "$(list-unordered)"
       }
     ],
     "menus": {
@@ -184,6 +196,16 @@
           "command": "canticaScores.closeAllSongbooks",
           "when": "view == canticaScores.songbooksView",
           "group": "navigation@3"
+        },
+        {
+          "command": "canticaScores.songbookViewTree",
+          "when": "view == canticaScores.songbooksView && canticaScores.songbookViewMode == 'list'",
+          "group": "navigation@4"
+        },
+        {
+          "command": "canticaScores.songbookViewList",
+          "when": "view == canticaScores.songbooksView && canticaScores.songbookViewMode == 'tree'",
+          "group": "navigation@4"
         },
         {
           "command": "canticaScores.newServer",

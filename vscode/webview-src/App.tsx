@@ -276,10 +276,11 @@ export function App() {
         case 'updateSettings': store.setSettings(msg.settings); break;
         case 'actorStatus':    store.setRunning(msg.name, msg.running); break;
         case 'actorOutput':
-          store.setOutput(msg.name, msg.output);
-          store.setRunning(msg.name, false);
+          store.appendOutput(msg.name, msg.output);
           break;
-        case 'error':          console.error('[Cantica Studio]', msg.message); break;
+        case 'error':
+          console.error('[Cantica Studio]', msg.message);
+          break;
         case 'deleteSelected':
           if (store.selectedActorId) store.removeActor(store.selectedActorId);
           break;

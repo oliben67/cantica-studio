@@ -103,11 +103,42 @@ export class ActorsPanel {
       case 'runActor': {
         const name = raw['name'] as string;
         const instruction = raw['instruction'] as string;
+        const isStartOnly = instruction === '__start__';
+
+        // Ensure the actor is started on the backend before instructing
+        let alreadyRunning = false;
+        try {
+          const runningNames = await this.client.listRunning();
+          alreadyRunning = runningNames.includes(name);
+        } catch { /* assume not running */ }
+
+        if (!alreadyRunning) {
+          const graph = await this.client.loadGraph();
+          const def = graph?.actors.find(a => a.name === name);
+          if (!def) {
+            await this.post({ type: 'actorOutput', name, output: `⚠ Actor "${name}" not found in graph.` });
+            break;
+          }
+          try {
+            await this.client.startActor(def);
+            const tag = def.actorType === 'ai'
+              ? `${def.provider}/${def.model}`
+              : `${def.actorType}`;
+            await this.post({ type: 'actorOutput', name, output: `▶ Started · ${tag}` });
+            await this.post({ type: 'actorStatus', name, running: true });
+          } catch (err) {
+            await this.post({ type: 'actorOutput', name, output: `⚠ Failed to start: ${String(err)}` });
+            break;
+          }
+        }
+
+        if (isStartOnly) break;
+
         try {
           const output = await this.client.instructActor(name, instruction);
           await this.post({ type: 'actorOutput', name, output });
         } catch (err) {
-          await this.post({ type: 'error', message: String(err) });
+          await this.post({ type: 'actorOutput', name, output: `⚠ ${String(err)}` });
         }
         break;
       }

@@ -71,6 +71,7 @@ interface GraphState {
   // Runtime state
   setRunning: (name: string, running: boolean) => void;
   setOutput: (name: string, output: string) => void;
+  appendOutput: (name: string, text: string) => void;
 
   // Metadata
   setPrompts: (prompts: CanticaPrompt[]) => void;
@@ -223,6 +224,14 @@ export const useStore = create<GraphState>((set) => ({
     set((s) => {
       const next = new Map(s.actorOutputs);
       next.set(name, output);
+      return { actorOutputs: next };
+    }),
+
+  appendOutput: (name, text) =>
+    set((s) => {
+      const next = new Map(s.actorOutputs);
+      const prev = next.get(name) ?? '';
+      next.set(name, prev ? `${prev}\n${text}` : text);
       return { actorOutputs: next };
     }),
 

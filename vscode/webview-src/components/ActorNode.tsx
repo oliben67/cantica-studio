@@ -89,10 +89,17 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     vscode.postMessage({ type: 'stopActor', name: actor.name });
   }
 
+  function startActor(e: React.MouseEvent) {
+    e.stopPropagation();
+    vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' });
+    if (!logsVisible) toggleLogs(actor.id);
+  }
+
   function sendPrompt(e: React.MouseEvent) {
     e.stopPropagation();
     const text = promptText.trim();
-    if (!text) return;
+    if (!text || !running) return;
+    useStore.getState().appendOutput(actor.name, `> ${text}`);
     vscode.postMessage({ type: 'runActor', name: actor.name, instruction: text });
     setPromptText('');
     if (!logsVisible) toggleLogs(actor.id);
@@ -234,23 +241,32 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             </div>
           )}
 
-          {/* ── AI actor: prompt input ── */}
+          {/* ── AI actor: start / prompt / stop ── */}
           <div className="cs-actor-prompt-row" onClick={e => e.stopPropagation()}>
-            <input
-              ref={promptRef}
-              className="cs-actor-prompt-input"
-              placeholder="Send a prompt…"
-              value={promptText}
-              onChange={e => setPromptText(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); sendPrompt(e as unknown as React.MouseEvent); }
-                e.stopPropagation();
-              }}
-              onClick={e => e.stopPropagation()}
-            />
-            <button className="cs-actor-btn cs-actor-btn--prompt" onClick={sendPrompt} title="Send prompt">Prompt</button>
-            {running && (
-              <button className="cs-actor-btn cs-actor-btn--stop" onClick={handleStop} title="Stop actor">■</button>
+            {!running ? (
+              <button
+                className="cs-actor-btn cs-actor-btn--prompt"
+                style={{ flex: 1 }}
+                onClick={startActor}
+                title="Start actor"
+              >▶ Start</button>
+            ) : (
+              <>
+                <input
+                  ref={promptRef}
+                  className="cs-actor-prompt-input"
+                  placeholder="Send a prompt…"
+                  value={promptText}
+                  onChange={e => setPromptText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); sendPrompt(e as unknown as React.MouseEvent); }
+                    e.stopPropagation();
+                  }}
+                  onClick={e => e.stopPropagation()}
+                />
+                <button className="cs-actor-btn cs-actor-btn--prompt" onClick={sendPrompt} title="Send prompt">Prompt</button>
+                <button className="cs-actor-btn cs-actor-btn--stop" onClick={handleStop} title="Stop actor">■</button>
+              </>
             )}
           </div>
         </>

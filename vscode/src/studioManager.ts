@@ -96,6 +96,14 @@ export class StudioManager implements vscode.Disposable {
     progress.report({ message: 'Starting Cantica Studio API container…' });
     this.outputChannel.appendLine(`[studio] Starting container — home=${home} port=${port}`);
 
+    // Collect AI provider API keys: VS Code setting takes priority, then host env.
+    const cfg = vscode.workspace.getConfiguration('canticaScores');
+    const apiKeys: [string, string][] = [
+      ['ANTHROPIC_API_KEY', (cfg.get<string>('anthropicApiKey') ?? '').trim() || (process.env['ANTHROPIC_API_KEY'] ?? '')],
+      ['OPENAI_API_KEY',    (cfg.get<string>('openaiApiKey')    ?? '').trim() || (process.env['OPENAI_API_KEY']    ?? '')],
+      ['GEMINI_API_KEY',    (cfg.get<string>('geminiApiKey')    ?? '').trim() || (process.env['GEMINI_API_KEY']    ?? '')],
+    ];
+
     const args = [
       'run',
       '-d',
@@ -105,8 +113,13 @@ export class StudioManager implements vscode.Disposable {
       '-v', `${home}:/cantica-home`,
       '-e', `CANTICA_HOME=/cantica-home`,
       '-e', `CANTICA_PORT=${INTERNAL_PORT}`,
-      IMAGE,
     ];
+
+    for (const [key, value] of apiKeys) {
+      if (value) args.push('-e', `${key}=${value}`);
+    }
+
+    args.push(IMAGE);
 
     await new Promise<void>((resolve, reject) => {
       child_process.execFile('docker', args, { timeout: 15_000 }, (err, stdout, stderr) => {

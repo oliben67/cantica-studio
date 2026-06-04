@@ -333,6 +333,27 @@
           "markdownDescription": "Auto-start the Studio API container on activation.",
           "scope": "machine-overridable",
           "order": 7
+        },
+        "canticaScores.anthropicApiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Anthropic API key (`ANTHROPIC_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
+          "scope": "machine",
+          "order": 8
+        },
+        "canticaScores.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "OpenAI API key (`OPENAI_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
+          "scope": "machine",
+          "order": 9
+        },
+        "canticaScores.geminiApiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Google Gemini API key (`GEMINI_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
+          "scope": "machine",
+          "order": 10
         }
       }
     }

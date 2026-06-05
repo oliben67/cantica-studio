@@ -24,11 +24,19 @@ function openMenuFor(actorId: string) {
   useStore.setState({ providerMenuState: { actorId, x: 0, y: 0 } });
 }
 
+function defaultSettings() {
+  return {
+    servers: [], serverUrl: '', authToken: '', explorerSide: 'left' as const,
+    canticaHome: '', studioPort: 8043, autoStartStudio: true, providerModels: {},
+  };
+}
+
 beforeEach(() => {
   useStore.setState({
     graph: graph([actor()]),
     runningActors: new Set(),
     providerMenuState: null,
+    settings: defaultSettings(),
   });
 });
 
@@ -53,8 +61,8 @@ describe('ProviderMenu rendering', () => {
   it('shows model buttons for each provider', () => {
     openMenuFor('urn:x:a1');
     render(<ProviderMenu />);
-    // claude-sonnet-4-6 is unique to the Claude section
-    expect(screen.getByRole('button', { name: 'claude-sonnet-4-6' })).toBeInTheDocument();
+    // claude-opus-4-8 is unique to the Claude section (not in Copilot)
+    expect(screen.getByRole('button', { name: 'claude-opus-4-8' })).toBeInTheDocument();
     // gpt-4-turbo is unique to GPT (not in Copilot)
     expect(screen.getByRole('button', { name: 'gpt-4-turbo' })).toBeInTheDocument();
   });
@@ -159,6 +167,96 @@ describe('ProviderMenu running lock', () => {
     const updated = useStore.getState().graph.actors[0]!;
     expect(updated.model).toBe('claude-haiku-4-5');
     expect(updated.provider).toBe('claude');
+  });
+});
+
+// ── providerModels constraints ────────────────────────────────────────────────
+
+describe('ProviderMenu providerModels constraints', () => {
+  it('empty array [] hides the provider entirely', () => {
+    useStore.setState({ settings: { ...defaultSettings(), providerModels: { gpt: [] } } });
+    openMenuFor('urn:x:a1');
+    render(<ProviderMenu />);
+    // GPT badge should not be in the document
+    expect(screen.queryByText('GPT')).not.toBeInTheDocument();
+    // Other providers still visible
+    expect(screen.getByText('Claude')).toBeInTheDocument();
+  });
+
+  it('allowlist shows only the specified models', () => {
+    useStore.setState({
+      // claude-3-5-sonnet-20241022 is only in Claude's built-in list, not Copilot's
+      settings: { ...defaultSettings(), providerModels: { claude: ['claude-3-5-sonnet-20241022'] } },
+    });
+    openMenuFor('urn:x:a1');
+    render(<ProviderMenu />);
+    expect(screen.getByRole('button', { name: 'claude-3-5-sonnet-20241022' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'claude-opus-4-8' })).not.toBeInTheDocument();
+  });
+
+  it('allowlist may contain custom model names not in the built-in list', () => {
+    useStore.setState({
+      settings: {
+        ...defaultSettings(),
+        // Restrict every provider except copilot so model names are unambiguous
+        providerModels: {
+          claude: [], gpt: [], gemini: [], mistral: [],
+          copilot: ['my-copilot-model-a', 'my-copilot-model-b', 'my-custom-new'],
+        },
+      },
+    });
+    openMenuFor('urn:x:a1');
+    render(<ProviderMenu />);
+    expect(screen.getByRole('button', { name: 'my-copilot-model-a' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'my-copilot-model-b' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'my-custom-new' })).toBeInTheDocument();
+  });
+
+  it('null shows the full built-in default list', () => {
+    useStore.setState({
+      settings: { ...defaultSettings(), providerModels: { claude: null } },
+    });
+    openMenuFor('urn:x:a1');
+    render(<ProviderMenu />);
+    // Use models unique to the Claude section (not in Copilot's default list)
+    expect(screen.getByRole('button', { name: 'claude-opus-4-8' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'claude-3-haiku-20240307' })).toBeInTheDocument();
+  });
+
+  it('missing key (undefined) falls back to the built-in default list', () => {
+    // providerModels doesn't mention 'claude' at all
+    useStore.setState({
+      settings: { ...defaultSettings(), providerModels: { gpt: [] } },
+    });
+    openMenuFor('urn:x:a1');
+    render(<ProviderMenu />);
+    expect(screen.getByRole('button', { name: 'claude-opus-4-8' })).toBeInTheDocument();
+  });
+
+  it('selecting a custom model from allowlist updates the actor', () => {
+    useStore.setState({
+      settings: { ...defaultSettings(), providerModels: { copilot: ['my-custom-model'] } },
+    });
+    openMenuFor('urn:x:a1');
+    render(<ProviderMenu />);
+    fireEvent.click(screen.getByRole('button', { name: 'my-custom-model' }));
+    const updated = useStore.getState().graph.actors[0]!;
+    expect(updated.provider).toBe('copilot');
+    expect(updated.model).toBe('my-custom-model');
+  });
+
+  it('disabling all except one provider still shows that provider', () => {
+    useStore.setState({
+      settings: {
+        ...defaultSettings(),
+        providerModels: { gpt: [], gemini: [], mistral: [], copilot: [] },
+      },
+    });
+    openMenuFor('urn:x:a1');
+    render(<ProviderMenu />);
+    expect(screen.getByText('Claude')).toBeInTheDocument();
+    expect(screen.queryByText('GPT')).not.toBeInTheDocument();
+    expect(screen.queryByText('Gemini')).not.toBeInTheDocument();
   });
 });
 

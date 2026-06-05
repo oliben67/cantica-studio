@@ -135,6 +135,7 @@ export const useStore = create<GraphState>((set) => ({
     servers: [], serverUrl: 'http://localhost:8042', authToken: '',
     explorerSide: 'left', canticaHome: '', studioPort: 8043,
     autoStartStudio: true,
+    providerModels: {},
   },
   explorerSide: 'left',
 

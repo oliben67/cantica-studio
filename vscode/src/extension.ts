@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { ActorsPanel } from './actors-panel.js';
-import { SongbooksProvider, SongbookItem, SongbookRawEntry } from './songbooks-provider.js';
-import { ServersProvider, ServerItem } from './servers-provider.js';
+import type { SongbookItem, SongbookRawEntry } from './songbooks-provider.js';
+import { SongbooksProvider } from './songbooks-provider.js';
+import type { ServerItem } from './servers-provider.js';
+import { ServersProvider } from './servers-provider.js';
 import { StudioProvider } from './studio-provider.js';
 import { StudioClient, parseGraph } from './studio-client.js';
 import { StudioManager } from './studioManager.js';
@@ -30,6 +32,7 @@ function readSettings(): ExtensionSettings {
     canticaHome: cfg.get<string>('canticaHome') ?? '',
     studioPort: cfg.get<number>('studioPort') ?? 8043,
     autoStartStudio: cfg.get<boolean>('autoStartStudio') ?? true,
+    providerModels: cfg.get<Record<string, string[] | null>>('providerModels') ?? {},
   };
 }
 

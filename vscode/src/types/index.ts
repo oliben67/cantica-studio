@@ -99,6 +99,8 @@ export interface ExtensionSettings {
   canticaHome: string;
   studioPort: number;
   autoStartStudio: boolean;
+  /** Per-provider model constraints. null = open; [] = disabled; [..] = allowlist. */
+  providerModels: Record<string, string[] | null>;
 }
 
 // ── Webview message protocol ──────────────────────────────────────────────────

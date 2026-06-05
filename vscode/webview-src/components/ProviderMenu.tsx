@@ -67,16 +67,41 @@ export const PROVIDERS: Record<string, { label: string; color: string; models: s
       'o1-mini',
       'o3-mini',
       'claude-3-5-sonnet',
+      'claude-sonnet-4-5',
+      'claude-sonnet-4-6',
+      'claude-sonnet-4-7',
       'meta-llama-3.1-405b-instruct',
       'meta-llama-3.1-70b-instruct',
       'meta-llama-3.1-8b-instruct',
       'mistral-large-2407',
+      'gemini-2.0-flash',
     ],
   },
 };
 
+// ── Constraint resolution ─────────────────────────────────────────────────────
+//
+// providerModels setting rules (per provider key):
+//   undefined / missing key  →  show built-in default model list
+//   null                     →  any model name accepted (open); show built-in list
+//   []  (empty array)        →  provider disabled — hidden entirely
+//   ["m1","m2",…]            →  show only these models (may include custom names)
+
+type ProviderEntry = { key: string; label: string; color: string; models: string[] };
+
+function resolveProviders(constraints: Record<string, string[] | null>): ProviderEntry[] {
+  return Object.entries(PROVIDERS).flatMap(([key, { label, color, models }]) => {
+    const constraint = constraints[key];
+    if (Array.isArray(constraint) && constraint.length === 0) return [];  // disabled
+    const resolvedModels = (constraint === undefined || constraint === null) ? models : constraint;
+    return [{ key, label, color, models: resolvedModels }];
+  });
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export function ProviderMenu() {
-  const { providerMenuState, closeProviderMenu, updateActor, graph, runningActors } = useStore();
+  const { providerMenuState, closeProviderMenu, updateActor, graph, runningActors, settings } = useStore();
 
   if (!providerMenuState) return null;
 
@@ -84,6 +109,8 @@ export function ProviderMenu() {
   const actor = graph.actors.find(a => a.id === actorId);
   const currentProvider = actor?.provider ?? '';
   const isRunning = actor ? runningActors.has(actor.name) : false;
+
+  const providers = resolveProviders(settings.providerModels ?? {});
 
   function select(provider: string, model: string) {
     if (isRunning && provider !== currentProvider) return;
@@ -105,7 +132,7 @@ export function ProviderMenu() {
             🔒 Running — only <strong>{PROVIDERS[currentProvider]?.label ?? currentProvider}</strong> models available
           </div>
         )}
-        {Object.entries(PROVIDERS).map(([key, { label, color, models }]) => {
+        {providers.map(({ key, label, color, models }) => {
           const locked = isRunning && key !== currentProvider;
           return (
             <div key={key} className={`cs-provider-section${locked ? ' cs-provider-section--locked' : ''}`}>

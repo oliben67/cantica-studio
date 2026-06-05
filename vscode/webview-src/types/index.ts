@@ -94,6 +94,8 @@ export interface ExtensionSettings {
   canticaHome: string;
   studioPort: number;
   autoStartStudio: boolean;
+  /** Per-provider model constraints. null = open; [] = disabled; [..] = allowlist. */
+  providerModels: Record<string, string[] | null>;
 }
 
 /** Messages arriving FROM the extension host into the webview. */

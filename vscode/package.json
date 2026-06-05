@@ -49,7 +49,13 @@
     "viewsWelcome": [
       {
         "view": "canticaScores.studioView",
-        "contents": "Manage the local Studio API and settings.\n[▶  Start Studio API](command:canticaScores.startLocalStudio)\n[■  Stop Studio API](command:canticaScores.stopLocalStudio)\n[⚙  Configure Settings](command:canticaScores.configureServer)"
+        "contents": "Manage the local Studio API container.\n[▶  Start Studio API](command:canticaScores.startLocalStudio)\n[■  Stop Studio API](command:canticaScores.stopLocalStudio)",
+        "when": "config.canticaScores.studioMode == local"
+      },
+      {
+        "view": "canticaScores.studioView",
+        "contents": "Connected to remote Studio API.",
+        "when": "config.canticaScores.studioMode == remote"
       }
     ],
     "commands": [
@@ -219,12 +225,12 @@
         },
         {
           "command": "canticaScores.startLocalStudio",
-          "when": "view == canticaScores.studioView",
+          "when": "view == canticaScores.studioView && config.canticaScores.studioMode == local",
           "group": "navigation@1"
         },
         {
           "command": "canticaScores.stopLocalStudio",
-          "when": "view == canticaScores.studioView",
+          "when": "view == canticaScores.studioView && config.canticaScores.studioMode == local",
           "group": "navigation@2"
         },
         {
@@ -320,47 +326,66 @@
           "scope": "machine-overridable",
           "order": 5
         },
+        "canticaScores.studioMode": {
+          "type": "string",
+          "enum": ["local", "remote"],
+          "enumDescriptions": [
+            "Manage a local Docker container. The extension starts, stops, and injects API keys automatically.",
+            "Connect to an existing Studio API server. Configure the URL below; API keys are managed server-side."
+          ],
+          "default": "local",
+          "markdownDescription": "How the extension connects to the Studio API.\n\n- **local** — Docker container managed by the extension (configure port and API keys below)\n- **remote** — existing server; set `#canticaScores.studioUrl#` to its base URL",
+          "scope": "machine-overridable",
+          "order": 6
+        },
+        "canticaScores.studioUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Studio API base URL used when `#canticaScores.studioMode#` is **remote** (e.g. `https://studio.example.com`). Ignored in **local** mode.",
+          "scope": "machine-overridable",
+          "order": 7
+        },
         "canticaScores.studioPort": {
           "type": "number",
           "default": 8043,
-          "markdownDescription": "Local port for the Studio API container.",
+          "markdownDescription": "_(local mode only)_ Host port mapped to the Studio API container.",
           "scope": "machine-overridable",
-          "order": 6
+          "order": 8
         },
         "canticaScores.autoStartStudio": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Auto-start the Studio API container on activation.",
+          "markdownDescription": "_(local mode only)_ Auto-start the Studio API container when the extension activates.",
           "scope": "machine-overridable",
-          "order": 7
+          "order": 9
         },
         "canticaScores.anthropicApiKey": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Anthropic API key (`ANTHROPIC_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
+          "markdownDescription": "_(local mode only)_ Anthropic API key (`ANTHROPIC_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
           "scope": "machine",
-          "order": 8
+          "order": 10
         },
         "canticaScores.openaiApiKey": {
           "type": "string",
           "default": "",
-          "markdownDescription": "OpenAI API key (`OPENAI_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
+          "markdownDescription": "_(local mode only)_ OpenAI API key (`OPENAI_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
           "scope": "machine",
-          "order": 9
+          "order": 11
         },
         "canticaScores.geminiApiKey": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Google Gemini API key (`GEMINI_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
+          "markdownDescription": "_(local mode only)_ Google Gemini API key (`GEMINI_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
           "scope": "machine",
-          "order": 10
+          "order": 12
         },
         "canticaScores.githubToken": {
           "type": "string",
           "default": "",
-          "markdownDescription": "GitHub token (`GITHUB_TOKEN`) injected into the Studio API container. Required for the **Copilot** provider — either a personal access token or a Copilot-issued token. Falls back to the `GITHUB_TOKEN` environment variable if empty. Restart the Studio API after changing.",
+          "markdownDescription": "_(local mode only)_ GitHub token (`GITHUB_TOKEN`) injected into the Studio API container. Required for the **Copilot** provider. Falls back to the `GITHUB_TOKEN` environment variable if empty. Restart the Studio API after changing.",
           "scope": "machine",
-          "order": 11
+          "order": 13
         },
         "canticaScores.providerModels": {
           "type": "object",
@@ -371,9 +396,9 @@
               { "type": "null", "description": "Any model name is accepted (open / unconstrained)" }
             ]
           },
-          "markdownDescription": "Restrict which models are available per provider in the UI.\n\n- `\"claude\": [\"claude-3-5-sonnet-20241022\"]` — only that model shown for Claude\n- `\"gpt\": []` — GPT provider hidden entirely\n- `\"copilot\": null` — any model name accepted (no restriction)\n- omit a provider key — falls back to the built-in default model list\n\nChanges take effect immediately without reloading.",
+          "markdownDescription": "_(local mode only)_ Restrict which models are available per provider in the UI.\n\n- `\"claude\": [\"claude-3-5-sonnet-20241022\"]` — only that model shown for Claude\n- `\"gpt\": []` — GPT provider hidden entirely\n- `\"copilot\": null` — any model name accepted (no restriction)\n- omit a provider key — falls back to the built-in default model list\n\nChanges take effect immediately without reloading.",
           "scope": "window",
-          "order": 11
+          "order": 14
         }
       }
     }

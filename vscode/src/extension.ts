@@ -9,11 +9,9 @@ import { StudioClient, parseGraph } from './studio-client.js';
 import { StudioManager } from './studioManager.js';
 import type { CanticaServer, ExtensionSettings } from './types/index.js';
 
-const LOCAL_STUDIO_URL = 'http://localhost:8043';
-
 function readSettings(): ExtensionSettings {
   const cfg = vscode.workspace.getConfiguration('canticaScores');
-  const serverUrl = cfg.get<string>('serverUrl') ?? LOCAL_STUDIO_URL;
+  const serverUrl = cfg.get<string>('serverUrl') ?? 'http://localhost:8042';
   const authToken = cfg.get<string>('authToken') ?? '';
 
   const rawServers = cfg.get<{ url: string; authToken?: string }[]>('servers') ?? [];
@@ -24,20 +22,25 @@ function readSettings(): ExtensionSettings {
       .map((s) => ({ url: s.url, authToken: s.authToken ?? '' })),
   ];
 
+  const studioMode = (cfg.get<string>('studioMode') ?? 'local') as 'local' | 'remote';
+  const studioPort = cfg.get<number>('studioPort') ?? 8043;
+  const remoteUrl = (cfg.get<string>('studioUrl') ?? '').trim();
+  const studioBaseUrl = studioMode === 'remote' && remoteUrl
+    ? remoteUrl
+    : `http://localhost:${studioPort}`;
+
   return {
     servers,
     serverUrl,
     authToken,
     explorerSide: (cfg.get<string>('explorerSide') ?? 'left') as 'left' | 'right',
     canticaHome: cfg.get<string>('canticaHome') ?? '',
-    studioPort: cfg.get<number>('studioPort') ?? 8043,
+    studioMode,
+    studioBaseUrl,
+    studioPort,
     autoStartStudio: cfg.get<boolean>('autoStartStudio') ?? true,
     providerModels: cfg.get<Record<string, string[] | null>>('providerModels') ?? {},
   };
-}
-
-function isLocalStudio(url: string): boolean {
-  return url.startsWith('http://localhost:8043') || url.startsWith('http://127.0.0.1:8043');
 }
 
 function songbooksDir(canticaHome: string): vscode.Uri {
@@ -81,7 +84,7 @@ async function findSongbooks(canticaHome: string): Promise<SongbookRawEntry[]> {
 
 export function activate(context: vscode.ExtensionContext): void {
   let settings = readSettings();
-  let client = new StudioClient(settings.studioPort);
+  let client = new StudioClient(settings.studioBaseUrl);
   const studio = new StudioManager();
   context.subscriptions.push(studio);
 
@@ -152,7 +155,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const url = await studio.ensureRunning();
       if (url) {
         settings = readSettings();
-        client = new StudioClient(settings.studioPort);
+        client = new StudioClient(settings.studioBaseUrl);
         void vscode.window.showInformationMessage(`Studio API running at ${url}`);
       }
     }),
@@ -370,7 +373,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('canticaScores')) {
         settings = readSettings();
-        client = new StudioClient(settings.studioPort);
+        client = new StudioClient(settings.studioBaseUrl);
         ActorsPanel.current?.updateSettings(settings, client);
         refreshProviders();
       }
@@ -378,7 +381,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Set initial view-mode context so the toggle button renders correctly from the start
-  void vscode.commands.executeCommand('setContext', 'canticaScores.songbookViewMode', 'list');
+  void vscode.commands.executeCommand('setContext', 'canticaScores.songbookViewMode', 'tree');
 
   // Watch the songbooks directory for new/deleted files (all supported extensions)
   for (const ext of ['jsonld', 'json', 'yaml', 'yml']) {
@@ -425,10 +428,10 @@ export function activate(context: vscode.ExtensionContext): void {
     await vscode.workspace.fs.createDirectory(songbooksDir(settings.canticaHome));
     refreshProviders();
 
-    if (settings.autoStartStudio && isLocalStudio(settings.serverUrl)) {
+    if (settings.studioMode === 'local' && settings.autoStartStudio) {
       await studio.ensureRunning();
       settings = readSettings();
-      client = new StudioClient(settings.studioPort);
+      client = new StudioClient(settings.studioBaseUrl);
     }
   })();
 }

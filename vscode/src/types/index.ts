@@ -97,6 +97,8 @@ export interface ExtensionSettings {
   authToken: string;
   explorerSide: 'left' | 'right';
   canticaHome: string;
+  studioMode: 'local' | 'remote';
+  studioBaseUrl: string;
   studioPort: number;
   autoStartStudio: boolean;
   /** Per-provider model constraints. null = open; [] = disabled; [..] = allowlist. */
@@ -111,6 +113,7 @@ export type ToWebview =
   | { type: 'updatePrompts'; prompts: CanticaPrompt[] }
   | { type: 'updateSettings'; settings: ExtensionSettings }
   | { type: 'actorStatus'; name: string; running: boolean }
+  | { type: 'actorPaused'; name: string; paused: boolean }
   | { type: 'actorOutput'; name: string; output: string }
   | { type: 'error'; message: string }
   | { type: 'deleteSelected' }
@@ -125,6 +128,8 @@ export type FromWebview =
   | { type: 'runActor'; name: string; instruction: string }
   | { type: 'fireEvent'; name: string; eventName: string; context: string }
   | { type: 'stopActor'; name: string }
+  | { type: 'pauseActor'; name: string }
+  | { type: 'resumeActor'; name: string }
   | { type: 'refreshPrompts' }
   | { type: 'explorerSideChanged'; side: 'left' | 'right' }
   | { type: 'configureServer' }

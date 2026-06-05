@@ -142,7 +142,7 @@ export class ActorsPanel {
             break;
           }
         } else if (isStartOnly) {
-          await this.post({ type: 'actorOutput', name, output: `ℹ ${name} is already running` });
+          await this.post({ type: 'actorOutput', name, output: `· ${name} is already running` });
           await this.post({ type: 'actorStatus', name, running: true });
         }
 
@@ -176,6 +176,31 @@ export class ActorsPanel {
         try {
           await this.client.stopActor(name);
           await this.post({ type: 'actorStatus', name, running: false });
+          await this.post({ type: 'actorPaused', name, paused: false });
+        } catch (err) {
+          await this.post({ type: 'error', message: String(err) });
+        }
+        break;
+      }
+
+      case 'pauseActor': {
+        const name = raw['name'] as string;
+        try {
+          await this.client.pauseActor(name);
+          await this.post({ type: 'actorPaused', name, paused: true });
+          await this.post({ type: 'actorOutput', name, output: '⏸ Paused — prompts will be queued' });
+        } catch (err) {
+          await this.post({ type: 'error', message: String(err) });
+        }
+        break;
+      }
+
+      case 'resumeActor': {
+        const name = raw['name'] as string;
+        try {
+          await this.client.resumeActor(name);
+          await this.post({ type: 'actorPaused', name, paused: false });
+          await this.post({ type: 'actorOutput', name, output: '▶ Resumed' });
         } catch (err) {
           await this.post({ type: 'error', message: String(err) });
         }

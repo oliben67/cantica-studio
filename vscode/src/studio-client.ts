@@ -1,9 +1,5 @@
 import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, CanticaServer, PromptEventDef, PromptRef } from './types/index.js';
 
-function studioUrl(path: string, port: number): string {
-  return `http://localhost:${port}${path}`;
-}
-
 function headers(token?: string): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
   if (token) h['Authorization'] = `Bearer ${token}`;
@@ -11,14 +7,14 @@ function headers(token?: string): Record<string, string> {
 }
 
 export class StudioClient {
-  private readonly port: number;
+  private readonly baseUrl: string;
 
-  constructor(port: number = 8043) {
-    this.port = port;
+  constructor(baseUrl = 'http://localhost:8043') {
+    this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
   private url(path: string): string {
-    return studioUrl(path, this.port);
+    return `${this.baseUrl}${path}`;
   }
 
   async ping(): Promise<boolean> {
@@ -120,6 +116,20 @@ export class StudioClient {
 
   async stopActor(name: string): Promise<void> {
     await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}`), { method: 'DELETE' });
+  }
+
+  async pauseActor(name: string): Promise<void> {
+    const r = await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}/pause`), {
+      method: 'POST', headers: headers(),
+    });
+    if (!r.ok) throw new Error(`Pause failed [${r.status}]`);
+  }
+
+  async resumeActor(name: string): Promise<void> {
+    const r = await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}/resume`), {
+      method: 'POST', headers: headers(),
+    });
+    if (!r.ok) throw new Error(`Resume failed [${r.status}]`);
   }
 
   async instructActor(name: string, instruction: string): Promise<string> {

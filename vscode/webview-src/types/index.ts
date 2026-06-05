@@ -104,6 +104,7 @@ export type IncomingMessage =
   | { type: 'updatePrompts'; prompts: CanticaPrompt[] }
   | { type: 'updateSettings'; settings: ExtensionSettings }
   | { type: 'actorStatus'; name: string; running: boolean }
+  | { type: 'actorPaused'; name: string; paused: boolean }
   | { type: 'actorOutput'; name: string; output: string }
   | { type: 'error'; message: string }
   | { type: 'deleteSelected' }
@@ -118,6 +119,8 @@ export type OutgoingMessage =
   | { type: 'runActor'; name: string; instruction: string }
   | { type: 'fireEvent'; name: string; eventName: string; context: string }
   | { type: 'stopActor'; name: string }
+  | { type: 'pauseActor'; name: string }
+  | { type: 'resumeActor'; name: string }
   | { type: 'refreshPrompts' }
   | { type: 'explorerSideChanged'; side: 'left' | 'right' }
   | { type: 'configureServer' }

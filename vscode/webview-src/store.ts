@@ -48,6 +48,7 @@ interface GraphState {
   selectedActorId: string | null;
   selectedEdgeId: string | null;
   runningActors: Set<string>;
+  pausedActors: Set<string>;
   actorOutputs: Map<string, string>;
   prompts: CanticaPrompt[];
   settings: ExtensionSettings;
@@ -74,6 +75,7 @@ interface GraphState {
 
   // Runtime state
   setRunning: (name: string, running: boolean) => void;
+  setPaused: (name: string, paused: boolean) => void;
   setOutput: (name: string, output: string) => void;
   appendOutput: (name: string, text: string) => void;
 
@@ -129,6 +131,7 @@ export const useStore = create<GraphState>((set) => ({
   selectedActorId: null,
   selectedEdgeId: null,
   runningActors: new Set(),
+  pausedActors: new Set(),
   actorOutputs: new Map(),
   prompts: [],
   settings: {
@@ -234,7 +237,16 @@ export const useStore = create<GraphState>((set) => ({
     set((s) => {
       const next = new Set(s.runningActors);
       if (running) { next.add(name); } else { next.delete(name); }
-      return { runningActors: next };
+      // Clear paused state when actor stops
+      const nextPaused = running ? s.pausedActors : (() => { const p = new Set(s.pausedActors); p.delete(name); return p; })();
+      return { runningActors: next, pausedActors: nextPaused };
+    }),
+
+  setPaused: (name, paused) =>
+    set((s) => {
+      const next = new Set(s.pausedActors);
+      if (paused) { next.add(name); } else { next.delete(name); }
+      return { pausedActors: next };
     }),
 
   setOutput: (name, output) =>

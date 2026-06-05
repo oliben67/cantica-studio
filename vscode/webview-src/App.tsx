@@ -277,6 +277,7 @@ export function App() {
         case 'updatePrompts':  store.setPrompts(msg.prompts); break;
         case 'updateSettings': store.setSettings(msg.settings); break;
         case 'actorStatus':    store.setRunning(msg.name, msg.running); break;
+        case 'actorPaused':    store.setPaused(msg.name, msg.paused); break;
         case 'actorOutput':
           store.appendOutput(msg.name, msg.output);
           break;

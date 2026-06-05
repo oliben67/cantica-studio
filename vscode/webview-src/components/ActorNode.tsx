@@ -60,9 +60,9 @@ function ActivityPanel({
 }) {
   const lastTen = outputLines.slice(-10);
   return (
-    <div className="cs-actor-output">
+    <div className="cs-actor-output" onDoubleClick={onExpand}>
       <div className="cs-actor-output-header">
-        <span className="cs-actor-section-label">activities</span>
+        <span className="cs-actor-section-label">chat</span>
         <button className="cs-actor-expand-btn" onClick={onExpand} title="Expand chat">⤢</button>
       </div>
       {lastTen.length > 0 ? (
@@ -88,13 +88,14 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const {
-    runningActors, actorOutputs, selectActor, updateActor,
+    runningActors, pausedActors, actorOutputs, selectActor, updateActor,
     openEventsModal, openCronsModal, openActorMenu, openProviderMenu,
     actorChatVisible, toggleChat, openChatModal,
   } = useStore();
 
   const isCode = actor.actorType === 'python' || actor.actorType === 'typescript';
   const running = runningActors.has(actor.name);
+  const paused = pausedActors.has(actor.name);
   const output = actorOutputs.get(actor.name);
   const chatVisible = actorChatVisible[actor.id] ?? false;
   const outputLines = output ? output.split('\n').filter(l => l.trim()) : [];
@@ -126,6 +127,16 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     vscode.postMessage({ type: 'stopActor', name: actor.name });
   }
 
+  function handlePause(e: React.MouseEvent) {
+    e.stopPropagation();
+    vscode.postMessage({ type: 'pauseActor', name: actor.name });
+  }
+
+  function handleResume(e: React.MouseEvent) {
+    e.stopPropagation();
+    vscode.postMessage({ type: 'resumeActor', name: actor.name });
+  }
+
   function startActor(e: React.MouseEvent) {
     e.stopPropagation();
     // Open the log panel immediately and write a placeholder so the user sees
@@ -147,7 +158,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
 
   return (
     <div
-      className={`cs-actor-node${selected ? ' cs-actor-node--selected' : ''}${running ? ' cs-actor-node--running' : ''}`}
+      className={`cs-actor-node${selected ? ' cs-actor-node--selected' : ''}${running ? ' cs-actor-node--running' : ''}${paused ? ' cs-actor-node--paused' : ''}`}
       onClick={() => selectActor(actor.id)}
     >
       {/* Per-side handles — one per incoming/outgoing edge on the nearest face */}
@@ -157,8 +168,8 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
       {/* ── Header: status | provider | name | gear ── */}
       <div className="cs-actor-header">
         <span
-          className={`cs-actor-status${running ? ' cs-actor-status--on' : ''}`}
-          title={running ? 'running' : 'idle'}
+          className={`cs-actor-status${running ? (paused ? ' cs-actor-status--paused' : ' cs-actor-status--on') : ''}`}
+          title={running ? (paused ? 'paused' : 'running') : 'idle'}
         />
 
         <div
@@ -277,7 +288,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             />
           )}
 
-          {/* ── AI actor: start / prompt / stop ── */}
+          {/* ── AI actor: start / prompt / pause / stop ── */}
           <div className="cs-actor-prompt-row" onClick={e => e.stopPropagation()}>
             {!running ? (
               <button
@@ -293,6 +304,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
                   className="cs-actor-prompt-input"
                   placeholder="Send a prompt…"
                   value={promptText}
+                  disabled={paused}
                   onChange={e => setPromptText(e.target.value)}
                   onKeyDown={e => {
                     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); sendPrompt(e as unknown as React.MouseEvent); }
@@ -300,8 +312,12 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
                   }}
                   onClick={e => e.stopPropagation()}
                 />
-                <button className="cs-actor-btn cs-actor-btn--prompt" onClick={sendPrompt} title="Send prompt">Prompt</button>
-                <button className="cs-actor-btn cs-actor-btn--stop" onClick={handleStop} title="Stop actor">■</button>
+                <button className="cs-actor-btn cs-actor-btn--prompt" onClick={sendPrompt} disabled={paused} title="Send prompt">Prompt</button>
+                {paused
+                  ? <button className="cs-actor-btn cs-actor-btn--pause" onClick={handleResume} title="Resume — flush queued prompts">▶</button>
+                  : <button className="cs-actor-btn cs-actor-btn--pause" onClick={handlePause} title="Pause — queue incoming prompts">⏸</button>
+                }
+                <button className="cs-actor-btn cs-actor-btn--stop" onClick={handleStop} title={paused ? 'Stop — discard queue' : 'Stop actor'}>■</button>
               </>
             )}
           </div>

@@ -442,6 +442,7 @@ body {
 }
 .cs-actor-node--selected { border-color: var(--cs-accent); box-shadow: 0 0 0 2px var(--cs-accent-dim); }
 .cs-actor-node--running  { border-color: #16a34a; }
+.cs-actor-node--paused   { border-color: #d97706; }
 
 .cs-actor-header {
   display: flex; align-items: center; gap: 6px;
@@ -457,7 +458,8 @@ body {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--cs-border); flex-shrink: 0;
 }
-.cs-actor-status--on { background: #16a34a; box-shadow: 0 0 4px #16a34a80; }
+.cs-actor-status--on     { background: #16a34a; box-shadow: 0 0 4px #16a34a80; }
+.cs-actor-status--paused { background: #d97706; box-shadow: 0 0 4px #d9770680; }
 
 .cs-actor-define-prompt {
   padding: 5px 10px;
@@ -575,18 +577,23 @@ body {
   padding: 5px 10px 6px;
 }
 .cs-actor-btn {
-  font-size: 11px; padding: 2px 8px; border-radius: 3px; cursor: pointer; border: none; white-space: nowrap;
+  font-size: 11px; padding: 4px 8px; border-radius: 3px; cursor: pointer; border: none; white-space: nowrap;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 22px; line-height: 1; box-sizing: border-box;
+  padding-top: 2px; padding-bottom: 6px;
 }
 .cs-actor-btn--run    { background: var(--cs-accent); color: #fff; }
 .cs-actor-btn--run:hover { filter: brightness(1.15); }
 .cs-actor-btn--stop   { background: #dc2626; color: #fff; }
 .cs-actor-btn--stop:hover { filter: brightness(1.15); }
+.cs-actor-btn--pause  { background: #d97706; color: #fff; }
+.cs-actor-btn--pause:hover { filter: brightness(1.15); }
 .cs-actor-btn--prompt { background: var(--cs-accent); color: #fff; }
 .cs-actor-btn--prompt:hover { filter: brightness(1.15); }
 
 /* Prompt input row at the bottom of every actor node */
 .cs-actor-prompt-row {
-  display: flex; gap: 4px; align-items: center;
+  display: flex; gap: 4px; align-items: stretch;
   padding: 5px 8px 6px;
   border-top: 1px solid var(--cs-border);
 }
@@ -596,6 +603,8 @@ body {
   color: var(--cs-text); font-size: 11px; padding: 2px 6px; outline: none;
 }
 .cs-actor-prompt-input:focus { border-color: var(--cs-accent); }
+.cs-actor-prompt-input:disabled { opacity: 0.4; cursor: not-allowed; }
+.cs-actor-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Actor-checks: checkbox list for event target actors */
 .cs-actor-checks {

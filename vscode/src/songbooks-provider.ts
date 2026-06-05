@@ -61,7 +61,7 @@ export class SongbooksProvider implements vscode.TreeDataProvider<SongbookNode> 
   private readonly _evt = new vscode.EventEmitter<SongbookNode | undefined>();
   readonly onDidChangeTreeData = this._evt.event;
 
-  private _mode: SongbookViewMode = 'list';
+  private _mode: SongbookViewMode = 'tree';
   private _entries: SongbookRawEntry[] = [];
 
   setMode(mode: SongbookViewMode): void {

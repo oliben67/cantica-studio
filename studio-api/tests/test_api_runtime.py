@@ -218,27 +218,27 @@ def test_list_actor_crons_not_found_returns_404(client: TestClient, mock_runtime
     assert r.status_code == 404
 
 
-# ── GET /v1/runtime/actors/{name}/logs ───────────────────────────────────────
+# ── GET /v1/runtime/actors/{name}/chat ───────────────────────────────────────
 
 
-def test_get_actor_logs_success(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.get_actor_logs.return_value = "line1\nline2"
-    r = client.get("/v1/runtime/actors/bot/logs")
+def test_get_actor_chat_success(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_chat.return_value = "line1\nline2"
+    r = client.get("/v1/runtime/actors/bot/chat")
     assert r.status_code == 200
-    assert r.json()["logs"] == "line1\nline2"
+    assert r.json()["chat"] == "line1\nline2"
     assert r.json()["name"] == "bot"
-    mock_runtime.get_actor_logs.assert_called_once_with("bot")
+    mock_runtime.get_actor_chat.assert_called_once_with("bot")
 
 
-def test_get_actor_logs_not_found_returns_404(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.get_actor_logs.side_effect = KeyError("not running")
-    r = client.get("/v1/runtime/actors/ghost/logs")
+def test_get_actor_chat_not_found_returns_404(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_chat.side_effect = KeyError("not running")
+    r = client.get("/v1/runtime/actors/ghost/chat")
     assert r.status_code == 404
 
 
-def test_get_actor_logs_error_returns_500(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.get_actor_logs.side_effect = RuntimeError("timeout")
-    r = client.get("/v1/runtime/actors/bot/logs")
+def test_get_actor_chat_error_returns_500(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.get_actor_chat.side_effect = RuntimeError("timeout")
+    r = client.get("/v1/runtime/actors/bot/chat")
     assert r.status_code == 500
 
 

@@ -95,6 +95,24 @@ async def start_actor(body: StartActorRequest) -> dict:
     return {"name": body.name, "status": "running", "actor_type": body.actor_type}
 
 
+@router.post("/actors/{name}/pause")
+def pause_actor(name: str) -> dict:
+    try:
+        _rt().pause(name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"name": name, "status": "paused"}
+
+
+@router.post("/actors/{name}/resume")
+def resume_actor(name: str) -> dict:
+    try:
+        flushed = _rt().resume(name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"name": name, "status": "running", "queued_flushed": flushed}
+
+
 @router.delete("/actors/{name}", status_code=204)
 async def stop_actor(name: str) -> None:
     try:
@@ -152,17 +170,17 @@ def list_actor_crons(name: str) -> list[dict]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/actors/{name}/logs")
-async def get_actor_logs(name: str) -> dict:
-    """Return captured log output from a code actor."""
+@router.get("/actors/{name}/chat")
+async def get_actor_chat(name: str) -> dict:
+    """Return captured chat/log output from a code actor."""
     try:
         loop = asyncio.get_event_loop()
-        logs = await loop.run_in_executor(None, _rt().get_actor_logs, name)
+        chat = await loop.run_in_executor(None, _rt().get_actor_chat, name)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"name": name, "logs": logs}
+    return {"name": name, "chat": chat}
 
 
 @router.get("/actors/{name}/type")

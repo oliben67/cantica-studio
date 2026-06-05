@@ -295,10 +295,10 @@ def test_fire_event_target_not_running_is_silently_skipped() -> None:
     rt.stop_all()
 
 
-# ── runtime.py — get_actor_logs exception handler (258-259) ──────────────────
+# ── runtime.py — get_actor_chat exception handler (258-259) ──────────────────
 
 
-def test_get_actor_logs_returns_empty_string_on_proxy_exception() -> None:
+def test_get_actor_chat_returns_empty_string_on_proxy_exception() -> None:
     """proxy.get_logs().get() raising is caught; returns '' (lines 258-259)."""
     rt = ActorRuntime()
     proxy = MagicMock()
@@ -309,7 +309,7 @@ def test_get_actor_logs_returns_empty_string_on_proxy_exception() -> None:
          patch("pykka.ThreadingActor.start", return_value=ref):
         rt.start(_adef(), _conn())
 
-    assert rt.get_actor_logs("test-actor") == ""
+    assert rt.get_actor_chat("test-actor") == ""
     rt.stop_all()
 
 

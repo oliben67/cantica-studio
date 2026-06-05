@@ -61,7 +61,7 @@ def _make_provider(provider: str, model: str) -> Any:
     if p == "gemini":
         return Gemini(model)
     if p == "copilot":
-        return Copilot(model)
+        return Copilot(model, use_sdk=True)
     if p == "mistral":
         return Mistral(model)
     raise ValueError(
@@ -86,6 +86,8 @@ class ActorRuntime:
         self._ai_events: dict[str, list[PromptEventDef]] = {}        # name → resolved AI events
         self._code_events: dict[str, list[dict]] = {}                # name → discovered events
         self._code_crons: dict[str, list[dict]] = {}                 # name → discovered crons
+        self._paused: set[str] = set()                               # names of paused actors
+        self._queued: dict[str, list[str]] = {}                      # name → queued instructions
         self._scheduler = BackgroundScheduler()
         self._scheduler.start()
 
@@ -183,6 +185,31 @@ class ActorRuntime:
         self._register_code_crons(defn.name, code_crons)
         _log.info("Started %s code actor %r", defn.actor_type, defn.name)
 
+    def pause(self, name: str) -> None:
+        if name not in self._refs:
+            raise KeyError(f"Actor {name!r} is not running")
+        self._paused.add(name)
+        self._queued.setdefault(name, [])
+        _log.info("Paused actor %r", name)
+
+    def resume(self, name: str) -> int:
+        """Unpause an actor and flush its queued instructions. Returns the number flushed."""
+        if name not in self._refs:
+            raise KeyError(f"Actor {name!r} is not running")
+        self._paused.discard(name)
+        queued = self._queued.pop(name, [])
+        for instruction in queued:
+            try:
+                proxy = self._get_proxy(name)
+                proxy.instruct(instruction).get(timeout=120)
+            except Exception as exc:
+                _log.error("Failed to flush queued instruction for %r: %s", name, exc)
+        _log.info("Resumed actor %r, flushed %d queued instruction(s)", name, len(queued))
+        return len(queued)
+
+    def is_paused(self, name: str) -> bool:
+        return name in self._paused
+
     def stop(self, name: str) -> None:
         ref = self._refs.pop(name, None)
         if ref is None:
@@ -191,6 +218,8 @@ class ActorRuntime:
         self._ai_events.pop(name, None)
         self._code_events.pop(name, None)
         self._code_crons.pop(name, None)
+        self._paused.discard(name)
+        self._queued.pop(name, None)
         try:
             for job in self._scheduler.get_jobs():
                 if job.id.startswith(f"cron-{name}-"):
@@ -217,6 +246,10 @@ class ActorRuntime:
     # ── Messaging ─────────────────────────────────────────────────────────────
 
     def instruct(self, name: str, text: str) -> str:
+        if name in self._paused:
+            self._queued.setdefault(name, []).append(text)
+            _log.info("Actor %r is paused — queued instruction (%d total)", name, len(self._queued[name]))
+            return f"⏸ Queued (actor is paused — {len(self._queued[name])} instruction(s) pending)"
         proxy = self._get_proxy(name)
         return proxy.instruct(text).get(timeout=120)
 
@@ -261,7 +294,7 @@ class ActorRuntime:
             raise KeyError(f"Actor {name!r} is not running")
         return list(self._code_crons.get(name, []))
 
-    def get_actor_logs(self, name: str) -> str:
+    def get_actor_chat(self, name: str) -> str:
         """Return captured log output for a code actor (empty string for AI actors)."""
         proxy = self._get_proxy(name)
         try:
@@ -374,6 +407,9 @@ class ActorRuntime:
                     ta: str | None = target_actor,
                     te: str | None = target_event,
                 ) -> None:
+                    if actor_name in self._paused:
+                        _log.debug("Skipping cron for paused actor %r", actor_name)
+                        return
                     try:
                         proxy = self._refs[actor_name].proxy()
                         output = proxy.instruct(p).get(timeout=120)

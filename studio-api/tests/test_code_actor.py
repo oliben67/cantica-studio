@@ -174,7 +174,7 @@ def test_get_actor_type_ai():
     rt.stop_all()
 
 
-def test_python_code_actor_get_logs(tmp_path):
+def test_python_code_actor_get_chat(tmp_path):
     defn, _ = _code_def(
         tmp_path,
         """
@@ -190,7 +190,7 @@ def run(ctx):
     rt.start(defn, MagicMock())
     import time
     time.sleep(0.2)
-    logs = rt.get_actor_logs("worker")
+    logs = rt.get_actor_chat("worker")
     assert "hello from loop" in logs
     rt.stop_all()
 

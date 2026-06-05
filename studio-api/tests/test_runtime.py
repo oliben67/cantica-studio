@@ -644,10 +644,10 @@ def test_code_cron_invalid_schedule_warns(tmp_path):
     rt.stop_all()
 
 
-# ── get_actor_logs for AI actor returns empty string ─────────────────────────
+# ── get_actor_chat for AI actor returns empty string ─────────────────────────
 
 
-def test_get_actor_logs_ai_actor_returns_empty():
+def test_get_actor_chat_ai_actor_returns_empty():
     rt = ActorRuntime()
     connector = _mock_connector()
 
@@ -659,7 +659,7 @@ def test_get_actor_logs_ai_actor_returns_empty():
     with patch("studio_api.runtime._make_provider", return_value=None), \
          patch("pykka.ThreadingActor.start", return_value=started_ref):
         rt.start(_actor_def(), connector)
-        result = rt.get_actor_logs("test-actor")
+        result = rt.get_actor_chat("test-actor")
 
     # get_logs is attempted; returns empty string
     assert result == ""

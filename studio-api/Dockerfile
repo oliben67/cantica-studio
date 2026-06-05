@@ -22,11 +22,15 @@ RUN pip install --no-cache-dir /dist/*.whl
 # dropped ExternalServerConfig (actor-ai 0.3.x depends on 0.3.0 behaviour).
 RUN pip install --no-cache-dir "github-copilot-sdk==0.3.0"
 
-# Install studio-api and its dependencies (actor-ai from PyPI, etc.)
+# Install actor-ai from the local wheel (includes unreleased changes).
+COPY actor_ai-0.3.7-py3-none-any.whl /tmp/
+RUN pip install --no-cache-dir /tmp/actor_ai-0.3.7-py3-none-any.whl
+
+# Install studio-api and its remaining dependencies (actor-ai already satisfied above).
 WORKDIR /app
 COPY cantica-studio/studio-api/pyproject.toml cantica-studio/studio-api/README.md ./
 COPY cantica-studio/studio-api/src ./src
-RUN pip install --no-cache-dir -e ".[actor-ai]" 2>/dev/null || pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e .
 
 ENV STUDIO_WORKSPACE=/workspace
 ENV STUDIO_HOST=0.0.0.0

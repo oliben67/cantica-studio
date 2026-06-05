@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ActivityModal } from '../../webview-src/components/ActivityModal';
+import { ChatModal } from '../../webview-src/components/ChatModal';
 import { useStore } from '../../webview-src/store';
 import type { AIActorDef, ActorGraph } from '../../webview-src/types';
 
@@ -24,7 +24,7 @@ beforeEach(() => {
   useStore.setState({
     graph: graph([actor()]),
     runningActors: new Set(),
-    activityModalActorId: null,
+    chatModalActorId: null,
     actorOutputs: new Map(),
   });
 });
@@ -32,57 +32,58 @@ beforeEach(() => {
 // ── rendering ─────────────────────────────────────────────────────────────────
 
 describe('ActivityModal rendering', () => {
-  it('renders nothing when activityModalActorId is null', () => {
-    const { container } = render(<ActivityModal />);
+  it('renders nothing when chatModalActorId is null', () => {
+    const { container } = render(<ChatModal />);
     expect(container.firstChild).toBeNull();
   });
 
   it('renders the modal with actor name when open', () => {
-    useStore.setState({ activityModalActorId: 'urn:x:a1' });
-    render(<ActivityModal />);
+    useStore.setState({ chatModalActorId: 'urn:x:a1' });
+    render(<ChatModal />);
     expect(screen.getByText(/test-actor/i)).toBeInTheDocument();
-    expect(screen.getByText(/Activities/i)).toBeInTheDocument();
+    const title = document.querySelector(".cs-modal-title");
+    expect(title?.textContent).toMatch(/Chat/i);
   });
 
   it('shows empty state message when no output', () => {
-    useStore.setState({ activityModalActorId: 'urn:x:a1' });
-    render(<ActivityModal />);
-    expect(screen.getByText(/No activity yet/i)).toBeInTheDocument();
+    useStore.setState({ chatModalActorId: 'urn:x:a1' });
+    render(<ChatModal />);
+    expect(screen.getByText(/No chat yet/i)).toBeInTheDocument();
   });
 
   it('renders user prompt bubbles for lines starting with "> "', () => {
     useStore.setState({
-      activityModalActorId: 'urn:x:a1',
+      chatModalActorId: 'urn:x:a1',
       actorOutputs: new Map([['test-actor', '> Hello there']]),
     });
-    render(<ActivityModal />);
+    render(<ChatModal />);
     expect(screen.getByText('Hello there')).toBeInTheDocument();
   });
 
   it('renders AI response bubbles for plain lines', () => {
     useStore.setState({
-      activityModalActorId: 'urn:x:a1',
+      chatModalActorId: 'urn:x:a1',
       actorOutputs: new Map([['test-actor', 'Hi, I am Claude!']]),
     });
-    render(<ActivityModal />);
+    render(<ChatModal />);
     expect(screen.getByText('Hi, I am Claude!')).toBeInTheDocument();
   });
 
   it('renders system lines (⏳ ✓ ⚠ ℹ) in their own style', () => {
     useStore.setState({
-      activityModalActorId: 'urn:x:a1',
+      chatModalActorId: 'urn:x:a1',
       actorOutputs: new Map([['test-actor', '✓ Ready · claude/claude-sonnet-4-6']]),
     });
-    render(<ActivityModal />);
+    render(<ChatModal />);
     expect(screen.getByText('✓ Ready · claude/claude-sonnet-4-6')).toBeInTheDocument();
   });
 
   it('renders multiple messages in order', () => {
     useStore.setState({
-      activityModalActorId: 'urn:x:a1',
+      chatModalActorId: 'urn:x:a1',
       actorOutputs: new Map([['test-actor', '> Question\nAnswer line']]),
     });
-    render(<ActivityModal />);
+    render(<ChatModal />);
     expect(screen.getByText('Question')).toBeInTheDocument();
     expect(screen.getByText('Answer line')).toBeInTheDocument();
   });
@@ -92,26 +93,26 @@ describe('ActivityModal rendering', () => {
 
 describe('ActivityModal close', () => {
   it('clicking ✕ closes the modal', () => {
-    useStore.setState({ activityModalActorId: 'urn:x:a1' });
-    render(<ActivityModal />);
+    useStore.setState({ chatModalActorId: 'urn:x:a1' });
+    render(<ChatModal />);
     fireEvent.click(screen.getByTitle('Close'));
-    expect(useStore.getState().activityModalActorId).toBeNull();
+    expect(useStore.getState().chatModalActorId).toBeNull();
   });
 
   it('clicking the overlay closes the modal', () => {
-    useStore.setState({ activityModalActorId: 'urn:x:a1' });
-    render(<ActivityModal />);
+    useStore.setState({ chatModalActorId: 'urn:x:a1' });
+    render(<ChatModal />);
     const overlay = document.querySelector('.cs-modal-overlay') as HTMLElement;
     fireEvent.mouseDown(overlay);
-    expect(useStore.getState().activityModalActorId).toBeNull();
+    expect(useStore.getState().chatModalActorId).toBeNull();
   });
 
   it('clicking inside the modal does not close it', () => {
-    useStore.setState({ activityModalActorId: 'urn:x:a1' });
-    render(<ActivityModal />);
+    useStore.setState({ chatModalActorId: 'urn:x:a1' });
+    render(<ChatModal />);
     const modal = document.querySelector('.cs-modal') as HTMLElement;
     fireEvent.mouseDown(modal);
-    expect(useStore.getState().activityModalActorId).toBe('urn:x:a1');
+    expect(useStore.getState().chatModalActorId).toBe('urn:x:a1');
   });
 });
 
@@ -120,10 +121,10 @@ describe('ActivityModal close', () => {
 describe('ActivityModal prompt resend', () => {
   it('clicking a user bubble populates the input field', () => {
     useStore.setState({
-      activityModalActorId: 'urn:x:a1',
+      chatModalActorId: 'urn:x:a1',
       actorOutputs: new Map([['test-actor', '> Previous question']]),
     });
-    render(<ActivityModal />);
+    render(<ChatModal />);
     fireEvent.click(screen.getByText('Previous question'));
     const input = screen.getByRole('textbox') as HTMLInputElement;
     expect(input.value).toBe('Previous question');
@@ -134,18 +135,18 @@ describe('ActivityModal prompt resend', () => {
 
 describe('ActivityModal send prompt', () => {
   it('input is disabled when actor is not running', () => {
-    useStore.setState({ activityModalActorId: 'urn:x:a1', runningActors: new Set() });
-    render(<ActivityModal />);
+    useStore.setState({ chatModalActorId: 'urn:x:a1', runningActors: new Set() });
+    render(<ChatModal />);
     const input = screen.getByRole('textbox');
     expect(input).toBeDisabled();
   });
 
   it('input is enabled when actor is running', () => {
     useStore.setState({
-      activityModalActorId: 'urn:x:a1',
+      chatModalActorId: 'urn:x:a1',
       runningActors: new Set(['test-actor']),
     });
-    render(<ActivityModal />);
+    render(<ChatModal />);
     const input = screen.getByRole('textbox');
     expect(input).not.toBeDisabled();
   });
@@ -157,10 +158,10 @@ describe('ActivityModal send prompt', () => {
     });
 
     useStore.setState({
-      activityModalActorId: 'urn:x:a1',
+      chatModalActorId: 'urn:x:a1',
       runningActors: new Set(['test-actor']),
     });
-    render(<ActivityModal />);
+    render(<ChatModal />);
 
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'What time is it?' } });
@@ -181,10 +182,10 @@ describe('ActivityModal send prompt', () => {
     });
 
     useStore.setState({
-      activityModalActorId: 'urn:x:a1',
+      chatModalActorId: 'urn:x:a1',
       runningActors: new Set(['test-actor']),
     });
-    render(<ActivityModal />);
+    render(<ChatModal />);
 
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'Hello!' } });

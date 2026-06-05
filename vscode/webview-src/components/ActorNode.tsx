@@ -63,7 +63,7 @@ function ActivityPanel({
     <div className="cs-actor-output">
       <div className="cs-actor-output-header">
         <span className="cs-actor-section-label">activities</span>
-        <button className="cs-actor-expand-btn" onClick={onExpand} title="Expand activities">⤢</button>
+        <button className="cs-actor-expand-btn" onClick={onExpand} title="Expand chat">⤢</button>
       </div>
       {lastTen.length > 0 ? (
         <div className="cs-actor-output-lines" ref={scrollRef}>
@@ -85,18 +85,18 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   const [promptText, setPromptText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLInputElement>(null);
-  const activitiesScrollRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const {
     runningActors, actorOutputs, selectActor, updateActor,
     openEventsModal, openCronsModal, openActorMenu, openProviderMenu,
-    actorActivitiesVisible, toggleActivities, openActivityModal,
+    actorChatVisible, toggleChat, openChatModal,
   } = useStore();
 
   const isCode = actor.actorType === 'python' || actor.actorType === 'typescript';
   const running = runningActors.has(actor.name);
   const output = actorOutputs.get(actor.name);
-  const activitiesVisible = actorActivitiesVisible[actor.id] ?? false;
+  const chatVisible = actorChatVisible[actor.id] ?? false;
   const outputLines = output ? output.split('\n').filter(l => l.trim()) : [];
   const providerInfo = PROVIDERS[actor.provider];
   const color = providerInfo?.color ?? (isCode ? '#0ea5e9' : '#6b7280');
@@ -109,8 +109,8 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   }, [editing]);
 
   useEffect(() => {
-    if (activitiesScrollRef.current) {
-      activitiesScrollRef.current.scrollTop = activitiesScrollRef.current.scrollHeight;
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [output]);
 
@@ -130,7 +130,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     e.stopPropagation();
     // Open the log panel immediately and write a placeholder so the user sees
     // something right away, before the async round-trip to the extension host.
-    if (!activitiesVisible) toggleActivities(actor.id);
+    if (!chatVisible) toggleChat(actor.id);
     useStore.getState().appendOutput(actor.name, `⏳ Starting ${actor.name}…`);
     vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' });
   }
@@ -142,7 +142,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     useStore.getState().appendOutput(actor.name, `> ${text}`);
     vscode.postMessage({ type: 'runActor', name: actor.name, instruction: text });
     setPromptText('');
-    if (!activitiesVisible) toggleActivities(actor.id);
+    if (!chatVisible) toggleChat(actor.id);
   }
 
   return (
@@ -209,11 +209,11 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             {outEdges.length > 0 && <span className="cs-actor-indicator" title={`${outEdges.length} connections`}>⇢</span>}
           </div>
 
-          {activitiesVisible && (
+          {chatVisible && (
             <ActivityPanel
               outputLines={outputLines}
-              scrollRef={activitiesScrollRef}
-              onExpand={e => { e.stopPropagation(); openActivityModal(actor.id); }}
+              scrollRef={chatScrollRef}
+              onExpand={e => { e.stopPropagation(); openChatModal(actor.id); }}
               emptyLabel="not started"
             />
           )}
@@ -224,7 +224,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
               <button
                 className="cs-actor-btn cs-actor-btn--prompt"
                 style={{ flex: 1 }}
-                onClick={e => { e.stopPropagation(); vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' }); if (!activitiesVisible) toggleActivities(actor.id); }}
+                onClick={e => { e.stopPropagation(); vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' }); if (!chatVisible) toggleChat(actor.id); }}
                 title="Start code actor"
               >▶ Start</button>
             ) : (
@@ -268,12 +268,12 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             </div>
           )}
 
-          {activitiesVisible && (
+          {chatVisible && (
             <ActivityPanel
               outputLines={outputLines}
-              scrollRef={activitiesScrollRef}
-              onExpand={e => { e.stopPropagation(); openActivityModal(actor.id); }}
-              emptyLabel="no activity yet"
+              scrollRef={chatScrollRef}
+              onExpand={e => { e.stopPropagation(); openChatModal(actor.id); }}
+              emptyLabel="no chat yet"
             />
           )}
 

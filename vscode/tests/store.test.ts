@@ -35,8 +35,8 @@ beforeEach(() => {
     selectedEdgeId: null,
     runningActors: new Set(),
     actorOutputs: new Map(),
-    actorActivitiesVisible: {},
-    activityModalActorId: null,
+    actorChatVisible: {},
+    chatModalActorId: null,
     propertiesModalActorId: null,
     eventsModalActorId: null,
     cronsModalActorId: null,
@@ -192,38 +192,38 @@ describe('runtime state', () => {
   });
 });
 
-// ── activity visibility ───────────────────────────────────────────────────────
+// ── chat visibility ───────────────────────────────────────────────────────
 
-describe('activity visibility', () => {
-  it('toggleActivities flips visibility from false to true', () => {
-    useStore.getState().toggleActivities('urn:x:a1');
-    expect(useStore.getState().actorActivitiesVisible['urn:x:a1']).toBe(true);
+describe('chat visibility', () => {
+  it('toggleChat flips visibility from false to true', () => {
+    useStore.getState().toggleChat('urn:x:a1');
+    expect(useStore.getState().actorChatVisible['urn:x:a1']).toBe(true);
   });
 
-  it('toggleActivities flips visibility from true to false', () => {
-    useStore.getState().toggleActivities('urn:x:a1');
-    useStore.getState().toggleActivities('urn:x:a1');
-    expect(useStore.getState().actorActivitiesVisible['urn:x:a1']).toBe(false);
+  it('toggleChat flips visibility from true to false', () => {
+    useStore.getState().toggleChat('urn:x:a1');
+    useStore.getState().toggleChat('urn:x:a1');
+    expect(useStore.getState().actorChatVisible['urn:x:a1']).toBe(false);
   });
 
   it('different actors toggle independently', () => {
-    useStore.getState().toggleActivities('urn:x:a1');
-    expect(useStore.getState().actorActivitiesVisible['urn:x:a2']).toBeFalsy();
+    useStore.getState().toggleChat('urn:x:a1');
+    expect(useStore.getState().actorChatVisible['urn:x:a2']).toBeFalsy();
   });
 });
 
 // ── modal open/close ──────────────────────────────────────────────────────────
 
 describe('modal state', () => {
-  it('openActivityModal sets activityModalActorId', () => {
-    useStore.getState().openActivityModal('urn:x:a1');
-    expect(useStore.getState().activityModalActorId).toBe('urn:x:a1');
+  it('openChatModal sets chatModalActorId', () => {
+    useStore.getState().openChatModal('urn:x:a1');
+    expect(useStore.getState().chatModalActorId).toBe('urn:x:a1');
   });
 
-  it('closeActivityModal clears activityModalActorId', () => {
-    useStore.getState().openActivityModal('urn:x:a1');
-    useStore.getState().closeActivityModal();
-    expect(useStore.getState().activityModalActorId).toBeNull();
+  it('closeChatModal clears chatModalActorId', () => {
+    useStore.getState().openChatModal('urn:x:a1');
+    useStore.getState().closeChatModal();
+    expect(useStore.getState().chatModalActorId).toBeNull();
   });
 
   it('openPropertiesModal sets propertiesModalActorId', () => {

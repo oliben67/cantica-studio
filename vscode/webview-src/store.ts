@@ -108,12 +108,12 @@ interface GraphState {
   openPropertiesModal: (actorId: string) => void;
   closePropertiesModal: () => void;
 
-  actorActivitiesVisible: Record<string, boolean>;
-  toggleActivities: (actorId: string) => void;
+  actorChatVisible: Record<string, boolean>;
+  toggleChat: (actorId: string) => void;
 
-  activityModalActorId: string | null;
-  openActivityModal: (actorId: string) => void;
-  closeActivityModal: () => void;
+  chatModalActorId: string | null;
+  openChatModal: (actorId: string) => void;
+  closeChatModal: () => void;
 
   resourcesModalActorId: string | null;
   openResourcesModal: (actorId: string) => void;
@@ -281,14 +281,14 @@ export const useStore = create<GraphState>((set) => ({
   openPropertiesModal: (actorId) => set({ propertiesModalActorId: actorId }),
   closePropertiesModal: () => set({ propertiesModalActorId: null }),
 
-  actorActivitiesVisible: {},
-  toggleActivities: (actorId) => set(s => ({
-    actorActivitiesVisible: { ...s.actorActivitiesVisible, [actorId]: !s.actorActivitiesVisible[actorId] },
+  actorChatVisible: {},
+  toggleChat: (actorId) => set(s => ({
+    actorChatVisible: { ...s.actorChatVisible, [actorId]: !s.actorChatVisible[actorId] },
   })),
 
-  activityModalActorId: null,
-  openActivityModal: (actorId) => set({ activityModalActorId: actorId }),
-  closeActivityModal: () => set({ activityModalActorId: null }),
+  chatModalActorId: null,
+  openChatModal: (actorId) => set({ chatModalActorId: actorId }),
+  closeChatModal: () => set({ chatModalActorId: null }),
 
   resourcesModalActorId: null,
   openResourcesModal: (actorId) => set({ resourcesModalActorId: actorId }),

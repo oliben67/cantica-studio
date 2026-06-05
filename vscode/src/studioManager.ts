@@ -102,6 +102,7 @@ export class StudioManager implements vscode.Disposable {
       ['ANTHROPIC_API_KEY', (cfg.get<string>('anthropicApiKey') ?? '').trim() || (process.env['ANTHROPIC_API_KEY'] ?? '')],
       ['OPENAI_API_KEY',    (cfg.get<string>('openaiApiKey')    ?? '').trim() || (process.env['OPENAI_API_KEY']    ?? '')],
       ['GEMINI_API_KEY',    (cfg.get<string>('geminiApiKey')    ?? '').trim() || (process.env['GEMINI_API_KEY']    ?? '')],
+      ['GITHUB_TOKEN',      (cfg.get<string>('githubToken')     ?? '').trim() || (process.env['GITHUB_TOKEN']      ?? '')],
     ];
 
     const args = [

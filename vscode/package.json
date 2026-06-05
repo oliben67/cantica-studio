@@ -355,6 +355,13 @@
           "scope": "machine",
           "order": 10
         },
+        "canticaScores.githubToken": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "GitHub token (`GITHUB_TOKEN`) injected into the Studio API container. Required for the **Copilot** provider — either a personal access token or a Copilot-issued token. Falls back to the `GITHUB_TOKEN` environment variable if empty. Restart the Studio API after changing.",
+          "scope": "machine",
+          "order": 11
+        },
         "canticaScores.providerModels": {
           "type": "object",
           "default": {},

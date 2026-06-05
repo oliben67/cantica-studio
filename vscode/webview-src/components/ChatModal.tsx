@@ -19,9 +19,9 @@ function parseLine(line: string): ChatMsg {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ActivityModal() {
+export function ChatModal() {
   const {
-    graph, activityModalActorId, closeActivityModal,
+    graph, chatModalActorId, closeChatModal,
     actorOutputs, runningActors, appendOutput,
   } = useStore();
 
@@ -29,8 +29,8 @@ export function ActivityModal() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const actor = activityModalActorId
-    ? graph.actors.find(a => a.id === activityModalActorId) ?? null
+  const actor = chatModalActorId
+    ? graph.actors.find(a => a.id === chatModalActorId) ?? null
     : null;
 
   const running = actor ? runningActors.has(actor.name) : false;
@@ -41,17 +41,17 @@ export function ActivityModal() {
 
   // Auto-scroll to bottom when messages arrive
   useEffect(() => {
-    if (activityModalActorId && scrollRef.current) {
+    if (chatModalActorId && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [output, activityModalActorId]);
+  }, [output, chatModalActorId]);
 
   // Focus input when modal opens
   useEffect(() => {
-    if (activityModalActorId) {
+    if (chatModalActorId) {
       setTimeout(() => inputRef.current?.focus(), 60);
     }
-  }, [activityModalActorId]);
+  }, [chatModalActorId]);
 
   if (!actor) return null;
 
@@ -69,19 +69,19 @@ export function ActivityModal() {
   }
 
   return (
-    <div className="cs-modal-overlay" onMouseDown={closeActivityModal}>
-      <div className="cs-modal cs-modal--activity" onMouseDown={e => e.stopPropagation()}>
+    <div className="cs-modal-overlay" onMouseDown={closeChatModal}>
+      <div className="cs-modal cs-modal--chat" onMouseDown={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="cs-modal-header">
-          <span className="cs-modal-title">⚡ {actor.name} — Activities</span>
-          <button className="cs-modal-close" onClick={closeActivityModal} title="Close">✕</button>
+          <span className="cs-modal-title">⚡ {actor.name} — Chat</span>
+          <button className="cs-modal-close" onClick={closeChatModal} title="Close">✕</button>
         </div>
 
         {/* Chat body */}
         <div className="cs-chat-body" ref={scrollRef}>
           {messages.length === 0 ? (
-            <p className="cs-chat-empty">No activity yet — start the actor and send a prompt.</p>
+            <p className="cs-chat-empty">No chat yet — start the actor and send a prompt.</p>
           ) : (
             messages.map((msg, i) => (
               <div key={i} className={`cs-chat-row cs-chat-row--${msg.kind}`}>

@@ -5,14 +5,14 @@ export function ActorMenu() {
   const {
     graph, actorMenuState, closeActorMenu,
     openEventsModal, openCronsModal, openPropertiesModal,
-    toggleActivities, actorActivitiesVisible, openActivityModal,
+    toggleChat, actorChatVisible, openChatModal,
     openResourcesModal,
   } = useStore();
 
   if (!actorMenuState) return null;
 
   const { actorId, x, y } = actorMenuState;
-  const activitiesOn = actorActivitiesVisible[actorId] ?? false;
+  const chatOn = actorChatVisible[actorId] ?? false;
   const actor = graph.actors.find(a => a.id === actorId);
   const isCode = actor?.actorType === 'python' || actor?.actorType === 'typescript';
 
@@ -35,11 +35,11 @@ export function ActorMenu() {
             </button>
           </>
         )}
-        <button className="cs-ctx-item" onClick={() => run(() => toggleActivities(actorId))}>
-          <span className="cs-ctx-icon">📋</span> {activitiesOn ? 'Hide Activities' : 'Activities'}
+        <button className="cs-ctx-item" onClick={() => run(() => toggleChat(actorId))}>
+          <span className="cs-ctx-icon">📋</span> {chatOn ? 'Hide Chat' : 'Activities'}
         </button>
-        <button className="cs-ctx-item" onClick={() => run(() => openActivityModal(actorId))}>
-          <span className="cs-ctx-icon">⤢</span> Expand Activities
+        <button className="cs-ctx-item" onClick={() => run(() => openChatModal(actorId))}>
+          <span className="cs-ctx-icon">⤢</span> Expand Chat
         </button>
         <div className="cs-ctx-sep" />
         <button className="cs-ctx-item" onClick={() => run(() => openResourcesModal(actorId))}>

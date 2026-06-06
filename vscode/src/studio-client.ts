@@ -50,9 +50,10 @@ export class StudioClient {
 
   // ── Prompts ──────────────────────────────────────────────────────────────────
 
-  async fetchProviderModels(): Promise<Record<string, string[]>> {
+  async fetchProviderModels(refresh = false): Promise<Record<string, string[]>> {
     try {
-      const r = await fetch(this.url('/v1/providers/models'), { signal: AbortSignal.timeout(30_000) });
+      const path = refresh ? '/v1/providers/models?refresh=true' : '/v1/providers/models';
+      const r = await fetch(this.url(path), { signal: AbortSignal.timeout(30_000) });
       if (!r.ok) return {};
       return r.json() as Promise<Record<string, string[]>>;
     } catch {

@@ -11,7 +11,7 @@ export class ActorsPanel {
   static async refreshProviderModels(client: StudioClient): Promise<void> {
     if (ActorsPanel._current) {
       ActorsPanel._current.client = client;
-      await ActorsPanel._current.pushProviderModels();
+      await ActorsPanel._current.pushProviderModels(true);
     }
   }
 
@@ -77,7 +77,7 @@ export class ActorsPanel {
         await this.pushSettings();
         await this.pushGraph();
         await this.pushPrompts();
-        void this.pushProviderModels();
+        void this.pushProviderModels(true);
         break;
 
       case 'saveGraph': {
@@ -289,12 +289,12 @@ export class ActorsPanel {
     await this.post({ type: 'updateSettings', settings: this.settings });
   }
 
-  async pushProviderModels(): Promise<void> {
-    let models = await this.client.fetchProviderModels();
+  async pushProviderModels(refresh = false): Promise<void> {
+    let models = await this.client.fetchProviderModels(refresh);
     if (Object.keys(models).length === 0) {
-      // API not yet ready — retry once after 3 s
+      // API not yet ready — retry once after 3 s, still with refresh flag
       await new Promise(resolve => setTimeout(resolve, 3000));
-      models = await this.client.fetchProviderModels();
+      models = await this.client.fetchProviderModels(refresh);
     }
     if (Object.keys(models).length > 0) {
       await this.post({ type: 'providerModels', models });

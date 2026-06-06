@@ -278,6 +278,7 @@ export function App() {
         case 'updateSettings': store.setSettings(msg.settings); break;
         case 'actorStatus':    store.setRunning(msg.name, msg.running); break;
         case 'actorPaused':    store.setPaused(msg.name, msg.paused); break;
+        case 'providerModels': store.setDynamicModels(msg.models); break;
         case 'actorOutput':
           store.appendOutput(msg.name, msg.output);
           break;

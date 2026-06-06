@@ -454,6 +454,7 @@ body {
   padding: 1px 5px; border-radius: 3px; color: #fff;
 }
 .cs-actor-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-actor-model--unavailable { color: #dc2626; }
 .cs-actor-status {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--cs-border); flex-shrink: 0;

@@ -3,7 +3,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { AIActorDef, EdgeHandleInfo, HandleSide } from '../types';
 import { useStore } from '../store';
 import { vscode } from '../vscode';
-import { PROVIDERS } from './ProviderMenu';
+import { isModelAvailable, PROVIDERS } from './ProviderMenu';
 
 export type ActorNodeData = {
   actor: AIActorDef;
@@ -90,12 +90,13 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   const {
     runningActors, pausedActors, actorOutputs, selectActor, updateActor,
     openEventsModal, openCronsModal, openActorMenu, openProviderMenu,
-    actorChatVisible, toggleChat, openChatModal,
+    actorChatVisible, toggleChat, openChatModal, dynamicModels,
   } = useStore();
 
   const isCode = actor.actorType === 'python' || actor.actorType === 'typescript';
   const running = runningActors.has(actor.name);
   const paused = pausedActors.has(actor.name);
+  const modelAvailable = isCode || isModelAvailable(actor.provider, actor.model, dynamicModels);
   const output = actorOutputs.get(actor.name);
   const chatVisible = actorChatVisible[actor.id] ?? false;
   const outputLines = output ? output.split('\n').filter(l => l.trim()) : [];
@@ -253,7 +254,10 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
           {/* ── AI actor: model row | indicators ── */}
           <div className="cs-actor-model-row">
             <span className="cs-actor-section-label">model</span>
-            <span className="cs-actor-model">{actor.model}</span>
+            <span
+              className={`cs-actor-model${modelAvailable ? '' : ' cs-actor-model--unavailable'}`}
+              title={modelAvailable ? undefined : `Model "${actor.model}" is not available for this provider — change it to enable this actor`}
+            >{actor.model}{!modelAvailable && ' ⚠'}</span>
             {actor.promptEvents.length > 0 && (
               <button
                 className="cs-actor-indicator"
@@ -294,8 +298,9 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
               <button
                 className="cs-actor-btn cs-actor-btn--prompt"
                 style={{ flex: 1 }}
+                disabled={!modelAvailable}
                 onClick={startActor}
-                title="Start actor"
+                title={modelAvailable ? 'Start actor' : `Model "${actor.model}" is not available — update the model to start`}
               >▶ Start</button>
             ) : (
               <>

@@ -50,6 +50,16 @@ export class StudioClient {
 
   // ── Prompts ──────────────────────────────────────────────────────────────────
 
+  async fetchProviderModels(): Promise<Record<string, string[]>> {
+    try {
+      const r = await fetch(this.url('/v1/providers/models'), { signal: AbortSignal.timeout(30_000) });
+      if (!r.ok) return {};
+      return r.json() as Promise<Record<string, string[]>>;
+    } catch {
+      return {};
+    }
+  }
+
   async fetchPrompts(_servers: CanticaServer[]): Promise<CanticaPrompt[]> {
     // Ask the studio API which aggregates from all configured Cantica servers
     try {

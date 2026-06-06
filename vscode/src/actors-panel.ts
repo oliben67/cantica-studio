@@ -69,6 +69,7 @@ export class ActorsPanel {
         await this.pushSettings();
         await this.pushGraph();
         await this.pushPrompts();
+        void this.pushProviderModels();
         break;
 
       case 'saveGraph': {
@@ -278,6 +279,13 @@ export class ActorsPanel {
 
   async pushSettings(): Promise<void> {
     await this.post({ type: 'updateSettings', settings: this.settings });
+  }
+
+  async pushProviderModels(): Promise<void> {
+    const models = await this.client.fetchProviderModels();
+    if (Object.keys(models).length > 0) {
+      await this.post({ type: 'providerModels', models });
+    }
   }
 
   setActiveSongbook(uri: vscode.Uri | undefined): void {

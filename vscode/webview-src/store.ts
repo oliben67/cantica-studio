@@ -83,6 +83,8 @@ interface GraphState {
   setPrompts: (prompts: CanticaPrompt[]) => void;
   setSettings: (settings: ExtensionSettings) => void;
   setExplorerSide: (side: 'left' | 'right') => void;
+  dynamicModels: Record<string, string[]>;
+  setDynamicModels: (models: Record<string, string[]>) => void;
 
   // Modal UI state
   eventsModalActorId: string | null;
@@ -267,6 +269,8 @@ export const useStore = create<GraphState>((set) => ({
   setPrompts: (prompts) => set({ prompts }),
   setSettings: (settings) => set({ settings, explorerSide: settings.explorerSide }),
   setExplorerSide: (side) => set({ explorerSide: side }),
+  dynamicModels: {},
+  setDynamicModels: (models) => set({ dynamicModels: models }),
 
   eventsModalActorId: null,
   eventsModalFocusLabel: null,

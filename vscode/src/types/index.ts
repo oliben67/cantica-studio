@@ -112,6 +112,7 @@ export type ToWebview =
   | { type: 'loadGraph'; graph: ActorGraph }
   | { type: 'updatePrompts'; prompts: CanticaPrompt[] }
   | { type: 'updateSettings'; settings: ExtensionSettings }
+  | { type: 'providerModels'; models: Record<string, string[]> }
   | { type: 'actorStatus'; name: string; running: boolean }
   | { type: 'actorPaused'; name: string; paused: boolean }
   | { type: 'actorOutput'; name: string; output: string }

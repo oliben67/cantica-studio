@@ -7,6 +7,14 @@ export class ActorsPanel {
   private static _current: ActorsPanel | undefined;
   static get current(): ActorsPanel | undefined { return ActorsPanel._current; }
 
+  /** Call after studio API becomes ready so the webview gets a fresh model list. */
+  static async refreshProviderModels(client: StudioClient): Promise<void> {
+    if (ActorsPanel._current) {
+      ActorsPanel._current.client = client;
+      await ActorsPanel._current.pushProviderModels();
+    }
+  }
+
   private readonly panel: vscode.WebviewPanel;
   private readonly disposables: vscode.Disposable[] = [];
   private settings: ExtensionSettings;
@@ -282,7 +290,12 @@ export class ActorsPanel {
   }
 
   async pushProviderModels(): Promise<void> {
-    const models = await this.client.fetchProviderModels();
+    let models = await this.client.fetchProviderModels();
+    if (Object.keys(models).length === 0) {
+      // API not yet ready — retry once after 3 s
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      models = await this.client.fetchProviderModels();
+    }
     if (Object.keys(models).length > 0) {
       await this.post({ type: 'providerModels', models });
     }

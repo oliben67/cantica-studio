@@ -157,6 +157,7 @@ export function activate(context: vscode.ExtensionContext): void {
         settings = readSettings();
         client = new StudioClient(settings.studioBaseUrl);
         void vscode.window.showInformationMessage(`Studio API running at ${url}`);
+        void ActorsPanel.refreshProviderModels(client);
       }
     }),
 
@@ -432,6 +433,7 @@ export function activate(context: vscode.ExtensionContext): void {
       await studio.ensureRunning();
       settings = readSettings();
       client = new StudioClient(settings.studioBaseUrl);
+      void ActorsPanel.refreshProviderModels(client);
     }
   })();
 }

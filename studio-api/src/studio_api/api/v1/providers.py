@@ -22,7 +22,9 @@ def _models_for(provider_key: str) -> list[str]:
         elif provider_key == "gemini":
             p = Gemini("gemini-2.0-flash")
         elif provider_key == "copilot":
-            p = Copilot("gpt-4o", use_sdk=True)
+            # Copilot SDK list_models() is unreliable; read the validated model
+            # set directly from the class attribute — no API call needed.
+            return sorted(Copilot.MODELS)
         elif provider_key == "mistral":
             p = Mistral("mistral-large-latest")
         else:

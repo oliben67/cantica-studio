@@ -123,6 +123,11 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     setEditing(false);
   }
 
+  function handleRefresh(e: React.MouseEvent) {
+    e.stopPropagation();
+    vscode.postMessage({ type: 'refreshActor', name: actor.name });
+  }
+
   function handleStop(e: React.MouseEvent) {
     e.stopPropagation();
     vscode.postMessage({ type: 'stopActor', name: actor.name });
@@ -203,6 +208,13 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
           >{actor.name}</span>
         )}
 
+        {running && (
+          <button
+            className="cs-actor-gear"
+            title="Refresh actor — stop and restart, keeping conversation history"
+            onClick={handleRefresh}
+          >♻</button>
+        )}
         <button
           className="cs-actor-gear"
           title="Actor settings"
@@ -235,14 +247,14 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             {!running ? (
               <button
                 className="cs-actor-btn cs-actor-btn--prompt"
-                style={{ flex: 1 }}
+                style={{ marginLeft: 'auto' }}
                 onClick={e => { e.stopPropagation(); vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' }); if (!chatVisible) toggleChat(actor.id); }}
                 title="Start code actor"
               >▶ Start</button>
             ) : (
               <button
                 className="cs-actor-btn cs-actor-btn--stop"
-                style={{ flex: 1 }}
+                style={{ marginLeft: 'auto' }}
                 onClick={handleStop}
                 title="Stop code actor"
               >■ Stop</button>
@@ -297,7 +309,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             {!running ? (
               <button
                 className="cs-actor-btn cs-actor-btn--prompt"
-                style={{ flex: 1 }}
+                style={{ marginLeft: 'auto' }}
                 disabled={!modelAvailable}
                 onClick={startActor}
                 title={modelAvailable ? 'Start actor' : `Model "${actor.model}" is not available — update the model to start`}

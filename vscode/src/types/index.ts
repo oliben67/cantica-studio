@@ -105,6 +105,16 @@ export interface ExtensionSettings {
   providerModels: Record<string, string[] | null>;
 }
 
+// ── API call log ──────────────────────────────────────────────────────────────
+
+export interface LogEntry {
+  ts: number;
+  method: string;
+  url: string;
+  status: number;
+  durationMs: number;
+}
+
 // ── Webview message protocol ──────────────────────────────────────────────────
 
 /** Messages sent FROM the extension host TO the webview. */
@@ -116,6 +126,7 @@ export type ToWebview =
   | { type: 'actorStatus'; name: string; running: boolean }
   | { type: 'actorPaused'; name: string; paused: boolean }
   | { type: 'actorOutput'; name: string; output: string }
+  | { type: 'apiLog'; entry: LogEntry }
   | { type: 'error'; message: string }
   | { type: 'deleteSelected' }
   | { type: 'resetGraph' }

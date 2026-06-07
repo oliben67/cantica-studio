@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { ActorsPanel } from './actors-panel.js';
-import type { SongbookItem, SongbookRawEntry } from './songbooks-provider.js';
+import type { SongbookFolderItem, SongbookItem, SongbookNode, SongbookRawEntry } from './songbooks-provider.js';
 import { SongbooksProvider } from './songbooks-provider.js';
+import { SONGBOOKS_SCHEME, SongbooksFileSystemProvider } from './songbooks-fs-provider.js';
 import type { ServerItem } from './servers-provider.js';
 import { ServersProvider } from './servers-provider.js';
 import { StudioProvider } from './studio-provider.js';
@@ -44,8 +45,7 @@ function readSettings(): ExtensionSettings {
 }
 
 function songbooksDir(canticaHome: string): vscode.Uri {
-  const home = canticaHome.trim() || `${process.env['HOME'] ?? '~'}/.cantica`;
-  return vscode.Uri.file(`${home}/songbooks`);
+  return vscode.Uri.file(songbooksRoot(canticaHome));
 }
 
 const SONGBOOK_EXTS = new Set(['.json', '.jsonld', '.yaml', '.yml']);
@@ -69,9 +69,7 @@ async function findSongbooks(canticaHome: string): Promise<SongbookRawEntry[]> {
           const children = subEntries
             .filter(([n, t]) => t === vscode.FileType.File && isSongbookFile(n))
             .map(([n]) => ({ kind: 'file' as const, label: n, uri: vscode.Uri.joinPath(dir, name, n) }));
-          if (children.length > 0) {
-            results.push({ kind: 'folder', label: name, children });
-          }
+          results.push({ kind: 'folder', label: name, uri: vscode.Uri.joinPath(dir, name), children });
         } catch { /* skip unreadable sub-dirs */ }
       }
     }
@@ -82,11 +80,65 @@ async function findSongbooks(canticaHome: string): Promise<SongbookRawEntry[]> {
   }
 }
 
+function songbooksRoot(canticaHome: string): string {
+  return `${(canticaHome.trim() || `${process.env['HOME'] ?? '~'}/.cantica`)}/songbooks`;
+}
+
+function ensureSongbooksWorkspaceFolder(root: string): void {
+  const uri = vscode.Uri.parse(`${SONGBOOKS_SCHEME}:///`);
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (!folders.some((f) => f.uri.scheme === SONGBOOKS_SCHEME)) {
+    vscode.workspace.updateWorkspaceFolders(folders.length, 0, { uri, name: 'Songbooks' });
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   let settings = readSettings();
   let client = new StudioClient(settings.studioBaseUrl);
   const studio = new StudioManager();
   context.subscriptions.push(studio);
+
+  // ── Studio health status bar ───────────────────────────────────────────────
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 90);
+  statusBar.command = 'canticaScores.startLocalStudio';
+  statusBar.text = '$(circle-outline) Studio';
+  statusBar.tooltip = 'Cantica Studio API — click to start';
+  statusBar.show();
+  context.subscriptions.push(statusBar);
+
+  let _healthPollTimer: ReturnType<typeof setInterval> | undefined;
+  function startHealthPoll(): void {
+    if (_healthPollTimer !== undefined) return;
+    _healthPollTimer = setInterval(() => {
+      void client.ping().then((ok) => {
+        if (ok) {
+          statusBar.text = '$(circle-filled) Studio';
+          statusBar.color = '#22c55e';
+          statusBar.tooltip = 'Cantica Studio API — healthy';
+        } else {
+          statusBar.text = '$(error) Studio';
+          statusBar.color = '#ef4444';
+          statusBar.tooltip = 'Cantica Studio API — not reachable · click to start';
+        }
+      });
+    }, 5000);
+  }
+  startHealthPoll();
+  // Show yellow while startup is in progress
+  function setStatusStarting(): void {
+    statusBar.text = '$(loading~spin) Studio';
+    statusBar.color = '#f59e0b';
+    statusBar.tooltip = 'Cantica Studio API — starting…';
+  }
+
+  // ── Songbooks virtual filesystem ───────────────────────────────────────────
+  const fsProvider = new SongbooksFileSystemProvider(songbooksRoot(settings.canticaHome));
+  context.subscriptions.push(
+    vscode.workspace.registerFileSystemProvider(SONGBOOKS_SCHEME, fsProvider, {
+      isCaseSensitive: true,
+    }),
+  );
+  ensureSongbooksWorkspaceFolder(songbooksRoot(settings.canticaHome));
 
   const songbooksProvider = new SongbooksProvider();
   const serversProvider = new ServersProvider();
@@ -94,7 +146,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const songbooksView = vscode.window.createTreeView('canticaScores.songbooksView', {
     treeDataProvider: songbooksProvider,
-    showCollapseAll: false,
+    dragAndDropController: songbooksProvider,
+    showCollapseAll: true,
+    canSelectMany: true,
   });
   const serversView = vscode.window.createTreeView('canticaScores.serversView', {
     treeDataProvider: serversProvider,
@@ -121,6 +175,26 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   refreshProviders();
+
+  songbooksProvider.setDropHandler(async (sourceUris, target) => {
+    const destDir = target ? target.uri : songbooksDir(settings.canticaHome);
+    for (const srcUri of sourceUris) {
+      // cantica-songbooks:// URIs from the Explorer workspace folder → real file:// path
+      const realSrc = srcUri.scheme === SONGBOOKS_SCHEME
+        ? vscode.Uri.file(songbooksRoot(settings.canticaHome) + srcUri.path)
+        : srcUri;
+      const filename = realSrc.path.split('/').pop();
+      if (!filename) continue;
+      const dest = vscode.Uri.joinPath(destDir, filename);
+      if (realSrc.fsPath !== dest.fsPath) {
+        try {
+          await vscode.workspace.fs.rename(realSrc, dest, { overwrite: false });
+        } catch (err) {
+          void vscode.window.showErrorMessage(`Could not move "${filename}": ${String(err)}`);
+        }
+      }
+    }
+  });
 
   // ── Commands ───────────────────────────────────────────────────────────────
 
@@ -152,6 +226,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('canticaScores.startLocalStudio', async () => {
+      setStatusStarting();
       const url = await studio.ensureRunning();
       if (url) {
         settings = readSettings();
@@ -269,14 +344,15 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('canticaScores.deleteSongbook', async (item?: SongbookItem) => {
-      if (!item) return;
+      const target = item ?? songbooksView.selection.find((n): n is SongbookItem => n.kind === 'file');
+      if (!target) return;
       const answer = await vscode.window.showWarningMessage(
-        `Delete songbook "${item.label}"? This cannot be undone.`,
+        `Delete songbook "${target.label}"? This cannot be undone.`,
         { modal: true },
         'Delete',
       );
       if (answer !== 'Delete') return;
-      await vscode.workspace.fs.delete(item.uri);
+      await vscode.workspace.fs.delete(target.uri);
     }),
 
     vscode.commands.registerCommand('canticaScores.exportSongbook', async (item?: SongbookItem) => {
@@ -312,6 +388,97 @@ export function activate(context: vscode.ExtensionContext): void {
           }
         },
       );
+    }),
+
+    vscode.commands.registerCommand('canticaScores.newSongbookFolder', async () => {
+      const name = await vscode.window.showInputBox({
+        prompt: 'Folder name',
+        placeHolder: 'my-project',
+        validateInput: (v) => (v.trim() ? undefined : 'Name is required'),
+      });
+      if (!name) return;
+      const slug = name.trim().replace(/\s+/g, '-').toLowerCase();
+      const dir = songbooksDir(settings.canticaHome);
+      await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(dir, slug));
+    }),
+
+    vscode.commands.registerCommand('canticaScores.newSongbookInFolder', async (item?: SongbookFolderItem) => {
+      if (!item) return;
+      const name = await vscode.window.showInputBox({
+        prompt: 'Songbook name',
+        placeHolder: 'my-workflow',
+        validateInput: (v) => (v.trim() ? undefined : 'Name is required'),
+      });
+      if (!name) return;
+      const slug = name.trim().replace(/\s+/g, '-').toLowerCase();
+      const uri = vscode.Uri.joinPath(item.uri, `${slug}.jsonld`);
+      const content = JSON.stringify(
+        {
+          '@context': { '@vocab': 'https://cantica.dev/studio/', 'schema': 'http://schema.org/', 'name': 'schema:name' },
+          '@type': 'ActorGraph',
+          '@id': `urn:cantica:studio:graph:${slug}`,
+          'name': name.trim(),
+          'actors': [],
+          'edges': [],
+        },
+        null,
+        2,
+      );
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+      await vscode.commands.executeCommand('vscode.open', uri);
+    }),
+
+    vscode.commands.registerCommand('canticaScores.renameSongbook', async (item?: SongbookItem) => {
+      const target = item ?? songbooksView.selection.find((n): n is SongbookItem => n.kind === 'file');
+      if (!target) return;
+      const ext = target.uri.path.includes('.') ? target.uri.path.slice(target.uri.path.lastIndexOf('.')) : '';
+      const baseName = target.label.endsWith(ext) ? target.label.slice(0, -ext.length) : target.label;
+      const newName = await vscode.window.showInputBox({
+        prompt: 'New name (without extension)',
+        value: baseName,
+        validateInput: (v) => (v.trim() ? undefined : 'Name is required'),
+      });
+      if (!newName || newName.trim() === baseName) return;
+      const slug = newName.trim().replace(/\s+/g, '-').toLowerCase();
+      const dir = vscode.Uri.joinPath(target.uri, '..');
+      const newUri = vscode.Uri.joinPath(dir, `${slug}${ext}`);
+      await vscode.workspace.fs.rename(target.uri, newUri, { overwrite: false });
+      const panel = ActorsPanel.current;
+      if (panel?.activeSongbookUri?.fsPath === target.uri.fsPath) {
+        panel.setActiveSongbook(newUri);
+      }
+    }),
+
+    vscode.commands.registerCommand('canticaScores.renameSongbookFolder', async (item?: SongbookFolderItem) => {
+      const target = item ?? songbooksView.selection.find((n): n is SongbookFolderItem => n.kind === 'folder');
+      if (!target) return;
+      const newName = await vscode.window.showInputBox({
+        prompt: 'New folder name',
+        value: target.label,
+        validateInput: (v) => (v.trim() ? undefined : 'Name is required'),
+      });
+      if (!newName || newName.trim() === target.label) return;
+      const slug = newName.trim().replace(/\s+/g, '-').toLowerCase();
+      const parent = vscode.Uri.joinPath(target.uri, '..');
+      const newUri = vscode.Uri.joinPath(parent, slug);
+      await vscode.workspace.fs.rename(target.uri, newUri, { overwrite: false });
+    }),
+
+    vscode.commands.registerCommand('canticaScores.deleteSongbookFolder', async (item?: SongbookFolderItem) => {
+      const target = item ?? songbooksView.selection.find((n): n is SongbookFolderItem => n.kind === 'folder');
+      if (!target) return;
+      const answer = await vscode.window.showWarningMessage(
+        `Delete folder "${target.label}" and all its contents?`,
+        { modal: true },
+        'Delete',
+      );
+      if (answer !== 'Delete') return;
+      await vscode.workspace.fs.delete(target.uri, { recursive: true, useTrash: true });
+    }),
+
+    vscode.commands.registerCommand('canticaScores.revealSongbook', async (item?: SongbookItem) => {
+      if (!item) return;
+      await vscode.commands.executeCommand('revealFileInOS', item.uri);
     }),
 
     vscode.commands.registerCommand('canticaScores.newServer', async () => {
@@ -376,6 +543,7 @@ export function activate(context: vscode.ExtensionContext): void {
         settings = readSettings();
         client = new StudioClient(settings.studioBaseUrl);
         ActorsPanel.current?.updateSettings(settings, client);
+        fsProvider.updateRoot(songbooksRoot(settings.canticaHome));
         refreshProviders();
       }
     }),
@@ -384,7 +552,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Set initial view-mode context so the toggle button renders correctly from the start
   void vscode.commands.executeCommand('setContext', 'canticaScores.songbookViewMode', 'tree');
 
-  // Watch the songbooks directory for new/deleted files (all supported extensions)
+  // Watch the songbooks directory: files (all supported extensions) AND direct subdirectory changes
   for (const ext of ['jsonld', 'json', 'yaml', 'yml']) {
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(songbooksDir(settings.canticaHome), `**/*.${ext}`),
@@ -393,6 +561,14 @@ export function activate(context: vscode.ExtensionContext): void {
     watcher.onDidDelete(() => refreshProviders());
     context.subscriptions.push(watcher);
   }
+  // Separate watcher for direct children (catches folder create/rename/delete)
+  const dirWatcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(songbooksDir(settings.canticaHome), '*'),
+  );
+  dirWatcher.onDidCreate(() => refreshProviders());
+  dirWatcher.onDidDelete(() => refreshProviders());
+  dirWatcher.onDidChange(() => refreshProviders());
+  context.subscriptions.push(dirWatcher);
 
   // Reload the workspace canvas when the user manually saves the active .jsonld
   // file from the text editor.  We use onDidSaveTextDocument (not the FS watcher)
@@ -430,6 +606,7 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshProviders();
 
     if (settings.studioMode === 'local' && settings.autoStartStudio) {
+      setStatusStarting();
       await studio.ensureRunning();
       settings = readSettings();
       client = new StudioClient(settings.studioBaseUrl);

@@ -27,6 +27,7 @@ import { EdgeMenu } from './components/EdgeMenu';
 import { PropertiesModal } from './components/PropertiesModal';
 import { ResourcesModal } from './components/ResourcesModal';
 import { ChatModal } from './components/ChatModal';
+import { LogPanel } from './components/LogPanel';
 import { useStore } from './store';
 import type { ActorEdgeDef, EdgeHandleInfo, HandleSide, IncomingMessage } from './types';
 import { vscode } from './vscode';
@@ -187,6 +188,33 @@ function Canvas() {
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+
+    // text/uri-list: file dragged from VS Code Explorer or OS file manager
+    const uriList = e.dataTransfer.getData('text/uri-list');
+    if (uriList) {
+      const uris = uriList.split(/\r?\n/).filter((u) => u.trim() && !u.startsWith('#'));
+      const songbookUri = uris.find((u) => /\.(jsonld|json)$/i.test(u.split('?')[0] ?? ''));
+      if (songbookUri) {
+        vscode.postMessage({ type: 'openSongbook', uri: songbookUri.trim() });
+        return;
+      }
+    }
+
+    // Files dragged from the OS file manager (FileReader fallback)
+    const files = Array.from(e.dataTransfer.files);
+    const songbookFile = files.find((f) => /\.(jsonld|json)$/i.test(f.name));
+    if (songbookFile) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          vscode.postMessage({ type: 'openSongbook', content: JSON.parse(reader.result as string) });
+        } catch { /* ignore invalid JSON */ }
+      };
+      reader.readAsText(songbookFile);
+      return;
+    }
+
+    // Default: add a new actor at the drop position
     const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
     store.addActor(pos);
   }, [screenToFlowPosition, store]);
@@ -282,6 +310,9 @@ export function App() {
         case 'actorOutput':
           store.appendOutput(msg.name, msg.output);
           break;
+        case 'apiLog':
+          store.appendLog(msg.entry);
+          break;
         case 'error':
           console.error('[Cantica Studio]', msg.message);
           break;
@@ -307,10 +338,11 @@ export function App() {
     <div className="cs-root">
       <GraphToolbar />
       <div className="cs-workspace">
-        <main className="cs-canvas-root">
+        <main className="cs-canvas-root" style={{ position: 'relative' }}>
           <ReactFlowProvider>
             <Canvas />
           </ReactFlowProvider>
+          {store.logVisible && <LogPanel />}
         </main>
       </div>
 

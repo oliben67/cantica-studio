@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings } from './types';
+import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings, LogEntry } from './types';
 
 let _idSeq = 0;
 const nextId = (prefix: string) => `${prefix}-${Date.now()}-${++_idSeq}`;
@@ -125,6 +125,12 @@ interface GraphState {
 
   minimapVisible: boolean;
   toggleMinimap: () => void;
+
+  logEntries: LogEntry[];
+  logVisible: boolean;
+  appendLog: (entry: LogEntry) => void;
+  clearLog: () => void;
+  toggleLog: () => void;
 }
 
 export const useStore = create<GraphState>((set) => ({
@@ -312,4 +318,11 @@ export const useStore = create<GraphState>((set) => ({
 
   minimapVisible: true,
   toggleMinimap: () => set(s => ({ minimapVisible: !s.minimapVisible })),
+
+  logEntries: [],
+  logVisible: false,
+  appendLog: (entry) =>
+    set((s) => ({ logEntries: s.logEntries.length >= 500 ? [...s.logEntries.slice(-499), entry] : [...s.logEntries, entry] })),
+  clearLog: () => set({ logEntries: [] }),
+  toggleLog: () => set(s => ({ logVisible: !s.logVisible })),
 }));

@@ -1,4 +1,4 @@
-import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, CanticaServer, PromptEventDef, PromptRef } from './types/index.js';
+import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, CanticaServer, LogEntry, PromptEventDef, PromptRef } from './types/index.js';
 
 function headers(token?: string): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
@@ -8,6 +8,7 @@ function headers(token?: string): Record<string, string> {
 
 export class StudioClient {
   private readonly baseUrl: string;
+  onLog?: (entry: LogEntry) => void;
 
   constructor(baseUrl = 'http://localhost:8043') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -15,6 +16,14 @@ export class StudioClient {
 
   private url(path: string): string {
     return `${this.baseUrl}${path}`;
+  }
+
+  private async _fetch(path: string, init?: RequestInit): Promise<Response> {
+    const method = (init?.method ?? 'GET').toUpperCase();
+    const t0 = Date.now();
+    const r = await fetch(this.url(path), init);
+    this.onLog?.({ ts: t0, method, url: path, status: r.status, durationMs: Date.now() - t0 });
+    return r;
   }
 
   async ping(): Promise<boolean> {
@@ -30,7 +39,7 @@ export class StudioClient {
 
   async loadGraph(): Promise<ActorGraph | null> {
     try {
-      const r = await fetch(this.url('/v1/graph'));
+      const r = await this._fetch('/v1/graph');
       if (!r.ok) return null;
       const raw = (await r.json()) as Record<string, unknown>;
       return parseGraph(raw);
@@ -40,7 +49,7 @@ export class StudioClient {
   }
 
   async saveGraph(graph: ActorGraph): Promise<void> {
-    const r = await fetch(this.url('/v1/graph'), {
+    const r = await this._fetch('/v1/graph', {
       method: 'PUT',
       headers: headers(),
       body: JSON.stringify({ data: serializeGraph(graph) }),
@@ -53,7 +62,7 @@ export class StudioClient {
   async fetchProviderModels(refresh = false): Promise<Record<string, string[]>> {
     try {
       const path = refresh ? '/v1/providers/models?refresh=true' : '/v1/providers/models';
-      const r = await fetch(this.url(path), { signal: AbortSignal.timeout(30_000) });
+      const r = await this._fetch(path, { signal: AbortSignal.timeout(30_000) });
       if (!r.ok) return {};
       return r.json() as Promise<Record<string, string[]>>;
     } catch {
@@ -64,7 +73,7 @@ export class StudioClient {
   async fetchPrompts(_servers: CanticaServer[]): Promise<CanticaPrompt[]> {
     // Ask the studio API which aggregates from all configured Cantica servers
     try {
-      const r = await fetch(this.url('/v1/prompts'), { signal: AbortSignal.timeout(8000) });
+      const r = await this._fetch('/v1/prompts', { signal: AbortSignal.timeout(8000) });
       if (!r.ok) return [];
       return r.json() as Promise<CanticaPrompt[]>;
     } catch {
@@ -75,12 +84,12 @@ export class StudioClient {
   // ── Runtime ──────────────────────────────────────────────────────────────────
 
   async listRunning(): Promise<string[]> {
-    const r = await fetch(this.url('/v1/runtime/actors'));
+    const r = await this._fetch('/v1/runtime/actors');
     if (!r.ok) return [];
     return r.json() as Promise<string[]>;
   }
 
-  async startActor(def: AIActorDef): Promise<void> {
+  async startActor(def: AIActorDef): Promise<string | null> {
     const isCode = def.actorType === 'python' || def.actorType === 'typescript';
     const body = isCode
       ? {
@@ -113,7 +122,7 @@ export class StudioClient {
           outbox: {},
           ...(def.directory ? { directory: def.directory } : {}),
         };
-    const r = await fetch(this.url('/v1/runtime/actors'), {
+    const r = await this._fetch('/v1/runtime/actors', {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify(body),
@@ -123,28 +132,30 @@ export class StudioClient {
       try { detail = await r.text(); } catch { /* ignore */ }
       throw new Error(`Failed to start actor [${r.status}]${detail ? `: ${detail}` : ''}`);
     }
+    const data = (await r.json()) as { initial_output?: string };
+    return data.initial_output ?? null;
   }
 
   async stopActor(name: string): Promise<void> {
-    await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}`), { method: 'DELETE' });
+    await this._fetch(`/v1/runtime/actors/${encodeURIComponent(name)}`, { method: 'DELETE' });
   }
 
   async pauseActor(name: string): Promise<void> {
-    const r = await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}/pause`), {
+    const r = await this._fetch(`/v1/runtime/actors/${encodeURIComponent(name)}/pause`, {
       method: 'POST', headers: headers(),
     });
     if (!r.ok) throw new Error(`Pause failed [${r.status}]`);
   }
 
   async resumeActor(name: string): Promise<void> {
-    const r = await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}/resume`), {
+    const r = await this._fetch(`/v1/runtime/actors/${encodeURIComponent(name)}/resume`, {
       method: 'POST', headers: headers(),
     });
     if (!r.ok) throw new Error(`Resume failed [${r.status}]`);
   }
 
   async instructActor(name: string, instruction: string): Promise<string> {
-    const r = await fetch(this.url(`/v1/runtime/actors/${encodeURIComponent(name)}/instruct`), {
+    const r = await this._fetch(`/v1/runtime/actors/${encodeURIComponent(name)}/instruct`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ instruction }),
@@ -158,14 +169,24 @@ export class StudioClient {
     return data.output;
   }
 
-  async fireEvent(name: string, eventName: string, context = ''): Promise<string> {
-    const r = await fetch(
-      this.url(`/v1/runtime/actors/${encodeURIComponent(name)}/event/${encodeURIComponent(eventName)}`),
+  async drainNotifications(): Promise<Array<{ name: string; prompt: string; output: string }>> {
+    try {
+      const r = await this._fetch('/v1/runtime/notifications', { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) return [];
+      return r.json() as Promise<Array<{ name: string; prompt: string; output: string }>>;
+    } catch {
+      return [];
+    }
+  }
+
+  async fireEvent(name: string, eventName: string, context = ''): Promise<{ output: string; forwarded: Array<{ name: string; prompt: string; output: string }> }> {
+    const r = await this._fetch(
+      `/v1/runtime/actors/${encodeURIComponent(name)}/event/${encodeURIComponent(eventName)}`,
       { method: 'POST', headers: headers(), body: JSON.stringify({ context }) },
     );
     if (!r.ok) throw new Error(`Fire event failed: ${r.status}`);
-    const data = (await r.json()) as { output: string };
-    return data.output;
+    const data = (await r.json()) as { output: string; forwarded?: Array<{ name: string; prompt: string; output: string }> };
+    return { output: data.output, forwarded: data.forwarded ?? [] };
   }
 }
 

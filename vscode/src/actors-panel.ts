@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { ActorGraph, ExtensionSettings, ToWebview } from './types/index.js';
-import { serializeGraph, type StudioClient } from './studio-client.js';
+import { serializeGraph, parseGraph, type StudioClient } from './studio-client.js';
 
 export class ActorsPanel {
   static readonly viewType = 'canticaScores.panel';
@@ -11,6 +11,7 @@ export class ActorsPanel {
   static async refreshProviderModels(client: StudioClient): Promise<void> {
     if (ActorsPanel._current) {
       ActorsPanel._current.client = client;
+      ActorsPanel._current._attachLogCallback();
       await ActorsPanel._current.pushProviderModels(true);
     }
   }
@@ -57,6 +58,7 @@ export class ActorsPanel {
     this.panel = panel;
     this.client = client;
     this.settings = settings;
+    this._attachLogCallback();
     this.panel.webview.html = this.buildHtml(context);
     this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'icons', 'activitybar.svg');
 
@@ -109,6 +111,30 @@ export class ActorsPanel {
         // The webview handles node creation internally; extension just acknowledges
         break;
 
+      case 'openSongbook': {
+        const uri = raw['uri'] as string | undefined;
+        const content = raw['content'] as Record<string, unknown> | undefined;
+        try {
+          let graph: ActorGraph;
+          let songbookUri: vscode.Uri | undefined;
+          if (uri) {
+            songbookUri = vscode.Uri.parse(uri);
+            const bytes = await vscode.workspace.fs.readFile(songbookUri);
+            graph = parseGraph(JSON.parse(Buffer.from(bytes).toString('utf-8')) as Record<string, unknown>);
+          } else if (content) {
+            graph = parseGraph(content);
+          } else {
+            break;
+          }
+          try { await this.client.saveGraph(graph); } catch { /* API may not be running */ }
+          if (songbookUri) this.setActiveSongbook(songbookUri);
+          await this.post({ type: 'loadGraph', graph });
+        } catch (err) {
+          void vscode.window.showErrorMessage(`Could not open songbook: ${String(err)}`);
+        }
+        break;
+      }
+
       case 'runActor': {
         const name = raw['name'] as string;
         const instruction = raw['instruction'] as string;
@@ -122,7 +148,7 @@ export class ActorsPanel {
         } catch (err) {
           await this.post({
             type: 'actorOutput', name,
-            output: `⚠ Studio API not reachable at :${this['client']['port'] ?? 8043} — ${String(err)}`,
+            output: `⚠ Studio API not reachable — ${String(err)}`,
           });
           break;
         }
@@ -143,7 +169,10 @@ export class ActorsPanel {
             : def.actorType;
           await this.post({ type: 'actorOutput', name, output: `⏳ Initialising ${tag}…` });
           try {
-            await this.client.startActor(def);
+            const initialOutput = await this.client.startActor(def);
+            if (initialOutput) {
+              await this.post({ type: 'actorOutput', name, output: initialOutput });
+            }
             await this.post({ type: 'actorOutput', name, output: `✓ Ready · ${tag}` });
             await this.post({ type: 'actorStatus', name, running: true });
           } catch (err) {
@@ -161,6 +190,9 @@ export class ActorsPanel {
         try {
           const output = await this.client.instructActor(name, instruction);
           await this.post({ type: 'actorOutput', name, output });
+          // Push any actor-to-actor forwarded prompts that occurred during this
+          // call (e.g. the LLM using the fire_event tool to route output to B).
+          await this.pushNotifications();
         } catch (err) {
           await this.post({ type: 'actorOutput', name, output: `⚠ Prompt failed: ${String(err)}` });
         }
@@ -172,10 +204,51 @@ export class ActorsPanel {
         const eventName = raw['eventName'] as string;
         const context = (raw['context'] as string | undefined) ?? '';
         try {
-          const output = await this.client.fireEvent(name, eventName, context);
-          await this.post({ type: 'actorOutput', name, output });
+          const result = await this.client.fireEvent(name, eventName, context);
+          await this.post({ type: 'actorOutput', name, output: result.output });
+          await this.pushForwarded(result.forwarded);
+          await this.pushNotifications();
         } catch (err) {
           await this.post({ type: 'error', message: String(err) });
+        }
+        break;
+      }
+
+      case 'refreshActor': {
+        const name = raw['name'] as string;
+        const answer = await vscode.window.showWarningMessage(
+          `Refresh actor "${name}"? It will be stopped and restarted. Conversation history is preserved.`,
+          { modal: true },
+          'Refresh',
+        );
+        if (answer !== 'Refresh') break;
+
+        try {
+          await this.client.stopActor(name);
+          await this.post({ type: 'actorStatus', name, running: false });
+          await this.post({ type: 'actorPaused', name, paused: false });
+        } catch (err) {
+          await this.post({ type: 'error', message: `Stop failed: ${String(err)}` });
+          break;
+        }
+
+        const graph = await this.client.loadGraph();
+        const def = graph?.actors.find(a => a.name === name);
+        if (!def) {
+          await this.post({ type: 'actorOutput', name, output: '⚠ Actor not found in graph — could not restart' });
+          break;
+        }
+
+        await this.post({ type: 'actorOutput', name, output: `♻ Refreshing ${name}…` });
+        try {
+          const initialOutput = await this.client.startActor(def);
+          if (initialOutput) {
+            await this.post({ type: 'actorOutput', name, output: initialOutput });
+          }
+          await this.post({ type: 'actorOutput', name, output: '✓ Ready' });
+          await this.post({ type: 'actorStatus', name, running: true });
+        } catch (err) {
+          await this.post({ type: 'error', message: `Restart failed: ${String(err)}` });
         }
         break;
       }
@@ -244,14 +317,28 @@ export class ActorsPanel {
 
       case 'playSongbook': {
         const graph = await this.client.loadGraph();
-        if (graph) {
-          for (const actor of graph.actors) {
-            try {
-              await this.client.startActor(actor);
-              await this.post({ type: 'actorStatus', name: actor.name, running: true });
-            } catch {
-              // actor may already be running
+        if (!graph) break;
+        let runningNames: string[] = [];
+        try { runningNames = await this.client.listRunning(); } catch { /* ignore */ }
+        for (const actor of graph.actors) {
+          if (runningNames.includes(actor.name)) {
+            await this.post({ type: 'actorOutput', name: actor.name, output: `· ${actor.name} already running` });
+            await this.post({ type: 'actorStatus', name: actor.name, running: true });
+            continue;
+          }
+          const tag = actor.actorType === 'ai'
+            ? `${actor.provider} / ${actor.model}`
+            : actor.actorType;
+          await this.post({ type: 'actorOutput', name: actor.name, output: `⏳ Initialising ${tag}…` });
+          try {
+            const initialOutput = await this.client.startActor(actor);
+            if (initialOutput) {
+              await this.post({ type: 'actorOutput', name: actor.name, output: initialOutput });
             }
+            await this.post({ type: 'actorOutput', name: actor.name, output: `✓ Ready · ${tag}` });
+            await this.post({ type: 'actorStatus', name: actor.name, running: true });
+          } catch (err) {
+            await this.post({ type: 'actorOutput', name: actor.name, output: `⚠ Start failed: ${String(err)}` });
           }
         }
         break;
@@ -312,12 +399,25 @@ export class ActorsPanel {
     const dir = vscode.Uri.file(`${home}/songbooks`);
     try {
       const entries = await vscode.workspace.fs.readDirectory(dir);
-      const files = entries.filter(([n, t]) => t === vscode.FileType.File && n.endsWith('.jsonld'));
-      if (files.length === 1 && files[0]) {
-        return vscode.Uri.joinPath(dir, files[0][0]);
+      const candidates: vscode.Uri[] = [];
+      for (const [name, type] of entries) {
+        if (type === vscode.FileType.File && name.endsWith('.jsonld')) {
+          candidates.push(vscode.Uri.joinPath(dir, name));
+        } else if (type === vscode.FileType.Directory) {
+          try {
+            const subEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.joinPath(dir, name));
+            for (const [subName, subType] of subEntries) {
+              if (subType === vscode.FileType.File && subName.endsWith('.jsonld')) {
+                candidates.push(vscode.Uri.joinPath(dir, name, subName));
+              }
+            }
+          } catch { /* skip unreadable sub-dirs */ }
+        }
       }
-      for (const [name] of files) {
-        const uri = vscode.Uri.joinPath(dir, name);
+      if (candidates.length === 1 && candidates[0]) {
+        return candidates[0];
+      }
+      for (const uri of candidates) {
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
           const raw = JSON.parse(Buffer.from(bytes).toString('utf-8')) as Record<string, unknown>;
@@ -328,9 +428,14 @@ export class ActorsPanel {
     return undefined;
   }
 
+  private _attachLogCallback(): void {
+    this.client.onLog = (entry) => { void this.post({ type: 'apiLog', entry }); };
+  }
+
   updateSettings(settings: ExtensionSettings, client: StudioClient): void {
     this.settings = settings;
     this.client = client;
+    this._attachLogCallback();
     void this.pushSettings();
     void this.pushPrompts();
   }
@@ -356,8 +461,10 @@ export class ActorsPanel {
             evt.filePattern &&
             vscode.languages.match({ pattern: evt.filePattern }, { uri, languageId: '' } as unknown as vscode.TextDocument) !== 0
           ) {
-            void this.client.fireEvent(actor.name, evt.name, uri.fsPath).then((output) => {
-              void this.post({ type: 'actorOutput', name: actor.name, output });
+            void this.client.fireEvent(actor.name, evt.name, uri.fsPath).then(async (result) => {
+              await this.post({ type: 'actorOutput', name: actor.name, output: result.output });
+              await this.pushForwarded(result.forwarded);
+              await this.pushNotifications();
             });
           }
         }
@@ -370,6 +477,21 @@ export class ActorsPanel {
 
   private async post(msg: ToWebview): Promise<void> {
     await this.panel.webview.postMessage(msg);
+  }
+
+  /** Push forwarded prompt+response pairs to the receiver's chat panel. */
+  private async pushForwarded(forwarded: Array<{ name: string; prompt: string; output: string }>): Promise<void> {
+    for (const fwd of forwarded) {
+      const promptLine = fwd.prompt.replace(/[\r\n]+/g, ' ').trim();
+      await this.post({ type: 'actorOutput', name: fwd.name, output: `> ${promptLine}` });
+      await this.post({ type: 'actorOutput', name: fwd.name, output: fwd.output });
+    }
+  }
+
+  /** Drain the runtime's actor-to-actor notification log and push to the webview. */
+  private async pushNotifications(): Promise<void> {
+    const notes = await this.client.drainNotifications();
+    await this.pushForwarded(notes);
   }
 
   private buildHtml(context: vscode.ExtensionContext): string {

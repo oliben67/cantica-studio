@@ -98,6 +98,16 @@ export interface ExtensionSettings {
   providerModels: Record<string, string[] | null>;
 }
 
+// ── API call log ──────────────────────────────────────────────────────────────
+
+export interface LogEntry {
+  ts: number;
+  method: string;
+  url: string;
+  status: number;
+  durationMs: number;
+}
+
 /** Messages arriving FROM the extension host into the webview. */
 export type IncomingMessage =
   | { type: 'loadGraph'; graph: ActorGraph }
@@ -107,6 +117,7 @@ export type IncomingMessage =
   | { type: 'actorStatus'; name: string; running: boolean }
   | { type: 'actorPaused'; name: string; paused: boolean }
   | { type: 'actorOutput'; name: string; output: string }
+  | { type: 'apiLog'; entry: LogEntry }
   | { type: 'error'; message: string }
   | { type: 'deleteSelected' }
   | { type: 'resetGraph' }
@@ -120,6 +131,7 @@ export type OutgoingMessage =
   | { type: 'runActor'; name: string; instruction: string }
   | { type: 'fireEvent'; name: string; eventName: string; context: string }
   | { type: 'stopActor'; name: string }
+  | { type: 'refreshActor'; name: string }
   | { type: 'pauseActor'; name: string }
   | { type: 'resumeActor'; name: string }
   | { type: 'refreshPrompts' }
@@ -128,7 +140,8 @@ export type OutgoingMessage =
   | { type: 'startLocalStudio' }
   | { type: 'stopLocalStudio' }
   | { type: 'playSongbook' }
-  | { type: 'stopSongbook' };
+  | { type: 'stopSongbook' }
+  | { type: 'openSongbook'; uri?: string; content?: unknown };
 
 export interface VscodeApi {
   postMessage: (message: OutgoingMessage) => void;

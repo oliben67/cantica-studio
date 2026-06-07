@@ -92,6 +92,29 @@ def test_fire_event_wrong_name_raises():
         actor.fire_event("on-save")
 
 
+def test_fire_event_forwards_to_target_actors():
+    """fire_event must call _instruct_actor for each target_actor after running the prompt."""
+    forwarded: list[tuple[str, str]] = []
+    events = [PromptEventDef(name="ask-time", prompt="What time is it?", target_actors=["receiver"])]
+    ActorCls = _make_actor(events=events)
+    actor = ActorCls.__new__(ActorCls)
+    actor._instruct_actor = lambda name, text: forwarded.append((name, text)) or "[forwarded]"
+    actor.fire_event("ask-time")
+    assert len(forwarded) == 1
+    assert forwarded[0][0] == "receiver"
+    assert "What time is it?" in forwarded[0][1]
+
+
+def test_fire_event_no_target_actors_skips_forward():
+    events = [PromptEventDef(name="ping", prompt="pong", target_actors=[])]
+    ActorCls = _make_actor(events=events)
+    actor = ActorCls.__new__(ActorCls)
+    calls: list = []
+    actor._instruct_actor = lambda *a: calls.append(a)
+    actor.fire_event("ping")
+    assert calls == []
+
+
 def test_send_to_known_target():
     ActorCls = _make_actor(actor_outbox={"reviewer": "Please review: {output}"})
     actor = ActorCls.__new__(ActorCls)
@@ -127,3 +150,28 @@ def test_actor_class_isolation():
     assert A.prompt_events is not B.prompt_events
     assert A.prompt_events[0].name == "e1"
     assert B.prompt_events[0].name == "e2"
+
+
+# ── restore_session ───────────────────────────────────────────────────────────
+
+
+def test_restore_session_replaces_history():
+    ActorCls = _make_actor()
+    actor = ActorCls.__new__(ActorCls)
+    actor._session = []  # type: ignore[attr-defined]
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there"},
+    ]
+    actor.restore_session(messages)
+    assert actor._session == messages  # type: ignore[attr-defined]
+
+
+def test_restore_session_does_not_share_reference():
+    ActorCls = _make_actor()
+    actor = ActorCls.__new__(ActorCls)
+    actor._session = []  # type: ignore[attr-defined]
+    messages = [{"role": "user", "content": "Hi"}]
+    actor.restore_session(messages)
+    messages.clear()
+    assert len(actor._session) == 1  # type: ignore[attr-defined]

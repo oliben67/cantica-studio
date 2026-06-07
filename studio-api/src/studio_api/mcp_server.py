@@ -139,7 +139,7 @@ def fire_event(actor_name: str, event_name: str, context: str = "") -> str:
     event_name: name of the event to fire
     context:    optional extra context appended to the event's prompt
     """
-    return _get_rt().fire_event(actor_name, event_name, context)
+    return _get_rt().fire_event(actor_name, event_name, context)["output"]
 
 
 # ── Agent resource tools ──────────────────────────────────────────────────────

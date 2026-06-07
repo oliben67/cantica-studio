@@ -31,7 +31,7 @@ def test_list_actors_running(client: TestClient, mock_runtime: ActorRuntime):
 
 
 def test_start_actor_success(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.start = MagicMock()
+    mock_runtime.start = MagicMock(return_value=None)
     body = {
         "name": "bot",
         "define_prompt": "You are a bot.",
@@ -42,7 +42,15 @@ def test_start_actor_success(client: TestClient, mock_runtime: ActorRuntime):
     assert r.status_code == 201
     assert r.json()["name"] == "bot"
     assert r.json()["status"] == "running"
+    assert "initial_output" not in r.json()
     mock_runtime.start.assert_called_once()
+
+
+def test_start_actor_returns_initial_output(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.start = MagicMock(return_value="I am ready to help.")
+    r = client.post("/v1/runtime/actors", json={"name": "bot", "define_prompt": "You are a bot."})
+    assert r.status_code == 201
+    assert r.json()["initial_output"] == "I am ready to help."
 
 
 def test_start_actor_duplicate_returns_409(client: TestClient, mock_runtime: ActorRuntime):
@@ -58,7 +66,7 @@ def test_start_actor_internal_error_returns_500(client: TestClient, mock_runtime
 
 
 def test_start_actor_with_events_and_crons(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.start = MagicMock()
+    mock_runtime.start = MagicMock(return_value=None)
     body = {
         "name": "complex-bot",
         "define_prompt": "p",
@@ -77,7 +85,7 @@ def test_start_actor_with_events_and_crons(client: TestClient, mock_runtime: Act
 
 def test_start_actor_with_directory(client: TestClient, mock_runtime: ActorRuntime):
     """directory field is forwarded to ActorDef and included in response."""
-    mock_runtime.start = MagicMock()
+    mock_runtime.start = MagicMock(return_value=None)
     r = client.post("/v1/runtime/actors", json={
         "name": "scoped-bot",
         "define_prompt": "p",
@@ -90,7 +98,7 @@ def test_start_actor_with_directory(client: TestClient, mock_runtime: ActorRunti
 
 def test_start_actor_without_directory_defaults_to_empty(client: TestClient, mock_runtime: ActorRuntime):
     """Omitting directory in the request leaves ActorDef.directory as ''."""
-    mock_runtime.start = MagicMock()
+    mock_runtime.start = MagicMock(return_value=None)
     r = client.post("/v1/runtime/actors", json={"name": "plain-bot", "define_prompt": "p"})
     assert r.status_code == 201
     defn = mock_runtime.start.call_args[0][0]
@@ -141,7 +149,7 @@ def test_instruct_actor_internal_error_returns_500(client: TestClient, mock_runt
 
 
 def test_fire_event_success(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.fire_event = MagicMock(return_value="Event output")
+    mock_runtime.fire_event = MagicMock(return_value={"output": "Event output", "forwarded": []})
     r = client.post("/v1/runtime/actors/bot/event/on-review", json={"context": "main.py"})
     assert r.status_code == 200
     assert r.json()["output"] == "Event output"
@@ -151,7 +159,7 @@ def test_fire_event_success(client: TestClient, mock_runtime: ActorRuntime):
 
 
 def test_fire_event_no_context(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.fire_event = MagicMock(return_value="ok")
+    mock_runtime.fire_event = MagicMock(return_value={"output": "ok", "forwarded": []})
     r = client.post("/v1/runtime/actors/bot/event/ping", json={})
     assert r.status_code == 200
     mock_runtime.fire_event.assert_called_once_with("bot", "ping", "")
@@ -269,7 +277,7 @@ def test_get_actor_type_not_found_returns_404(client: TestClient, mock_runtime: 
 
 
 def test_start_actor_includes_actor_type_in_response(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.start = MagicMock()
+    mock_runtime.start = MagicMock(return_value=None)
     r = client.post("/v1/runtime/actors", json={
         "name": "worker", "actor_type": "python", "script_path": "/tmp/w.py",
     })
@@ -278,7 +286,7 @@ def test_start_actor_includes_actor_type_in_response(client: TestClient, mock_ru
 
 
 def test_start_actor_passes_script_fields(client: TestClient, mock_runtime: ActorRuntime):
-    mock_runtime.start = MagicMock()
+    mock_runtime.start = MagicMock(return_value=None)
     r = client.post("/v1/runtime/actors", json={
         "name": "ts-worker", "actor_type": "typescript",
         "script_path": "/app/worker.js", "script_command": "bun",
@@ -288,3 +296,22 @@ def test_start_actor_passes_script_fields(client: TestClient, mock_runtime: Acto
     assert call_args.actor_type == "typescript"
     assert call_args.script_path == "/app/worker.js"
     assert call_args.script_command == "bun"
+
+
+# ── GET /v1/runtime/notifications ────────────────────────────────────────────
+
+
+def test_drain_notifications_empty(client: TestClient, mock_runtime: ActorRuntime):
+    mock_runtime.drain_notifications = MagicMock(return_value=[])
+    r = client.get("/v1/runtime/notifications")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_drain_notifications_returns_log(client: TestClient, mock_runtime: ActorRuntime):
+    notes = [{"name": "bot-b", "prompt": "hello", "output": "world"}]
+    mock_runtime.drain_notifications = MagicMock(return_value=notes)
+    r = client.get("/v1/runtime/notifications")
+    assert r.status_code == 200
+    assert r.json() == notes
+    mock_runtime.drain_notifications.assert_called_once()

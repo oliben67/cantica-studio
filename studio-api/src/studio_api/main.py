@@ -30,7 +30,8 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     log.info("Studio API starting — workspace=%s", settings.workspace)
 
     connector = CanticaConnector(settings.cantica_servers)
-    rt = ActorRuntime()
+    sessions_dir = settings.workspace / ".cantica-studio" / "sessions"
+    rt = ActorRuntime(sessions_dir=sessions_dir)
     fs = WorkspaceFS(settings.workspace)
 
     prompts_ep.init(connector)

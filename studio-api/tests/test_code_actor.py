@@ -103,7 +103,8 @@ def check(ctx):
     rt = ActorRuntime()
     rt.start(defn, MagicMock())
     result = rt.fire_event("worker", "check", "data")
-    assert result == "checked: data"
+    assert result["output"] == "checked: data"
+    assert result["forwarded"] == []
     rt.stop_all()
 
 

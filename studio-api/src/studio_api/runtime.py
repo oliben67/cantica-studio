@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import threading
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,7 +81,7 @@ def _resolve(prompt: str, connector: CanticaConnector) -> str:
 class ActorRuntime:
     """Manages running actor instances (AI and code), cron schedules, and agent resources."""
 
-    def __init__(self) -> None:
+    def __init__(self, sessions_dir: Path | None = None) -> None:
         self._refs: dict[str, Any] = {}
         self._defs: dict[str, ActorDef] = {}                         # name → ActorDef
         self._resources: dict[str, list[AgentResource]] = {}         # name → resources
@@ -88,21 +90,27 @@ class ActorRuntime:
         self._code_crons: dict[str, list[dict]] = {}                 # name → discovered crons
         self._paused: set[str] = set()                               # names of paused actors
         self._queued: dict[str, list[str]] = {}                      # name → queued instructions
+        self._sessions_dir = sessions_dir
         self._scheduler = BackgroundScheduler()
         self._scheduler.start()
+        # Thread-safe log of actor-to-actor forwarded calls (populated by _instruct_actor
+        # wrappers, drained by the extension after each API call).
+        self._forwarded_log: list[dict] = []
+        self._forwarded_log_lock = threading.Lock()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    def start(self, defn: ActorDef, connector: CanticaConnector) -> None:
+    def start(self, defn: ActorDef, connector: CanticaConnector) -> str | None:
+        """Start an actor. Returns the warm-up output when a fresh AI actor is initialised."""
         if defn.name in self._refs:
             raise ValueError(f"Actor {defn.name!r} is already running")
 
         if defn.actor_type in ("python", "typescript"):
             self._start_code_actor(defn)
-        else:
-            self._start_ai_actor(defn, connector)
+            return None
+        return self._start_ai_actor(defn, connector)
 
-    def _start_ai_actor(self, defn: ActorDef, connector: CanticaConnector) -> None:
+    def _start_ai_actor(self, defn: ActorDef, connector: CanticaConnector) -> str | None:
         system_prompt = _resolve(defn.define_prompt, connector)
 
         resolved_events = [
@@ -141,6 +149,11 @@ class ActorRuntime:
                 "prompt_events": resolved_events,
                 "cron_jobs": resolved_crons,
                 "outbox": dict(defn.outbox),
+                # Wraps instruct() so that actor-to-actor forwards triggered by the
+                # LLM's fire_event tool are recorded in _forwarded_log.  The extension
+                # drains this log after each API call and pushes actorOutput messages
+                # to the webview so the receiver's chat panel shows the incoming prompt.
+                "_instruct_actor": self._make_instruct_actor(),
             },
         )
 
@@ -150,7 +163,22 @@ class ActorRuntime:
         self._resources[defn.name] = self._build_resources(defn)
         self._ai_events[defn.name] = resolved_events
         self._register_crons(defn.name, resolved_crons)
+
+        proxy = ref.proxy()
+        initial_output: str | None = None
+        saved_session = self._load_session(defn.name)
+        if saved_session:
+            proxy.restore_session(saved_session).get(timeout=5)
+            _log.info("Restored %d message(s) for actor %r", len(saved_session), defn.name)
+        elif system_prompt:
+            try:
+                initial_output = proxy.instruct(system_prompt).get(timeout=120)
+                _log.info("Warmed up actor %r with role prompt", defn.name)
+            except Exception as exc:
+                _log.warning("Warm-up call for actor %r failed: %s", defn.name, exc)
+
         _log.info("Started AI actor %r", defn.name)
+        return initial_output
 
     def _start_code_actor(self, defn: ActorDef) -> None:
         if defn.actor_type == "python":
@@ -227,6 +255,12 @@ class ActorRuntime:
         except Exception:
             pass
         try:
+            session = ref.proxy().get_session().get(timeout=5)
+            if session:
+                self._save_session(name, session)
+        except Exception as exc:
+            _log.warning("Could not save session for actor %r: %s", name, exc)
+        try:
             ref.stop()
         except Exception:
             pass
@@ -253,9 +287,10 @@ class ActorRuntime:
         proxy = self._get_proxy(name)
         return proxy.instruct(text).get(timeout=120)
 
-    def fire_event(self, name: str, event_name: str, context: str = "") -> str:
+    def fire_event(self, name: str, event_name: str, context: str = "") -> dict:
         """Fire a named event on an actor, routing output to all configured target actors.
 
+        Returns {"output": str, "forwarded": [{"name": str, "prompt": str, "output": str}]}.
         For AI actors: runs the event's resolved prompt via instruct() on self, then
         forwards the output to every target actor listed in target_actors.  If no
         target actors are configured the output is returned to the caller (self-loop).
@@ -265,11 +300,14 @@ class ActorRuntime:
             if evt.name == event_name:
                 instruction = f"{evt.prompt}\n\n{context}" if context else evt.prompt
                 output = self._get_proxy(name).instruct(instruction).get(timeout=120)
+                forwarded = []
                 for target in evt.target_actors:
                     if target and target in self._refs:
-                        self.instruct(target, output)
-                return output
-        return self._get_proxy(name).fire_event(event_name, context).get(timeout=120)
+                        target_output = self.instruct(target, output)
+                        forwarded.append({"name": target, "prompt": output, "output": target_output})
+                return {"output": output, "forwarded": forwarded}
+        output = self._get_proxy(name).fire_event(event_name, context).get(timeout=120)
+        return {"output": output, "forwarded": []}
 
     def list_running(self) -> list[str]:
         return list(self._refs)
@@ -360,6 +398,30 @@ class ActorRuntime:
                 return r.to_dict()
         raise KeyError(f"Resource {resource_id!r} not found on actor {actor_name!r}")
 
+    # ── Notification log ──────────────────────────────────────────────────────
+
+    def drain_notifications(self) -> list[dict]:
+        """Return and clear all accumulated forwarded-prompt notifications.
+
+        Each entry has the shape ``{"name": str, "prompt": str, "output": str}``
+        matching the ``forwarded`` items returned by :meth:`fire_event`.
+        """
+        with self._forwarded_log_lock:
+            items = list(self._forwarded_log)
+            self._forwarded_log.clear()
+        return items
+
+    def _make_instruct_actor(self):
+        """Return an _instruct_actor callback that records each call in the log."""
+        def _instruct_actor(actor_name: str, instruction: str) -> str:
+            result = self.instruct(actor_name, instruction)
+            with self._forwarded_log_lock:
+                self._forwarded_log.append(
+                    {"name": actor_name, "prompt": instruction, "output": result}
+                )
+            return result
+        return _instruct_actor
+
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _build_resources(self, defn: ActorDef) -> list[AgentResource]:
@@ -383,6 +445,30 @@ class ActorRuntime:
         if ref is None:
             raise KeyError(f"Actor {name!r} is not running")
         return ref.proxy()
+
+    def _save_session(self, name: str, session: list[dict]) -> None:
+        if self._sessions_dir is None:
+            return
+        try:
+            self._sessions_dir.mkdir(parents=True, exist_ok=True)
+            path = self._sessions_dir / f"{name}.json"
+            path.write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8")
+            _log.debug("Saved %d message(s) for actor %r", len(session), name)
+        except Exception as exc:
+            _log.warning("Failed to save session for actor %r: %s", name, exc)
+
+    def _load_session(self, name: str) -> list[dict]:
+        if self._sessions_dir is None:
+            return []
+        path = self._sessions_dir / f"{name}.json"
+        if not path.exists():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except Exception as exc:
+            _log.warning("Failed to load session for actor %r: %s", name, exc)
+            return []
 
     def _register_crons(self, name: str, crons: list[CronJobDef]) -> None:
         for i, cron in enumerate(crons):

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from actor_ai import AIActor
+from actor_ai import AIActor, tool
 
 _log = logging.getLogger(__name__)
 
@@ -75,15 +77,38 @@ class StudioActor(AIActor):
     cron_jobs: list[CronJobDef] = field(default_factory=list)
     outbox: dict[str, str] = field(default_factory=dict)
 
+    # Injected by ActorRuntime._start_ai_actor so fire_event can forward to target actors
+    # without going through self's pykka proxy (which would deadlock).
+    # Signature: (actor_name: str, instruction: str) -> str
+    _instruct_actor: Callable[[str, str], str] | None = None
+
+    @tool
     def fire_event(self, event_name: str, context: str = "") -> str:
-        """Run the prompt associated with a named event and return the LLM reply."""
+        """Fire a named prompt event on this actor.
+
+        event_name: the name of the event to fire (must be configured on this actor)
+        context: optional extra context appended to the event's prompt
+        """
         evt = next((e for e in self.prompt_events if e.name == event_name), None)
         if evt is None:
             raise ValueError(f"Unknown event {event_name!r} on actor {self.actor_name!r}")
         instruction = evt.prompt
         if context:
             instruction = f"{instruction}\n\n{context}"
-        return self.instruct(instruction)
+        # Run in a new thread: this @tool is invoked from inside the provider's asyncio
+        # event loop (Copilot SDK path). Calling asyncio.run() again on the same thread
+        # raises "RuntimeError: cannot be called when another event loop is running".
+        # use_session=False keeps session ordering clean.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            output = pool.submit(self.instruct, instruction, use_session=False).result()
+        if self._instruct_actor and evt.target_actors:
+            for target in evt.target_actors:
+                self._instruct_actor(target, output)
+        return output
+
+    def restore_session(self, messages: list[dict]) -> None:
+        """Replace the current session history with a previously saved snapshot."""
+        self._session = list(messages)
 
     def send_to(self, actor_name: str, output: str) -> str:
         """Format and return an instruction for another actor using the edge prompt."""

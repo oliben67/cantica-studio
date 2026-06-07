@@ -87,12 +87,15 @@ async def start_actor(body: StartActorRequest) -> dict:
     )
     try:
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _rt().start, defn, _cn())
+        initial_output = await loop.run_in_executor(None, _rt().start, defn, _cn())
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"name": body.name, "status": "running", "actor_type": body.actor_type}
+    result: dict = {"name": body.name, "status": "running", "actor_type": body.actor_type}
+    if initial_output:
+        result["initial_output"] = initial_output
+    return result
 
 
 @router.post("/actors/{name}/pause")
@@ -140,7 +143,7 @@ async def instruct_actor(name: str, body: InstructRequest) -> dict:
 async def fire_event(name: str, event_name: str, body: EventRequest) -> dict:
     try:
         loop = asyncio.get_event_loop()
-        output = await loop.run_in_executor(
+        result = await loop.run_in_executor(
             None, _rt().fire_event, name, event_name, body.context
         )
     except KeyError as exc:
@@ -149,7 +152,7 @@ async def fire_event(name: str, event_name: str, body: EventRequest) -> dict:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"name": name, "event": event_name, "output": output}
+    return {"name": name, "event": event_name, "output": result["output"], "forwarded": result.get("forwarded", [])}
 
 
 @router.get("/actors/{name}/events")
@@ -181,6 +184,17 @@ async def get_actor_chat(name: str) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"name": name, "chat": chat}
+
+
+@router.get("/notifications")
+def drain_notifications() -> list[dict]:
+    """Drain and return accumulated actor-to-actor forwarded-prompt notifications.
+
+    Each item has ``{"name": str, "prompt": str, "output": str}``.
+    The extension calls this after every ``instructActor`` call to push
+    forwarded prompts to the receiver's chat panel in the webview.
+    """
+    return _rt().drain_notifications()
 
 
 @router.get("/actors/{name}/type")

@@ -32,7 +32,7 @@ from studio_api.workspace_fs import WorkspaceFS
 
 
 def _adef(name: str = "test-actor", **kw) -> ActorDef:
-    return ActorDef(id=f"urn:x:{name}", name=name, define_prompt="You are a bot.", **kw)
+    return ActorDef(id=f"urn:x:{name}", name=name, define_prompt="", **kw)
 
 
 def _conn(content: str = "System prompt") -> MagicMock:
@@ -290,7 +290,8 @@ def test_fire_event_target_not_running_is_silently_skipped() -> None:
         )
 
     result = rt.fire_event("test-actor", "check")
-    assert result == "result"
+    assert result["output"] == "result"
+    assert result["forwarded"] == []
     assert proxy.instruct.call_count == 1   # only called on self; ghost skipped
     rt.stop_all()
 

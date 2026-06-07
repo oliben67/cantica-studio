@@ -1078,11 +1078,11 @@ body {
    API Log Panel
    ───────────────────────────────────────────────────────────── */
 .cs-log-panel {
-  position: absolute; bottom: 0; left: 0; right: 0; z-index: 50;
+  flex-shrink: 0;
   height: 180px;
   display: flex; flex-direction: column;
   background: var(--cs-bg-panel);
-  border-top: 1px solid var(--cs-border);
+  border-top: 2px solid var(--cs-accent);
 }
 .cs-log-header {
   display: flex; align-items: center; gap: 6px;
@@ -1112,3 +1112,13 @@ body {
 .cs-log-status { flex-shrink: 0; width: 32px; text-align: right; font-weight: 600; }
 .cs-log-dur { flex-shrink: 0; width: 44px; text-align: right; color: var(--cs-text-muted); }
 .cs-toolbar-btn--active { border-color: var(--cs-accent); color: var(--cs-accent); background: var(--cs-accent-dim); }
+
+/* Studio API health status dot — shown in toolbar between title and actions */
+.cs-studio-status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+  margin: 0 6px 0 4px;
+  display: inline-block;
+  box-shadow: 0 0 4px currentColor;
+  transition: background .4s ease;
+}

@@ -313,6 +313,9 @@ export function App() {
         case 'apiLog':
           store.appendLog(msg.entry);
           break;
+        case 'studioStatus':
+          store.setStudioHealth(msg.status);
+          break;
         case 'error':
           console.error('[Cantica Studio]', msg.message);
           break;
@@ -338,13 +341,13 @@ export function App() {
     <div className="cs-root">
       <GraphToolbar />
       <div className="cs-workspace">
-        <main className="cs-canvas-root" style={{ position: 'relative' }}>
+        <main className="cs-canvas-root">
           <ReactFlowProvider>
             <Canvas />
           </ReactFlowProvider>
-          {store.logVisible && <LogPanel />}
         </main>
       </div>
+      {store.logVisible && <LogPanel />}
 
       {store.eventsModalActorId && <EventsModal />}
       {store.cronsModalActorId && <CronModal />}

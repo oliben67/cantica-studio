@@ -127,6 +127,7 @@ export type ToWebview =
   | { type: 'actorPaused'; name: string; paused: boolean }
   | { type: 'actorOutput'; name: string; output: string }
   | { type: 'apiLog'; entry: LogEntry }
+  | { type: 'studioStatus'; status: 'healthy' | 'starting' | 'down' }
   | { type: 'error'; message: string }
   | { type: 'deleteSelected' }
   | { type: 'resetGraph' }

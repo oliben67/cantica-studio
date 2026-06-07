@@ -106,29 +106,34 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBar.show();
   context.subscriptions.push(statusBar);
 
+  function _applyHealth(status: 'healthy' | 'starting' | 'down'): void {
+    if (status === 'healthy') {
+      statusBar.text = '$(circle-filled) Studio';
+      statusBar.color = new vscode.ThemeColor('terminal.ansiGreen');
+      statusBar.tooltip = 'Cantica Studio API — healthy';
+    } else if (status === 'starting') {
+      statusBar.text = '$(loading~spin) Studio';
+      statusBar.color = new vscode.ThemeColor('terminal.ansiYellow');
+      statusBar.tooltip = 'Cantica Studio API — starting…';
+    } else {
+      statusBar.text = '$(error) Studio';
+      statusBar.color = new vscode.ThemeColor('terminal.ansiRed');
+      statusBar.tooltip = 'Cantica Studio API — not reachable · click to start';
+    }
+    void ActorsPanel.current?.postStudioStatus(status);
+  }
+
   let _healthPollTimer: ReturnType<typeof setInterval> | undefined;
   function startHealthPoll(): void {
     if (_healthPollTimer !== undefined) return;
     _healthPollTimer = setInterval(() => {
-      void client.ping().then((ok) => {
-        if (ok) {
-          statusBar.text = '$(circle-filled) Studio';
-          statusBar.color = '#22c55e';
-          statusBar.tooltip = 'Cantica Studio API — healthy';
-        } else {
-          statusBar.text = '$(error) Studio';
-          statusBar.color = '#ef4444';
-          statusBar.tooltip = 'Cantica Studio API — not reachable · click to start';
-        }
-      });
+      void client.ping().then((ok) => _applyHealth(ok ? 'healthy' : 'down'));
     }, 5000);
   }
   startHealthPoll();
-  // Show yellow while startup is in progress
+
   function setStatusStarting(): void {
-    statusBar.text = '$(loading~spin) Studio';
-    statusBar.color = '#f59e0b';
-    statusBar.tooltip = 'Cantica Studio API — starting…';
+    _applyHealth('starting');
   }
 
   // ── Songbooks virtual filesystem ───────────────────────────────────────────

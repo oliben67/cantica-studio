@@ -165,20 +165,13 @@ class ActorRuntime:
         self._register_crons(defn.name, resolved_crons)
 
         proxy = ref.proxy()
-        initial_output: str | None = None
         saved_session = self._load_session(defn.name)
         if saved_session:
             proxy.restore_session(saved_session).get(timeout=5)
             _log.info("Restored %d message(s) for actor %r", len(saved_session), defn.name)
-        elif system_prompt:
-            try:
-                initial_output = proxy.instruct(system_prompt).get(timeout=120)
-                _log.info("Warmed up actor %r with role prompt", defn.name)
-            except Exception as exc:
-                _log.warning("Warm-up call for actor %r failed: %s", defn.name, exc)
 
         _log.info("Started AI actor %r", defn.name)
-        return initial_output
+        return None
 
     def _start_code_actor(self, defn: ActorDef) -> None:
         if defn.actor_type == "python":

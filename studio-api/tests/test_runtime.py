@@ -69,8 +69,9 @@ def test_make_provider_gemini(monkeypatch: pytest.MonkeyPatch):
 
 def test_make_provider_copilot():
     from actor_ai import Copilot  # noqa: PLC0415
-    p = _make_provider("copilot", "gpt-4o")
+    p = _make_provider("copilot", "claude-sonnet-4.5")
     assert isinstance(p, Copilot)
+    assert p.use_sdk is True
 
 
 def test_make_provider_mistral(monkeypatch: pytest.MonkeyPatch):
@@ -114,7 +115,7 @@ def _mock_connector(content: str = "System prompt from Cantica") -> MagicMock:
 
 def _actor_def(
     name: str = "test-actor",
-    define_prompt: str = "You are a test actor.",
+    define_prompt: str = "",
     **kwargs,
 ) -> ActorDef:
     return ActorDef(id=f"urn:x:{name}", name=name, define_prompt=define_prompt, **kwargs)
@@ -236,7 +237,8 @@ def test_fire_event_calls_proxy():
         rt.start(_actor_def(), connector)
         result = rt.fire_event("test-actor", "on-review", "some context")
 
-    assert result == "Event output"
+    assert result["output"] == "Event output"
+    assert result["forwarded"] == []
     proxy_mock.fire_event.assert_called_once_with("on-review", "some context")
     rt.stop_all()
 
@@ -411,7 +413,8 @@ def test_fire_event_routes_output_to_target_actor():
         rt.start(_actor_def("target"), connector)
 
     result = rt.fire_event("source", "process", "ctx")
-    assert result == "source-output"          # returns self output
+    assert result["output"] == "source-output"          # returns self output
+    assert result["forwarded"] == [{"name": "target", "prompt": "source-output", "output": "target-reply"}]
     proxy_a.instruct.assert_called_once_with("p\n\nctx")
     proxy_b.instruct.assert_called_once_with("source-output")  # forwarded to target
     rt.stop_all()
@@ -447,7 +450,11 @@ def test_fire_event_routes_to_multiple_targets():
         rt.start(_actor_def("bot-c"), connector)
 
     result = rt.fire_event("source", "broadcast", "hello")
-    assert result == "src-out"
+    assert result["output"] == "src-out"
+    assert result["forwarded"] == [
+        {"name": "bot-b", "prompt": "src-out", "output": "b-reply"},
+        {"name": "bot-c", "prompt": "src-out", "output": "c-reply"},
+    ]
     proxy_src.instruct.assert_called_once_with("Announce:\n\nhello")
     proxy_b.instruct.assert_called_once_with("src-out")
     proxy_c.instruct.assert_called_once_with("src-out")
@@ -531,7 +538,8 @@ def test_fire_event_self_uses_instruct():
         )
         result = rt.fire_event("test-actor", "ping", "")
 
-    assert result == "self-reply"
+    assert result["output"] == "self-reply"
+    assert result["forwarded"] == []
     proxy_mock.instruct.assert_called_once_with("pong")
     rt.stop_all()
 
@@ -680,4 +688,182 @@ def test_invalid_ai_cron_schedule_warns_not_raises():
         rt.start(defn, connector)  # must not raise
 
     assert "test-actor" in rt.list_running()
+    rt.stop_all()
+
+
+# ── Session persistence ───────────────────────────────────────────────────────
+
+
+def test_start_returns_none_on_first_start(tmp_path):
+    """No warm-up is performed on a fresh start; start() always returns None."""
+    rt = ActorRuntime(sessions_dir=tmp_path)
+    connector = _mock_connector()
+
+    proxy_mock = MagicMock()
+    started_ref = MagicMock()
+    started_ref.proxy.return_value = proxy_mock
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        output = rt.start(_actor_def(define_prompt="You are a test assistant."), connector)
+
+    assert output is None
+    proxy_mock.instruct.assert_not_called()
+    rt.stop_all()
+
+
+def test_start_returns_none_when_no_define_prompt(tmp_path):
+    """start() returns None regardless of whether define_prompt is empty or set."""
+    rt = ActorRuntime(sessions_dir=tmp_path)
+    connector = _mock_connector()
+
+    proxy_mock = MagicMock()
+    started_ref = MagicMock()
+    started_ref.proxy.return_value = proxy_mock
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        output = rt.start(_actor_def(define_prompt=""), connector)
+
+    assert output is None
+    proxy_mock.instruct.assert_not_called()
+    rt.stop_all()
+
+
+def test_stop_saves_session_to_file(tmp_path):
+    """Session messages are written to sessions_dir on stop."""
+    rt = ActorRuntime(sessions_dir=tmp_path)
+    connector = _mock_connector()
+
+    session_data = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
+    proxy_mock = MagicMock()
+    proxy_mock.instruct.return_value.get.return_value = "ok"
+    proxy_mock.get_session.return_value.get.return_value = session_data
+    started_ref = MagicMock()
+    started_ref.proxy.return_value = proxy_mock
+    started_ref.stop = MagicMock()
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        rt.start(_actor_def(), connector)
+        rt.stop("test-actor")
+
+    saved = (tmp_path / "test-actor.json").read_text(encoding="utf-8")
+    import json
+    assert json.loads(saved) == session_data
+
+
+def test_start_restores_saved_session(tmp_path):
+    """When a session file exists, restore_session is called instead of warm-up."""
+    import json as _json
+    session_data = [{"role": "user", "content": "prior"}, {"role": "assistant", "content": "ok"}]
+    (tmp_path / "test-actor.json").write_text(
+        _json.dumps(session_data), encoding="utf-8"
+    )
+
+    rt = ActorRuntime(sessions_dir=tmp_path)
+    connector = _mock_connector()
+
+    proxy_mock = MagicMock()
+    proxy_mock.restore_session.return_value.get.return_value = None
+    started_ref = MagicMock()
+    started_ref.proxy.return_value = proxy_mock
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=started_ref):
+        output = rt.start(_actor_def(), connector)
+
+    assert output is None                                     # no warm-up when session restored
+    proxy_mock.restore_session.assert_called_once_with(session_data)
+    proxy_mock.instruct.assert_not_called()
+    rt.stop_all()
+
+
+def test_save_session_no_sessions_dir():
+    """When sessions_dir is None, save/load are no-ops."""
+    rt = ActorRuntime(sessions_dir=None)
+    rt._save_session("actor", [{"role": "user", "content": "x"}])  # must not raise
+    result = rt._load_session("actor")
+    assert result == []
+
+
+def test_load_session_missing_file(tmp_path):
+    """Missing session file returns empty list."""
+    rt = ActorRuntime(sessions_dir=tmp_path)
+    assert rt._load_session("nonexistent") == []
+
+
+def test_load_session_corrupted_file(tmp_path):
+    """Corrupted session file is silently ignored."""
+    (tmp_path / "bad-actor.json").write_text("not valid json", encoding="utf-8")
+    rt = ActorRuntime(sessions_dir=tmp_path)
+    assert rt._load_session("bad-actor") == []
+
+
+# ── Notification log (_make_instruct_actor / drain_notifications) ─────────────
+
+
+def test_drain_notifications_empty():
+    """drain_notifications returns an empty list when nothing was forwarded."""
+    rt = ActorRuntime()
+    assert rt.drain_notifications() == []
+    rt.stop_all()
+
+
+def test_drain_notifications_clears_log():
+    """drain_notifications empties the log so a second call returns nothing."""
+    rt = ActorRuntime()
+    rt._forwarded_log.append({"name": "b", "prompt": "hi", "output": "hello"})
+    first = rt.drain_notifications()
+    second = rt.drain_notifications()
+    assert first == [{"name": "b", "prompt": "hi", "output": "hello"}]
+    assert second == []
+    rt.stop_all()
+
+
+def test_make_instruct_actor_records_forwarded_call():
+    """_make_instruct_actor returns a callable that instructs the target and logs the call."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_b = MagicMock()
+    proxy_b.instruct.return_value.get.return_value = "b-response"
+    ref_b = MagicMock()
+    ref_b.proxy.return_value = proxy_b
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref_b):
+        rt.start(_actor_def("actor-b"), connector)
+
+    instruct_actor = rt._make_instruct_actor()
+    result = instruct_actor("actor-b", "hello from A")
+
+    assert result == "b-response"
+    notes = rt.drain_notifications()
+    assert notes == [{"name": "actor-b", "prompt": "hello from A", "output": "b-response"}]
+    rt.stop_all()
+
+
+def test_instruct_actor_log_survives_multiple_forwards():
+    """Each _instruct_actor call appends a separate entry to the log."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_b = MagicMock()
+    proxy_b.instruct.return_value.get.side_effect = ["reply-1", "reply-2"]
+    ref_b = MagicMock()
+    ref_b.proxy.return_value = proxy_b
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref_b):
+        rt.start(_actor_def("actor-b"), connector)
+
+    fn = rt._make_instruct_actor()
+    fn("actor-b", "first")
+    fn("actor-b", "second")
+
+    notes = rt.drain_notifications()
+    assert len(notes) == 2
+    assert notes[0] == {"name": "actor-b", "prompt": "first", "output": "reply-1"}
+    assert notes[1] == {"name": "actor-b", "prompt": "second", "output": "reply-2"}
     rt.stop_all()

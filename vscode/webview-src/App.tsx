@@ -316,9 +316,6 @@ export function App() {
         case 'mcpLog':
           store.appendMcpLog(msg.entry);
           break;
-        case 'studioStatus':
-          store.setStudioHealth(msg.status);
-          break;
         case 'error':
           console.error('[Cantica Studio]', msg.message);
           break;

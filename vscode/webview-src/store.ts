@@ -134,8 +134,6 @@ interface GraphState {
   clearLog: () => void;
   toggleLog: () => void;
 
-  studioHealth: 'unknown' | 'healthy' | 'starting' | 'down';
-  setStudioHealth: (status: 'healthy' | 'starting' | 'down') => void;
 }
 
 export const useStore = create<GraphState>((set) => ({
@@ -334,6 +332,4 @@ export const useStore = create<GraphState>((set) => ({
   clearLog: () => set({ logEntries: [], mcpLogEntries: [] }),
   toggleLog: () => set(s => ({ logVisible: !s.logVisible })),
 
-  studioHealth: 'unknown',
-  setStudioHealth: (status) => set({ studioHealth: status }),
 }));

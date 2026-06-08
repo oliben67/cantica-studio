@@ -38,16 +38,9 @@ function applyDagreLayout(
   return positions;
 }
 
-const HEALTH_DOT: Record<string, { color: string; label: string }> = {
-  healthy:  { color: '#22c55e', label: 'Studio API — healthy' },
-  starting: { color: '#f59e0b', label: 'Studio API — starting…' },
-  down:     { color: '#ef4444', label: 'Studio API — not reachable' },
-  unknown:  { color: '#6b7280', label: 'Studio API — status unknown' },
-};
-
 export function GraphToolbar() {
   const { graph, addActor, addCodeActor, removeActor, removeEdge, resetGraph, explorerSide, setExplorerSide,
-          selectedActorId, selectedEdgeId, updateActorPosition, logVisible, toggleLog, studioHealth } = useStore();
+          selectedActorId, selectedEdgeId, updateActorPosition, logVisible, toggleLog } = useStore();
 
   const hasSelection = selectedActorId !== null || selectedEdgeId !== null;
 
@@ -95,16 +88,9 @@ export function GraphToolbar() {
     }
   }
 
-  const dot = HEALTH_DOT[studioHealth] ?? HEALTH_DOT['unknown'] ?? { color: '#6b7280', label: 'unknown' };
-
   return (
     <div className="cs-toolbar">
       <span className="cs-toolbar-title">{graph.name}</span>
-      <span
-        className="cs-studio-status-dot"
-        style={{ background: dot.color }}
-        title={dot.label}
-      />
 
       <div className="cs-toolbar-actions">
         <button className="cs-toolbar-btn" onClick={handleAddActor} title="Add AI Actor">

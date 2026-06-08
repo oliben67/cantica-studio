@@ -101,7 +101,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function _applyHealth(status: StudioHealth): void {
     studioProvider.setStatus(status);
-    void ActorsPanel.current?.postStudioStatus(status);
   }
 
   let _healthPollTimer: ReturnType<typeof setInterval> | undefined;

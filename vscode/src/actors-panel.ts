@@ -80,9 +80,6 @@ export class ActorsPanel {
         await this.pushGraph();
         await this.pushPrompts();
         void this.pushProviderModels(true);
-        void this.client.ping().then((ok) =>
-          this.post({ type: 'studioStatus', status: ok ? 'healthy' : 'down' }),
-        );
         break;
 
       case 'saveGraph': {
@@ -360,10 +357,6 @@ export class ActorsPanel {
         break;
       }
     }
-  }
-
-  async postStudioStatus(status: 'healthy' | 'starting' | 'down'): Promise<void> {
-    await this.post({ type: 'studioStatus', status });
   }
 
   async pushGraph(): Promise<void> {

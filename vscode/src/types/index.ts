@@ -136,7 +136,6 @@ export type ToWebview =
   | { type: 'actorOutput'; name: string; output: string }
   | { type: 'apiLog'; entry: LogEntry }
   | { type: 'mcpLog'; entry: McpLogEntry }
-  | { type: 'studioStatus'; status: 'healthy' | 'starting' | 'down' }
   | { type: 'error'; message: string }
   | { type: 'deleteSelected' }
   | { type: 'resetGraph' }

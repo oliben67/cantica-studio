@@ -5,6 +5,7 @@ import { SongbooksProvider } from './songbooks-provider.js';
 import { SONGBOOKS_SCHEME, SongbooksFileSystemProvider } from './songbooks-fs-provider.js';
 import type { ServerItem } from './servers-provider.js';
 import { ServersProvider } from './servers-provider.js';
+import type { StudioHealth } from './studio-provider.js';
 import { StudioProvider } from './studio-provider.js';
 import { StudioClient, parseGraph } from './studio-client.js';
 import { StudioManager } from './studioManager.js';
@@ -98,28 +99,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const studio = new StudioManager();
   context.subscriptions.push(studio);
 
-  // ── Studio health status bar ───────────────────────────────────────────────
-  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 90);
-  statusBar.command = 'canticaScores.startLocalStudio';
-  statusBar.text = '$(circle-outline) Studio';
-  statusBar.tooltip = 'Cantica Studio API — click to start';
-  statusBar.show();
-  context.subscriptions.push(statusBar);
-
-  function _applyHealth(status: 'healthy' | 'starting' | 'down'): void {
-    if (status === 'healthy') {
-      statusBar.text = '$(circle-filled) Studio';
-      statusBar.color = new vscode.ThemeColor('terminal.ansiGreen');
-      statusBar.tooltip = 'Cantica Studio API — healthy';
-    } else if (status === 'starting') {
-      statusBar.text = '$(loading~spin) Studio';
-      statusBar.color = new vscode.ThemeColor('terminal.ansiYellow');
-      statusBar.tooltip = 'Cantica Studio API — starting…';
-    } else {
-      statusBar.text = '$(error) Studio';
-      statusBar.color = new vscode.ThemeColor('terminal.ansiRed');
-      statusBar.tooltip = 'Cantica Studio API — not reachable · click to start';
-    }
+  function _applyHealth(status: StudioHealth): void {
+    studioProvider.setStatus(status);
     void ActorsPanel.current?.postStudioStatus(status);
   }
 

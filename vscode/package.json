@@ -46,18 +46,6 @@
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "canticaScores.studioView",
-        "contents": "Manage the local Studio API container.\n[▶  Start Studio API](command:canticaScores.startLocalStudio)\n[■  Stop Studio API](command:canticaScores.stopLocalStudio)",
-        "when": "config.canticaScores.studioMode == local"
-      },
-      {
-        "view": "canticaScores.studioView",
-        "contents": "Connected to remote Studio API.",
-        "when": "config.canticaScores.studioMode == remote"
-      }
-    ],
     "commands": [
       {
         "command": "canticaScores.openPanel",

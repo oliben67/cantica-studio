@@ -21,6 +21,7 @@ export class ActorsPanel {
   private settings: ExtensionSettings;
   private client: StudioClient;
   private fileSaveWatcher: vscode.Disposable | undefined;
+  private _notifPollTimer: ReturnType<typeof setInterval> | undefined;
   private _activeSongbookUri: vscode.Uri | undefined;
   get activeSongbookUri(): vscode.Uri | undefined { return this._activeSongbookUri; }
 
@@ -63,6 +64,14 @@ export class ActorsPanel {
     this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'icons', 'activitybar.svg');
 
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+
+    // Poll for background activity (cron jobs, events) while the panel is open.
+    this._notifPollTimer = setInterval(() => {
+      if (this.panel.visible) {
+        void this.pushNotifications();
+      }
+    }, 3000);
+
     this.panel.webview.onDidReceiveMessage(
       (msg: unknown) => void this.handleMessage(msg),
       null,
@@ -531,6 +540,10 @@ export class ActorsPanel {
 
   dispose(): void {
     ActorsPanel._current = undefined;
+    if (this._notifPollTimer !== undefined) {
+      clearInterval(this._notifPollTimer);
+      this._notifPollTimer = undefined;
+    }
     this.fileSaveWatcher?.dispose();
     this.panel.dispose();
     for (const d of this.disposables) d.dispose();

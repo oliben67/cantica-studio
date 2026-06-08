@@ -494,11 +494,17 @@ class ActorRuntime:
                     try:
                         proxy = self._refs[actor_name].proxy()
                         output = proxy.instruct(p).get(timeout=360)
+                        with self._forwarded_log_lock:
+                            self._forwarded_log.append({"name": actor_name, "prompt": p, "output": output})
                         if ta and ta in self._refs:
                             if te:
-                                self.fire_event(ta, te, output)
+                                result = self.fire_event(ta, te, output)
+                                with self._forwarded_log_lock:
+                                    self._forwarded_log.extend(result.get("forwarded", []))
                             else:
-                                self.instruct(ta, output)
+                                target_output = self.instruct(ta, output)
+                                with self._forwarded_log_lock:
+                                    self._forwarded_log.append({"name": ta, "prompt": output, "output": target_output})
                     except Exception as exc:
                         _log.error("Cron job for %r failed: %s", actor_name, exc)
 

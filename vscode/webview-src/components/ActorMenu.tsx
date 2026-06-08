@@ -36,7 +36,7 @@ export function ActorMenu() {
           </>
         )}
         <button className="cs-ctx-item" onClick={() => run(() => toggleChat(actorId))}>
-          <span className="cs-ctx-icon">📋</span> {chatOn ? 'Hide Chat' : 'Activities'}
+          <span className="cs-ctx-icon">📋</span> {chatOn ? 'Hide Chat' : 'Chat'}
         </button>
         <button className="cs-ctx-item" onClick={() => run(() => openChatModal(actorId))}>
           <span className="cs-ctx-icon">⤢</span> Expand Chat

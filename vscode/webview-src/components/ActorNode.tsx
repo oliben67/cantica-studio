@@ -50,7 +50,7 @@ function Handles({ edges, type }: { edges: EdgeHandleInfo[]; type: 'source' | 't
   );
 }
 
-function ActivityPanel({
+function ChatPanel({
   outputLines, scrollRef, onExpand, emptyLabel,
 }: {
   outputLines: string[];
@@ -234,7 +234,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
           </div>
 
           {chatVisible && (
-            <ActivityPanel
+            <ChatPanel
               outputLines={outputLines}
               scrollRef={chatScrollRef}
               onExpand={e => { e.stopPropagation(); openChatModal(actor.id); }}
@@ -296,7 +296,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
           )}
 
           {chatVisible && (
-            <ActivityPanel
+            <ChatPanel
               outputLines={outputLines}
               scrollRef={chatScrollRef}
               onExpand={e => { e.stopPropagation(); openChatModal(actor.id); }}

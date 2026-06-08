@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings, LogEntry } from './types';
+import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings, LogEntry, McpLogEntry } from './types';
 
 let _idSeq = 0;
 const nextId = (prefix: string) => `${prefix}-${Date.now()}-${++_idSeq}`;
@@ -127,8 +127,10 @@ interface GraphState {
   toggleMinimap: () => void;
 
   logEntries: LogEntry[];
+  mcpLogEntries: McpLogEntry[];
   logVisible: boolean;
   appendLog: (entry: LogEntry) => void;
+  appendMcpLog: (entry: McpLogEntry) => void;
   clearLog: () => void;
   toggleLog: () => void;
 
@@ -323,10 +325,13 @@ export const useStore = create<GraphState>((set) => ({
   toggleMinimap: () => set(s => ({ minimapVisible: !s.minimapVisible })),
 
   logEntries: [],
+  mcpLogEntries: [],
   logVisible: false,
   appendLog: (entry) =>
     set((s) => ({ logEntries: s.logEntries.length >= 500 ? [...s.logEntries.slice(-499), entry] : [...s.logEntries, entry] })),
-  clearLog: () => set({ logEntries: [] }),
+  appendMcpLog: (entry) =>
+    set((s) => ({ mcpLogEntries: s.mcpLogEntries.length >= 200 ? [...s.mcpLogEntries.slice(-199), entry] : [...s.mcpLogEntries, entry] })),
+  clearLog: () => set({ logEntries: [], mcpLogEntries: [] }),
   toggleLog: () => set(s => ({ logVisible: !s.logVisible })),
 
   studioHealth: 'unknown',

@@ -499,6 +499,11 @@ export class ActorsPanel {
   private async pushNotifications(): Promise<void> {
     const notes = await this.client.drainNotifications();
     await this.pushForwarded(notes);
+    // Also drain MCP tool call log and forward as mcpLog messages.
+    const mcpEntries = await this.client.drainMcpLog();
+    for (const entry of mcpEntries) {
+      void this.post({ type: 'mcpLog', entry });
+    }
   }
 
   private buildHtml(context: vscode.ExtensionContext): string {

@@ -108,6 +108,14 @@ export interface LogEntry {
   durationMs: number;
 }
 
+export interface McpLogEntry {
+  ts: number;
+  tool: string;
+  durationMs: number;
+  status: 'ok' | 'error';
+  args: Record<string, string>;
+}
+
 /** Messages arriving FROM the extension host into the webview. */
 export type IncomingMessage =
   | { type: 'loadGraph'; graph: ActorGraph }
@@ -118,6 +126,7 @@ export type IncomingMessage =
   | { type: 'actorPaused'; name: string; paused: boolean }
   | { type: 'actorOutput'; name: string; output: string }
   | { type: 'apiLog'; entry: LogEntry }
+  | { type: 'mcpLog'; entry: McpLogEntry }
   | { type: 'studioStatus'; status: 'healthy' | 'starting' | 'down' }
   | { type: 'error'; message: string }
   | { type: 'deleteSelected' }

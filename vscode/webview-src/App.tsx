@@ -313,6 +313,9 @@ export function App() {
         case 'apiLog':
           store.appendLog(msg.entry);
           break;
+        case 'mcpLog':
+          store.appendMcpLog(msg.entry);
+          break;
         case 'studioStatus':
           store.setStudioHealth(msg.status);
           break;

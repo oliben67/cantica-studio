@@ -63,7 +63,7 @@ def _make_provider(provider: str, model: str) -> Any:
     if p == "gemini":
         return Gemini(model)
     if p == "copilot":
-        return Copilot(model, use_sdk=True)
+        return Copilot(model, use_sdk=True, timeout=300.0)
     if p == "mistral":
         return Mistral(model)
     raise ValueError(
@@ -153,7 +153,9 @@ class ActorRuntime:
                 # LLM's fire_event tool are recorded in _forwarded_log.  The extension
                 # drains this log after each API call and pushes actorOutput messages
                 # to the webview so the receiver's chat panel shows the incoming prompt.
-                "_instruct_actor": self._make_instruct_actor(),
+                # staticmethod prevents Python's descriptor protocol from binding the
+                # actor instance as the first argument when accessed via self._instruct_actor.
+                "_instruct_actor": staticmethod(self._make_instruct_actor()),
             },
         )
 
@@ -222,7 +224,7 @@ class ActorRuntime:
         for instruction in queued:
             try:
                 proxy = self._get_proxy(name)
-                proxy.instruct(instruction).get(timeout=120)
+                proxy.instruct(instruction).get(timeout=360)
             except Exception as exc:
                 _log.error("Failed to flush queued instruction for %r: %s", name, exc)
         _log.info("Resumed actor %r, flushed %d queued instruction(s)", name, len(queued))
@@ -278,7 +280,7 @@ class ActorRuntime:
             _log.info("Actor %r is paused — queued instruction (%d total)", name, len(self._queued[name]))
             return f"⏸ Queued (actor is paused — {len(self._queued[name])} instruction(s) pending)"
         proxy = self._get_proxy(name)
-        return proxy.instruct(text).get(timeout=120)
+        return proxy.instruct(text).get(timeout=360)
 
     def fire_event(self, name: str, event_name: str, context: str = "") -> dict:
         """Fire a named event on an actor, routing output to all configured target actors.
@@ -292,14 +294,14 @@ class ActorRuntime:
         for evt in self._ai_events.get(name, []):
             if evt.name == event_name:
                 instruction = f"{evt.prompt}\n\n{context}" if context else evt.prompt
-                output = self._get_proxy(name).instruct(instruction).get(timeout=120)
+                output = self._get_proxy(name).instruct(instruction).get(timeout=360)
                 forwarded = []
                 for target in evt.target_actors:
                     if target and target in self._refs:
                         target_output = self.instruct(target, output)
                         forwarded.append({"name": target, "prompt": output, "output": target_output})
                 return {"output": output, "forwarded": forwarded}
-        output = self._get_proxy(name).fire_event(event_name, context).get(timeout=120)
+        output = self._get_proxy(name).fire_event(event_name, context).get(timeout=360)
         return {"output": output, "forwarded": []}
 
     def list_running(self) -> list[str]:
@@ -491,7 +493,7 @@ class ActorRuntime:
                         return
                     try:
                         proxy = self._refs[actor_name].proxy()
-                        output = proxy.instruct(p).get(timeout=120)
+                        output = proxy.instruct(p).get(timeout=360)
                         if ta and ta in self._refs:
                             if te:
                                 self.fire_event(ta, te, output)
@@ -522,7 +524,7 @@ class ActorRuntime:
                 def _run(actor_name: str = name, cn: str = cron_name) -> None:
                     try:
                         proxy = self._refs[actor_name].proxy()
-                        proxy.run_cron(cn).get(timeout=120)
+                        proxy.run_cron(cn).get(timeout=360)
                     except Exception as exc:
                         _log.error("Code cron %r for actor %r failed: %s", cn, actor_name, exc)
 

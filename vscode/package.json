@@ -184,6 +184,41 @@
         "title": "Switch to List View",
         "category": "Cantica Studio",
         "icon": "$(list-unordered)"
+      },
+      {
+        "command": "canticaScores.newSongbookFolder",
+        "title": "New Folder",
+        "category": "Cantica Studio",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "canticaScores.newSongbookInFolder",
+        "title": "New Songbook in Folder",
+        "category": "Cantica Studio",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "canticaScores.renameSongbook",
+        "title": "Rename",
+        "category": "Cantica Studio",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "canticaScores.renameSongbookFolder",
+        "title": "Rename Folder",
+        "category": "Cantica Studio",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "canticaScores.deleteSongbookFolder",
+        "title": "Delete Folder",
+        "category": "Cantica Studio",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "canticaScores.revealSongbook",
+        "title": "Reveal in File Explorer",
+        "category": "Cantica Studio"
       }
     ],
     "menus": {
@@ -196,22 +231,22 @@
         {
           "command": "canticaScores.saveAllSongbooks",
           "when": "view == canticaScores.songbooksView",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "canticaScores.closeAllSongbooks",
           "when": "view == canticaScores.songbooksView",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "canticaScores.songbookViewTree",
           "when": "view == canticaScores.songbooksView && canticaScores.songbookViewMode == 'list'",
-          "group": "navigation@4"
+          "group": "navigation@5"
         },
         {
           "command": "canticaScores.songbookViewList",
           "when": "view == canticaScores.songbooksView && canticaScores.songbookViewMode == 'tree'",
-          "group": "navigation@4"
+          "group": "navigation@5"
         },
         {
           "command": "canticaScores.newServer",
@@ -237,6 +272,11 @@
           "command": "canticaScores.configureServer",
           "when": "view == canticaScores.studioView",
           "group": "navigation@3"
+        },
+        {
+          "command": "canticaScores.newSongbookFolder",
+          "when": "view == canticaScores.songbooksView",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -259,6 +299,46 @@
           "command": "canticaScores.exportSongbook",
           "when": "view == canticaScores.songbooksView && viewItem == songbook",
           "group": "2_manage@2"
+        },
+        {
+          "command": "canticaScores.newSongbookInFolder",
+          "when": "view == canticaScores.songbooksView && viewItem == songbookFolder",
+          "group": "1_new@1"
+        },
+        {
+          "command": "canticaScores.renameSongbookFolder",
+          "when": "view == canticaScores.songbooksView && viewItem == songbookFolder",
+          "group": "2_manage@1"
+        },
+        {
+          "command": "canticaScores.deleteSongbookFolder",
+          "when": "view == canticaScores.songbooksView && viewItem == songbookFolder",
+          "group": "2_manage@2"
+        },
+        {
+          "command": "canticaScores.renameSongbook",
+          "when": "view == canticaScores.songbooksView && viewItem == songbook",
+          "group": "2_manage@0"
+        },
+        {
+          "command": "canticaScores.revealSongbook",
+          "when": "view == canticaScores.songbooksView && viewItem == songbook",
+          "group": "3_explore@1"
+        },
+        {
+          "command": "canticaScores.renameSongbook",
+          "when": "view == canticaScores.songbooksView && viewItem == songbook",
+          "group": "inline@1"
+        },
+        {
+          "command": "canticaScores.renameSongbookFolder",
+          "when": "view == canticaScores.songbooksView && viewItem == songbookFolder",
+          "group": "inline@1"
+        },
+        {
+          "command": "canticaScores.deleteSongbookFolder",
+          "when": "view == canticaScores.songbooksView && viewItem == songbookFolder",
+          "group": "inline@2"
         }
       ],
       "explorer/context": [
@@ -328,7 +408,10 @@
         },
         "canticaScores.studioMode": {
           "type": "string",
-          "enum": ["local", "remote"],
+          "enum": [
+            "local",
+            "remote"
+          ],
           "enumDescriptions": [
             "Manage a local Docker container. The extension starts, stops, and injects API keys automatically.",
             "Connect to an existing Studio API server. Configure the URL below; API keys are managed server-side."
@@ -392,8 +475,17 @@
           "default": {},
           "additionalProperties": {
             "oneOf": [
-              { "type": "array", "items": { "type": "string" }, "description": "Exact list of allowed model names" },
-              { "type": "null", "description": "Any model name is accepted (open / unconstrained)" }
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Exact list of allowed model names"
+              },
+              {
+                "type": "null",
+                "description": "Any model name is accepted (open / unconstrained)"
+              }
             ]
           },
           "markdownDescription": "_(local mode only)_ Restrict which models are available per provider in the UI.\n\n- `\"claude\": [\"claude-3-5-sonnet-20241022\"]` — only that model shown for Claude\n- `\"gpt\": []` — GPT provider hidden entirely\n- `\"copilot\": null` — any model name accepted (no restriction)\n- omit a provider key — falls back to the built-in default model list\n\nChanges take effect immediately without reloading.",
@@ -401,7 +493,39 @@
           "order": 14
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "key": "f2",
+        "command": "canticaScores.renameSongbook",
+        "when": "focusedView == 'canticaScores.songbooksView' && viewItem == 'songbook'"
+      },
+      {
+        "key": "f2",
+        "command": "canticaScores.renameSongbookFolder",
+        "when": "focusedView == 'canticaScores.songbooksView' && viewItem == 'songbookFolder'"
+      },
+      {
+        "key": "delete",
+        "command": "canticaScores.deleteSongbook",
+        "when": "focusedView == 'canticaScores.songbooksView' && viewItem == 'songbook'"
+      },
+      {
+        "key": "backspace",
+        "command": "canticaScores.deleteSongbook",
+        "when": "focusedView == 'canticaScores.songbooksView' && viewItem == 'songbook'"
+      },
+      {
+        "key": "delete",
+        "command": "canticaScores.deleteSongbookFolder",
+        "when": "focusedView == 'canticaScores.songbooksView' && viewItem == 'songbookFolder'"
+      },
+      {
+        "key": "backspace",
+        "command": "canticaScores.deleteSongbookFolder",
+        "when": "focusedView == 'canticaScores.songbooksView' && viewItem == 'songbookFolder'"
+      }
+    ]
   },
   "scripts": {
     "compile": "node esbuild.js",

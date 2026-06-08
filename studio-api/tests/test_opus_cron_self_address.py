@@ -32,7 +32,7 @@ def _actor_def(**kwargs) -> ActorDef:
     defaults = dict(
         id="urn:cantica:studio:actor:time-checker",
         name="time-checker",
-        define_prompt="You are a helpful assistant. Answer concisely.",
+        define_prompt="",
         provider="claude",
         model=OPUS_MODEL,
     )

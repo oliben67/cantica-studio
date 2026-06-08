@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import collections
+import functools
+import time
+import threading
 from typing import TYPE_CHECKING
 
 from fastmcp import FastMCP
@@ -20,6 +24,42 @@ mcp = FastMCP(
 
 _fs: WorkspaceFS | None = None
 _rt: ActorRuntime | None = None
+
+# Thread-safe ring buffer of recent MCP tool calls.
+_mcp_log: collections.deque[dict] = collections.deque(maxlen=200)
+_mcp_log_lock = threading.Lock()
+
+
+def drain_mcp_log() -> list[dict]:
+    """Return and clear all accumulated MCP tool-call log entries."""
+    with _mcp_log_lock:
+        items = list(_mcp_log)
+        _mcp_log.clear()
+    return items
+
+
+def _logged_tool(fn):
+    """Decorator that records each MCP tool call into _mcp_log."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        t0 = time.time()
+        status = "ok"
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            status = "error"
+            raise exc from exc
+        finally:
+            entry = {
+                "ts": int(t0 * 1000),
+                "tool": fn.__name__,
+                "durationMs": int((time.time() - t0) * 1000),
+                "status": status,
+                "args": {k: str(v)[:120] for k, v in kwargs.items()},
+            }
+            with _mcp_log_lock:
+                _mcp_log.append(entry)
+    return wrapper
 
 
 def init(fs: WorkspaceFS, runtime: ActorRuntime | None = None) -> None:
@@ -43,12 +83,14 @@ def _get_rt() -> ActorRuntime:
 # ── Workspace file tools ──────────────────────────────────────────────────────
 
 @mcp.tool()
+@_logged_tool
 def read_file(path: str) -> str:
     """Read a file from the workspace. path is relative to the workspace root."""
     return _get_fs().read(path)
 
 
 @mcp.tool()
+@_logged_tool
 def write_file(path: str, content: str) -> str:
     """Write content to a file in the workspace. Creates parent directories as needed."""
     _get_fs().write(path, content)
@@ -56,12 +98,14 @@ def write_file(path: str, content: str) -> str:
 
 
 @mcp.tool()
+@_logged_tool
 def list_files(directory: str = ".") -> list[str]:
     """List files and directories inside a workspace directory."""
     return _get_fs().list(directory)
 
 
 @mcp.tool()
+@_logged_tool
 def search_files(pattern: str) -> list[str]:
     """Search for files matching a glob pattern within the workspace."""
     return _get_fs().search(pattern)
@@ -72,6 +116,7 @@ def search_files(pattern: str) -> list[str]:
 # ── Code-actor lifecycle tools ────────────────────────────────────────────────
 
 @mcp.tool()
+@_logged_tool
 def start_code_actor(
     actor_name: str,
     script_path: str,
@@ -100,6 +145,7 @@ def start_code_actor(
 
 
 @mcp.tool()
+@_logged_tool
 def stop_code_actor(actor_name: str) -> str:
     """Stop a running code actor.
 
@@ -110,6 +156,7 @@ def stop_code_actor(actor_name: str) -> str:
 
 
 @mcp.tool()
+@_logged_tool
 def list_code_actor_events(actor_name: str) -> list[dict]:
     """Return the events exposed by a running code actor.
 
@@ -120,6 +167,7 @@ def list_code_actor_events(actor_name: str) -> list[dict]:
 
 
 @mcp.tool()
+@_logged_tool
 def list_code_actor_crons(actor_name: str) -> list[dict]:
     """Return the cron jobs registered by a running code actor."""
     return _get_rt().get_actor_crons(actor_name)
@@ -128,6 +176,7 @@ def list_code_actor_crons(actor_name: str) -> list[dict]:
 # ── Event tools ───────────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_logged_tool
 def fire_event(actor_name: str, event_name: str, context: str = "") -> str:
     """Fire a named event on an actor.
 
@@ -145,12 +194,14 @@ def fire_event(actor_name: str, event_name: str, context: str = "") -> str:
 # ── Agent resource tools ──────────────────────────────────────────────────────
 
 @mcp.tool()
+@_logged_tool
 def list_actor_resources(actor_name: str) -> list[dict]:
     """List all MCP resources accessible to an actor (owned + shared with it)."""
     return _get_rt().get_accessible_resources(actor_name)
 
 
 @mcp.tool()
+@_logged_tool
 def read_actor_resource(actor_name: str, resource_id: str) -> str:
     """Read the content of an actor resource by ID.
 
@@ -174,6 +225,7 @@ def read_actor_resource(actor_name: str, resource_id: str) -> str:
 
 
 @mcp.tool()
+@_logged_tool
 def add_actor_resource(
     actor_name: str,
     name: str,
@@ -191,12 +243,14 @@ def add_actor_resource(
 
 
 @mcp.tool()
+@_logged_tool
 def share_actor_resource(actor_name: str, resource_id: str, target_actor: str) -> dict:
     """Share a resource with another actor (locks it)."""
     return _get_rt().share_resource(actor_name, resource_id, target_actor)
 
 
 @mcp.tool()
+@_logged_tool
 def delete_actor_resource(actor_name: str, resource_id: str) -> str:
     """Delete a dynamic unshared resource. Raises if the resource is locked."""
     _get_rt().delete_resource(actor_name, resource_id)

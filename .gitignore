@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Node.js
+vscode/node_modules/
+
+# VS Code Extension build artifacts
+vscode/dist/

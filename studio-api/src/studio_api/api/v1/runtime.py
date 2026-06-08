@@ -197,6 +197,17 @@ def drain_notifications() -> list[dict]:
     return _rt().drain_notifications()
 
 
+@router.get("/mcp-log")
+def drain_mcp_log() -> list[dict]:
+    """Drain and return accumulated MCP tool-call log entries.
+
+    Each item has ``{"ts": int, "tool": str, "durationMs": int, "status": str, "args": dict}``.
+    The extension polls this to show MCP calls in the log panel.
+    """
+    from studio_api.mcp_server import drain_mcp_log as _drain  # noqa: PLC0415
+    return _drain()
+
+
 @router.get("/actors/{name}/type")
 def get_actor_type(name: str) -> dict:
     """Return the type of a running actor: 'ai', 'python', or 'typescript'."""

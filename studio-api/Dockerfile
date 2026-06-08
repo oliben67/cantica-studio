@@ -23,8 +23,8 @@ RUN pip install --no-cache-dir /dist/*.whl
 RUN pip install --no-cache-dir "github-copilot-sdk==0.3.0"
 
 # Install actor-ai from the local wheel (includes unreleased changes).
-COPY actor_ai-0.3.8-py3-none-any.whl /tmp/
-RUN pip install --no-cache-dir /tmp/actor_ai-0.3.8-py3-none-any.whl
+COPY actor_ai-0.3.9-py3-none-any.whl /tmp/
+RUN pip install --no-cache-dir /tmp/actor_ai-0.3.9-py3-none-any.whl
 
 # Install studio-api and its remaining dependencies (actor-ai already satisfied above).
 WORKDIR /app

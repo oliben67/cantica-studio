@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import concurrent.futures
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -95,15 +94,28 @@ class StudioActor(AIActor):
         instruction = evt.prompt
         if context:
             instruction = f"{instruction}\n\n{context}"
-        # Run in a new thread: this @tool is invoked from inside the provider's asyncio
-        # event loop (Copilot SDK path). Calling asyncio.run() again on the same thread
-        # raises "RuntimeError: cannot be called when another event loop is running".
-        # use_session=False keeps session ordering clean.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            output = pool.submit(self.instruct, instruction, use_session=False).result()
+        # Call the provider directly with tools=[] to prevent the LLM from calling
+        # fire_event again (which would cause infinite recursion). This also avoids
+        # asyncio nesting issues: the Copilot SDK path dispatches tools via
+        # run_in_executor so this method already runs in a plain thread (no event loop),
+        # meaning asyncio.run() inside provider.run() works without wrapping.
+        try:
+            output = self.provider.run( # type: ignore
+                system=self._effective_system_prompt(),
+                messages=[{"role": "user", "content": instruction}],
+                tools=[],
+                dispatcher=lambda name, args: None,
+                max_tokens=self.max_tokens,
+            )
+        except Exception as exc:
+            _log.error("fire_event %r provider.run failed: %s", event_name, exc, exc_info=True)
+            raise
         if self._instruct_actor and evt.target_actors:
             for target in evt.target_actors:
-                self._instruct_actor(target, output)
+                try:
+                    self._instruct_actor(target, output)
+                except Exception as exc:
+                    _log.error("fire_event %r _instruct_actor(%r) failed: %s", event_name, target, exc)
         return output
 
     def restore_session(self, messages: list[dict]) -> None:

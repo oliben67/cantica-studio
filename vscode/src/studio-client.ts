@@ -1,4 +1,4 @@
-import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, CanticaServer, LogEntry, PromptEventDef, PromptRef } from './types/index.js';
+import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, CanticaServer, LogEntry, McpLogEntry, PromptEventDef, PromptRef } from './types/index.js';
 
 function headers(token?: string): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
@@ -174,6 +174,16 @@ export class StudioClient {
       const r = await this._fetch('/v1/runtime/notifications', { signal: AbortSignal.timeout(5000) });
       if (!r.ok) return [];
       return r.json() as Promise<Array<{ name: string; prompt: string; output: string }>>;
+    } catch {
+      return [];
+    }
+  }
+
+  async drainMcpLog(): Promise<McpLogEntry[]> {
+    try {
+      const r = await this._fetch('/v1/runtime/mcp-log', { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) return [];
+      return r.json() as Promise<McpLogEntry[]>;
     } catch {
       return [];
     }

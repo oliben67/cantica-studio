@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ActorsPanel } from './actors-panel.js';
-import type { SongbookFolderItem, SongbookItem, SongbookNode, SongbookRawEntry } from './songbooks-provider.js';
+import type { SongbookFolderItem, SongbookItem, SongbookRawEntry } from './songbooks-provider.js';
 import { SongbooksProvider } from './songbooks-provider.js';
 import { SONGBOOKS_SCHEME, SongbooksFileSystemProvider } from './songbooks-fs-provider.js';
 import type { ServerItem } from './servers-provider.js';
@@ -85,7 +85,7 @@ function songbooksRoot(canticaHome: string): string {
   return `${(canticaHome.trim() || `${process.env['HOME'] ?? '~'}/.cantica`)}/songbooks`;
 }
 
-function ensureSongbooksWorkspaceFolder(root: string): void {
+function ensureSongbooksWorkspaceFolder(): void {
   const uri = vscode.Uri.parse(`${SONGBOOKS_SCHEME}:///`);
   const folders = vscode.workspace.workspaceFolders ?? [];
   if (!folders.some((f) => f.uri.scheme === SONGBOOKS_SCHEME)) {
@@ -123,7 +123,7 @@ export function activate(context: vscode.ExtensionContext): void {
       isCaseSensitive: true,
     }),
   );
-  ensureSongbooksWorkspaceFolder(songbooksRoot(settings.canticaHome));
+  ensureSongbooksWorkspaceFolder();
 
   const songbooksProvider = new SongbooksProvider();
   const serversProvider = new ServersProvider();

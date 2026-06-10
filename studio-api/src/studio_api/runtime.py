@@ -39,18 +39,6 @@ class ActorDef:
     resources: list[dict] = field(default_factory=list)
     directory: str = ""                  # optional working directory exposed via MCP filesystem
 
-    def __post_init__(self) -> None:
-        if self.prompt_events is None:
-            self.prompt_events = []
-        if self.cron_jobs is None:
-            self.cron_jobs = []
-        if self.outbox is None:
-            self.outbox = {}
-        if self.resources is None:
-            self.resources = []
-        if self.directory is None:
-            self.directory = ""
-
 
 def _make_provider(provider: str, model: str) -> Any:
     from actor_ai import Claude, Copilot, Gemini, GPT, Mistral  # noqa: PLC0415
@@ -70,6 +58,10 @@ def _make_provider(provider: str, model: str) -> Any:
         f"Unknown provider {provider!r}. "
         "Expected one of: claude, gpt, openai, gemini, copilot, mistral."
     )
+
+
+def _make_cron_trigger(schedule: str) -> CronTrigger:
+    return CronTrigger.from_crontab(schedule)
 
 
 def _resolve(prompt: str, connector: CanticaConnector) -> str:
@@ -470,14 +462,7 @@ class ActorRuntime:
             label = cron.name
             job_id = f"cron-{name}-{i}-{label}"
             try:
-                parts = cron.schedule.split()
-                trigger = CronTrigger(
-                    minute=parts[0] if len(parts) > 0 else "*",
-                    hour=parts[1] if len(parts) > 1 else "*",
-                    day=parts[2] if len(parts) > 2 else "*",
-                    month=parts[3] if len(parts) > 3 else "*",
-                    day_of_week=parts[4] if len(parts) > 4 else "*",
-                )
+                trigger = _make_cron_trigger(cron.schedule)
                 target_actor = cron.target_actor
                 target_event = cron.target_event
                 prompt = cron.prompt
@@ -518,14 +503,7 @@ class ActorRuntime:
             schedule = crn.get("schedule", "")
             job_id = f"cron-{name}-code-{cron_name}"
             try:
-                parts = schedule.split()
-                trigger = CronTrigger(
-                    minute=parts[0] if len(parts) > 0 else "*",
-                    hour=parts[1] if len(parts) > 1 else "*",
-                    day=parts[2] if len(parts) > 2 else "*",
-                    month=parts[3] if len(parts) > 3 else "*",
-                    day_of_week=parts[4] if len(parts) > 4 else "*",
-                )
+                trigger = _make_cron_trigger(schedule)
 
                 def _run(actor_name: str = name, cn: str = cron_name) -> None:
                     try:

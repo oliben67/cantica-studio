@@ -101,9 +101,9 @@ class CanticaConnector:
         if host:
             servers = [s for s in servers if host in s.url] or self._servers
 
-        for server in servers:
-            try:
-                with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=15) as client:
+            for server in servers:
+                try:
                     r = client.post(
                         f"{server.url}/v1/resolve",
                         params={"slug": f"{ns}/{name}", "ref": ref},
@@ -111,7 +111,7 @@ class CanticaConnector:
                     )
                     if r.status_code == 200:
                         return r.json().get("content", "")
-            except Exception as exc:
-                _log.warning("Failed to resolve %s from %s: %s", uri, server.url, exc)
+                except Exception as exc:
+                    _log.warning("Failed to resolve %s from %s: %s", uri, server.url, exc)
 
         raise ValueError(f"Could not resolve URI {uri!r} from any configured server")

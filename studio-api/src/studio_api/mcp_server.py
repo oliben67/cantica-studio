@@ -46,9 +46,9 @@ def _logged_tool(fn):
         status = "ok"
         try:
             return fn(*args, **kwargs)
-        except Exception as exc:
+        except Exception:
             status = "error"
-            raise exc from exc
+            raise
         finally:
             entry = {
                 "ts": int(t0 * 1000),

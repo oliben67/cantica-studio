@@ -287,36 +287,8 @@ def test_cron_schedule_parsing_five_fields():
     rt.stop_all()
 
 
-# ── ActorDef None-field defaulting ────────────────────────────────────────────
-
-
-def test_actor_def_none_prompt_events_becomes_empty_list():
-    d = ActorDef(id="urn:x", name="b", define_prompt="p", prompt_events=None)
-    assert d.prompt_events == []
-
-
-def test_actor_def_none_cron_jobs_becomes_empty_list():
-    d = ActorDef(id="urn:x", name="b", define_prompt="p", cron_jobs=None)
-    assert d.cron_jobs == []
-
-
-def test_actor_def_none_outbox_becomes_empty_dict():
-    d = ActorDef(id="urn:x", name="b", define_prompt="p", outbox=None)
-    assert d.outbox == {}
-
-
-def test_actor_def_none_resources_becomes_empty_list():
-    d = ActorDef(id="urn:x", name="b", define_prompt="p", resources=None)
-    assert d.resources == []
-
-
 def test_actor_def_directory_defaults_to_empty_string():
     d = ActorDef(id="urn:x", name="b", define_prompt="p")
-    assert d.directory == ""
-
-
-def test_actor_def_none_directory_becomes_empty_string():
-    d = ActorDef(id="urn:x", name="b", define_prompt="p", directory=None)
     assert d.directory == ""
 
 

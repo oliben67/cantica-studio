@@ -86,8 +86,7 @@ async def start_actor(body: StartActorRequest) -> dict:
         directory=body.directory,
     )
     try:
-        loop = asyncio.get_event_loop()
-        initial_output = await loop.run_in_executor(None, _rt().start, defn, _cn())
+        initial_output = await asyncio.to_thread(_rt().start, defn, _cn())
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
@@ -119,8 +118,7 @@ def resume_actor(name: str) -> dict:
 @router.delete("/actors/{name}", status_code=204)
 async def stop_actor(name: str) -> None:
     try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _rt().stop, name)
+        await asyncio.to_thread(_rt().stop, name)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -128,10 +126,7 @@ async def stop_actor(name: str) -> None:
 @router.post("/actors/{name}/instruct")
 async def instruct_actor(name: str, body: InstructRequest) -> dict:
     try:
-        loop = asyncio.get_event_loop()
-        output = await loop.run_in_executor(
-            None, _rt().instruct, name, body.instruction
-        )
+        output = await asyncio.to_thread(_rt().instruct, name, body.instruction)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
@@ -142,10 +137,7 @@ async def instruct_actor(name: str, body: InstructRequest) -> dict:
 @router.post("/actors/{name}/event/{event_name}")
 async def fire_event(name: str, event_name: str, body: EventRequest) -> dict:
     try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None, _rt().fire_event, name, event_name, body.context
-        )
+        result = await asyncio.to_thread(_rt().fire_event, name, event_name, body.context)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -177,8 +169,7 @@ def list_actor_crons(name: str) -> list[dict]:
 async def get_actor_chat(name: str) -> dict:
     """Return captured chat/log output from a code actor."""
     try:
-        loop = asyncio.get_event_loop()
-        chat = await loop.run_in_executor(None, _rt().get_actor_chat, name)
+        chat = await asyncio.to_thread(_rt().get_actor_chat, name)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

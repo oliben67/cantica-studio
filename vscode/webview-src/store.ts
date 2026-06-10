@@ -4,14 +4,25 @@ import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSett
 let _idSeq = 0;
 const nextId = (prefix: string) => `${prefix}-${Date.now()}-${++_idSeq}`;
 
+/** Deterministic 8-char hex fingerprint of provider:model, baked into AIActor ids. */
+function providerModelHash(provider: string, model: string): string {
+  const s = `${provider}:${model}`;
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(16).padStart(8, '0');
+}
+
 function defaultActor(pos = { x: 100, y: 100 }): AIActorDef {
+  const provider = 'claude';
+  const model = 'claude-sonnet-4-6';
+  const base = nextId('actor');
   return {
-    id: `urn:cantica:studio:actor:${nextId('actor')}`,
+    id: `urn:cantica:studio:actor:${base}-${providerModelHash(provider, model)}`,
     name: `actor-${_idSeq}`,
     actorType: 'ai',
     definePrompt: {},
-    provider: 'claude',
-    model: 'claude-sonnet-4-6',
+    provider,
+    model,
     maxTokens: 4096,
     maxHistory: 10,
     position: pos,

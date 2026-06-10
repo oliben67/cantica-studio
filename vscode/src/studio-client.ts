@@ -202,6 +202,25 @@ export class StudioClient {
 
 // ── JSON-LD ↔ ActorGraph conversion (host side) ───────────────────────────────
 
+/** Deterministic 8-char hex fingerprint of provider:model, baked into AIActor ids. */
+function _providerModelHash(provider: string, model: string): string {
+  const s = `${provider}:${model}`;
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(16).padStart(8, '0');
+}
+
+/**
+ * Extract the hash segment from an AIActor id.
+ * Format: urn:cantica:studio:actor:actor-{ts}-{seq}-{8hexchars}
+ * Returns null for ids without the hash (legacy or CodeActor).
+ */
+function _extractAiHash(id: string): string | null {
+  const local = id.replace(/^urn:cantica:studio:actor:/, '');
+  const m = local.match(/^actor-\d+-\d+-([0-9a-f]{8})$/);
+  return m ? m[1] : null;
+}
+
 export function parseGraph(raw: Record<string, unknown>): ActorGraph {
   const actors = ((raw['actors'] ?? []) as Record<string, unknown>[]).map(_parseActor);
   // Drop: kindless legacy edges AND self-loop edges.
@@ -246,16 +265,22 @@ function _parseActor(r: Record<string, unknown>): AIActorDef {
     };
   });
   const actorType = ((r['actorType'] as string | undefined) ?? 'ai') as 'ai' | 'python' | 'typescript';
+  const id = (r['@id'] as string) ?? '';
+  const provider = (r['provider'] as string) ?? 'claude';
+  const model = (r['model'] as string) ?? 'claude-sonnet-4-6';
+  const idHash = actorType === 'ai' ? _extractAiHash(id) : null;
+  const corrupted = idHash !== null && idHash !== _providerModelHash(provider, model);
   return {
-    id: (r['@id'] as string) ?? '',
+    id,
     name: (r['name'] as string) ?? '',
     actorType,
     ...(r['scriptPath'] ? { scriptPath: r['scriptPath'] as string } : {}),
     ...(r['scriptCommand'] ? { scriptCommand: r['scriptCommand'] as string } : {}),
     ...(r['directory'] ? { directory: r['directory'] as string } : {}),
     definePrompt: _parseRef(r['definePrompt']),
-    provider: (r['provider'] as string) ?? 'claude',
-    model: (r['model'] as string) ?? 'claude-sonnet-4-6',
+    provider,
+    model,
+    ...(corrupted ? { corrupted: true } : {}),
     maxTokens: (r['maxTokens'] as number) ?? 4096,
     maxHistory: (r['maxHistory'] as number) ?? 10,
     position: { x: (pos.x ?? 0), y: (pos.y ?? 0) },

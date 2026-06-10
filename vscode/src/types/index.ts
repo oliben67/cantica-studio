@@ -48,6 +48,8 @@ export interface AIActorDef {
   promptEvents: PromptEventDef[];
   cronJobs: CronJobDef[];
   resources: AgentResource[];
+  /** True when an AIActor's provider/model fields no longer match the hash encoded in its id. */
+  corrupted?: boolean;
 }
 
 export interface ActorEdgeDef {

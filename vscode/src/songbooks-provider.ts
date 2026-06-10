@@ -1,23 +1,19 @@
 import * as vscode from 'vscode';
 
-// ── Raw data shapes (produced by findSongbooks in extension.ts) ───────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-export interface SongbookRawFile {
-  kind: 'file';
-  label: string;
-  uri: vscode.Uri;
+const SONGBOOK_EXTS = new Set(['.json', '.jsonld', '.yaml', '.yml']);
+
+function _isSongbook(name: string): boolean {
+  const dot = name.lastIndexOf('.');
+  return dot !== -1 && SONGBOOK_EXTS.has(name.slice(dot));
 }
 
-export interface SongbookRawFolder {
-  kind: 'folder';
-  label: string;
-  uri: vscode.Uri;
-  children: SongbookRawFile[];
+/** Strip the file extension to produce a clean display name. */
+function _displayLabel(fileName: string): string {
+  const dot = fileName.lastIndexOf('.');
+  return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
-
-export type SongbookRawEntry = SongbookRawFile | SongbookRawFolder;
-
-export type SongbookViewMode = 'tree' | 'list';
 
 // ── Tree-item classes ─────────────────────────────────────────────────────────
 
@@ -27,17 +23,23 @@ export class SongbookItem extends vscode.TreeItem {
   constructor(
     readonly label: string,
     readonly uri: vscode.Uri,
+    isActive = false,
+    description?: string,
   ) {
     super(label, vscode.TreeItemCollapsibleState.None);
-    this.iconPath = new vscode.ThemeIcon('file-code');
-    this.description = vscode.workspace.asRelativePath(uri, false);
-    this.tooltip = uri.fsPath;
+    this.id = uri.fsPath;
+    this.resourceUri = uri;
+    this.tooltip = new vscode.MarkdownString(`**${label}**\n\n\`${uri.fsPath}\``);
     this.contextValue = 'songbook';
-    this.command = {
-      command: 'canticaScores.viewSongbook',
-      title: 'Open Songbook',
-      arguments: [this],
-    };
+    this.command = { command: 'canticaScores.viewSongbook', title: 'Open', arguments: [this] };
+
+    if (isActive) {
+      this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green'));
+      this.description = description ?? 'open';
+    } else {
+      this.iconPath = new vscode.ThemeIcon('file-code');
+      if (description) this.description = description;
+    }
   }
 }
 
@@ -47,16 +49,21 @@ export class SongbookFolderItem extends vscode.TreeItem {
   constructor(
     readonly label: string,
     readonly uri: vscode.Uri,
-    readonly children: SongbookItem[],
+    isExpanded = false,
   ) {
-    super(label, vscode.TreeItemCollapsibleState.Expanded);
-    this.iconPath = new vscode.ThemeIcon('folder-opened');
+    super(label, isExpanded
+      ? vscode.TreeItemCollapsibleState.Expanded
+      : vscode.TreeItemCollapsibleState.Collapsed);
+    this.id = uri.fsPath;
+    this.resourceUri = uri;
     this.tooltip = uri.fsPath;
-    this.contextValue = 'songbookFolder';
+    this.contextValue = 'canticaFolder';
+    this.iconPath = new vscode.ThemeIcon(isExpanded ? 'folder-opened' : 'folder');
   }
 }
 
 export type SongbookNode = SongbookItem | SongbookFolderItem;
+export type SongbookViewMode = 'tree' | 'list';
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
@@ -70,16 +77,43 @@ export class SongbooksProvider
   readonly dragMimeTypes = ['application/vnd.code.tree.canticaScores.songbooksView'];
 
   private _mode: SongbookViewMode = 'tree';
-  private _entries: SongbookRawEntry[] = [];
+  private _rootUri: vscode.Uri | undefined;
+  private _activeUri: string | undefined;
+  private _expandedFolders = new Set<string>();
   private _dropHandler?: (sources: vscode.Uri[], target: SongbookFolderItem | undefined) => Promise<void>;
+
+  setRoot(uri: vscode.Uri): void {
+    this._rootUri = uri;
+    this._evt.fire(undefined);
+  }
+
+  refresh(): void {
+    this._evt.fire(undefined);
+  }
 
   setMode(mode: SongbookViewMode): void {
     this._mode = mode;
     this._evt.fire(undefined);
   }
 
-  update(entries: SongbookRawEntry[]): void {
-    this._entries = entries;
+  get activeUri(): string | undefined { return this._activeUri; }
+
+  setActive(uri: vscode.Uri | undefined): void {
+    const next = uri?.fsPath;
+    if (next !== this._activeUri) {
+      this._activeUri = next;
+      this._evt.fire(undefined);
+    }
+  }
+
+  setFolderExpanded(fsPath: string, expanded: boolean): void {
+    const had = this._expandedFolders.has(fsPath);
+    if (expanded === had) return;
+    if (expanded) {
+      this._expandedFolders.add(fsPath);
+    } else {
+      this._expandedFolders.delete(fsPath);
+    }
     this._evt.fire(undefined);
   }
 
@@ -88,17 +122,12 @@ export class SongbooksProvider
   }
 
   handleDrag(source: SongbookNode[], dataTransfer: vscode.DataTransfer): void {
-    const files = source.filter((n): n is SongbookItem => n.kind === 'file');
-    const uriList = files.map((f) => f.uri.toString()).join('\r\n');
-    // Private MIME: carries URI strings; used for move-within-tree and as fallback
+    const uriList = source.map((n) => n.uri.toString()).join('\r\n');
     dataTransfer.set(
       'application/vnd.code.tree.canticaScores.songbooksView',
       new vscode.DataTransferItem(uriList),
     );
-    // Standard URI list: lets items be dropped into the canvas WebView to load them
-    if (files.length > 0) {
-      dataTransfer.set('text/uri-list', new vscode.DataTransferItem(uriList));
-    }
+    dataTransfer.set('text/uri-list', new vscode.DataTransferItem(uriList));
   }
 
   async handleDrop(target: SongbookNode | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
@@ -127,29 +156,73 @@ export class SongbooksProvider
     return el;
   }
 
-  getChildren(el?: SongbookNode): SongbookNode[] {
+  async getChildren(el?: SongbookNode): Promise<SongbookNode[]> {
     if (this._mode === 'list') {
       if (el) return [];
-      return this._entries.flatMap((e): SongbookItem[] =>
-        e.kind === 'file'
-          ? [new SongbookItem(e.label, e.uri)]
-          : e.children.map((c) => new SongbookItem(`${e.label}/${c.label}`, c.uri)),
-      );
+      return this._listAll(this._rootUri);
     }
+    const dir = el ? el.uri : this._rootUri;
+    if (!dir) return [];
+    return this._readDir(dir);
+  }
 
-    // tree mode
-    if (!el) {
-      return this._entries.map((e): SongbookNode =>
-        e.kind === 'file'
-          ? new SongbookItem(e.label, e.uri)
-          : new SongbookFolderItem(
-              e.label,
-              e.uri,
-              e.children.map((c) => new SongbookItem(c.label, c.uri)),
-            ),
-      );
+  private async _readDir(dir: vscode.Uri): Promise<SongbookNode[]> {
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(dir);
+
+      const nodes: SongbookNode[] = [];
+      const folders: [string, vscode.Uri][] = [];
+      const files: [string, vscode.Uri][] = [];
+
+      for (const [name, type] of entries) {
+        const uri = vscode.Uri.joinPath(dir, name);
+        if (type === vscode.FileType.Directory) {
+          folders.push([name, uri]);
+        } else if (_isSongbook(name)) {
+          files.push([name, uri]);
+        }
+      }
+
+      // Sort each group alphabetically
+      folders.sort(([a], [b]) => a.localeCompare(b));
+      files.sort(([a], [b]) => a.localeCompare(b));
+
+      for (const [name, uri] of folders) {
+        nodes.push(new SongbookFolderItem(name, uri, this._expandedFolders.has(uri.fsPath)));
+      }
+      for (const [name, uri] of files) {
+        nodes.push(new SongbookItem(_displayLabel(name), uri, uri.fsPath === this._activeUri));
+      }
+
+      return nodes;
+    } catch {
+      return [];
     }
-    if (el.kind === 'folder') return el.children;
-    return [];
+  }
+
+  private async _listAll(dir: vscode.Uri | undefined, prefix = ''): Promise<SongbookItem[]> {
+    if (!dir) return [];
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(dir);
+      const results: SongbookItem[] = [];
+
+      for (const [name, type] of entries.sort(([a], [b]) => a.localeCompare(b))) {
+        const uri = vscode.Uri.joinPath(dir, name);
+        if (type === vscode.FileType.Directory) {
+          results.push(...(await this._listAll(uri, prefix ? `${prefix}/${name}` : name)));
+        } else if (_isSongbook(name)) {
+          results.push(new SongbookItem(
+            _displayLabel(name),
+            uri,
+            uri.fsPath === this._activeUri,
+            prefix || undefined,
+          ));
+        }
+      }
+
+      return results;
+    } catch {
+      return [];
+    }
   }
 }

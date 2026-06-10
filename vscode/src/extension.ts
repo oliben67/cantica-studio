@@ -49,9 +49,6 @@ function canticaHomeRoot(canticaHome: string): string {
   return canticaHome.trim() || `${process.env['HOME'] ?? '~'}/.cantica`;
 }
 
-function canticaHomeDir(canticaHome: string): vscode.Uri {
-  return vscode.Uri.file(canticaHomeRoot(canticaHome));
-}
 
 function songbooksRoot(canticaHome: string): string {
   return `${canticaHomeRoot(canticaHome)}/songbooks`;

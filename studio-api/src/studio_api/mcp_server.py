@@ -132,7 +132,6 @@ def start_code_actor(
     """
     from studio_api.runtime import ActorDef  # noqa: PLC0415
     defn = ActorDef(
-        id=f"urn:cantica:studio:actor:{actor_name}",
         name=actor_name,
         define_prompt="",
         actor_type=actor_type,

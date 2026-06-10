@@ -14,7 +14,7 @@ from studio_api.runtime import ActorDef, ActorRuntime, _make_provider, _resolve
 
 
 def test_actor_def_defaults():
-    d = ActorDef(id="urn:x", name="bot", define_prompt="You are a bot.")
+    d = ActorDef(name="bot", define_prompt="You are a bot.")
     assert d.prompt_events == []
     assert d.cron_jobs == []
     assert d.outbox == {}
@@ -22,7 +22,7 @@ def test_actor_def_defaults():
 
 def test_actor_def_stores_fields():
     d = ActorDef(
-        id="urn:x", name="bot", define_prompt="p",
+        name="bot", define_prompt="p",
         provider="gpt", model="gpt-4o", max_tokens=2048, max_history=5,
         prompt_events=[{"name": "e", "prompt": "ep"}],
         cron_jobs=[{"schedule": "* * * * *", "prompt": "cp", "name": "tick"}],
@@ -118,7 +118,7 @@ def _actor_def(
     define_prompt: str = "",
     **kwargs,
 ) -> ActorDef:
-    return ActorDef(id=f"urn:x:{name}", name=name, define_prompt=define_prompt, **kwargs)
+    return ActorDef(name=name, define_prompt=define_prompt, **kwargs)
 
 
 def test_list_running_empty():
@@ -288,12 +288,12 @@ def test_cron_schedule_parsing_five_fields():
 
 
 def test_actor_def_directory_defaults_to_empty_string():
-    d = ActorDef(id="urn:x", name="b", define_prompt="p")
+    d = ActorDef(name="b", define_prompt="p")
     assert d.directory == ""
 
 
 def test_actor_def_stores_directory():
-    d = ActorDef(id="urn:x", name="b", define_prompt="p", directory="src/")
+    d = ActorDef(name="b", define_prompt="p", directory="src/")
     assert d.directory == "src/"
 
 
@@ -346,7 +346,7 @@ def test_directory_resource_name_uses_basename():
 
 def test_actor_def_code_fields():
     d = ActorDef(
-        id="urn:x", name="w", define_prompt="",
+        name="w", define_prompt="",
         actor_type="python", script_path="/a/b.py", script_command="python3",
     )
     assert d.actor_type == "python"
@@ -458,7 +458,7 @@ def test_fire_event_legacy_single_target_actor_key():
         )
         rt.start(_actor_def("target"), connector)
 
-    evts = rt._ai_events.get("source", [])
+    evts = rt._actors["source"].ai_events
     assert evts[0].target_actors == ["target"]   # promoted to list
     rt.fire_event("source", "ping")
     proxy_b.instruct.assert_called_once_with("out")
@@ -473,7 +473,7 @@ def test_fire_event_unknown_actor_raises():
 
 
 def test_ai_events_stored_on_start():
-    """Resolved AI actor events are saved in _ai_events on start."""
+    """Resolved AI actor events are saved in _actors[name].ai_events on start."""
     rt = ActorRuntime()
     connector = _mock_connector()
     defn = _actor_def(
@@ -485,7 +485,7 @@ def test_ai_events_stored_on_start():
          patch("pykka.ThreadingActor.start", return_value=started_ref):
         rt.start(defn, connector)
 
-    events = rt._ai_events.get("test-actor", [])
+    events = rt._actors["test-actor"].ai_events
     assert len(events) == 1
     assert events[0].name == "on-review"
     assert events[0].prompt == "Review this."
@@ -539,7 +539,7 @@ def test_fire_event_self_with_context():
 
 
 def test_ai_events_cleared_on_stop():
-    """_ai_events entry is removed when the actor is stopped."""
+    """_actors entry is removed when the actor is stopped."""
     rt = ActorRuntime()
     connector = _mock_connector()
 
@@ -549,10 +549,10 @@ def test_ai_events_cleared_on_stop():
     with patch("studio_api.runtime._make_provider", return_value=None), \
          patch("pykka.ThreadingActor.start", return_value=started_ref):
         rt.start(_actor_def(prompt_events=[{"name": "e", "prompt": "p"}]), connector)
-        assert "test-actor" in rt._ai_events
+        assert "test-actor" in rt._actors
         rt.stop("test-actor")
 
-    assert "test-actor" not in rt._ai_events
+    assert "test-actor" not in rt._actors
     rt.stop_all()
 
 
@@ -585,7 +585,6 @@ def test_start_typescript_code_actor(tmp_path):
     proc = _FakeProc()
     rt = ActorRuntime()
     defn = ActorDef(
-        id="urn:x:ts",
         name="ts-worker",
         define_prompt="",
         actor_type="typescript",
@@ -615,7 +614,7 @@ def test_code_cron_invalid_schedule_warns(tmp_path):
     )
     rt = ActorRuntime()
     rt.start(
-        ActorDef(id="urn:x", name="bad-cron", define_prompt="", actor_type="python",
+        ActorDef(name="bad-cron", define_prompt="", actor_type="python",
                  script_path=str(p)),
         MagicMock(),
     )

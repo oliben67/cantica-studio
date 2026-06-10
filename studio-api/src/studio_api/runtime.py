@@ -23,7 +23,6 @@ _log = logging.getLogger(__name__)
 class ActorDef:
     """Serialised form of an actor from the JSON-LD graph."""
 
-    id: str
     name: str
     define_prompt: str
     actor_type: str = "ai"              # "ai" | "python" | "typescript"
@@ -38,6 +37,20 @@ class ActorDef:
     outbox: dict[str, str] = field(default_factory=dict)
     resources: list[dict] = field(default_factory=list)
     directory: str = ""                  # optional working directory exposed via MCP filesystem
+
+
+@dataclass
+class _ActorState:
+    """All runtime state for a single actor, keyed by name in ActorRuntime._actors."""
+
+    ref: Any
+    defn: ActorDef
+    resources: list[AgentResource] = field(default_factory=list)
+    ai_events: list[PromptEventDef] = field(default_factory=list)
+    code_events: list[dict] = field(default_factory=list)
+    code_crons: list[dict] = field(default_factory=list)
+    paused: bool = False
+    queued: list[str] = field(default_factory=list)
 
 
 def _make_provider(provider: str, model: str) -> Any:
@@ -74,14 +87,7 @@ class ActorRuntime:
     """Manages running actor instances (AI and code), cron schedules, and agent resources."""
 
     def __init__(self, sessions_dir: Path | None = None) -> None:
-        self._refs: dict[str, Any] = {}
-        self._defs: dict[str, ActorDef] = {}                         # name → ActorDef
-        self._resources: dict[str, list[AgentResource]] = {}         # name → resources
-        self._ai_events: dict[str, list[PromptEventDef]] = {}        # name → resolved AI events
-        self._code_events: dict[str, list[dict]] = {}                # name → discovered events
-        self._code_crons: dict[str, list[dict]] = {}                 # name → discovered crons
-        self._paused: set[str] = set()                               # names of paused actors
-        self._queued: dict[str, list[str]] = {}                      # name → queued instructions
+        self._actors: dict[str, _ActorState] = {}
         self._sessions_dir = sessions_dir
         self._scheduler = BackgroundScheduler()
         self._scheduler.start()
@@ -94,7 +100,7 @@ class ActorRuntime:
 
     def start(self, defn: ActorDef, connector: CanticaConnector) -> str | None:
         """Start an actor. Returns the warm-up output when a fresh AI actor is initialised."""
-        if defn.name in self._refs:
+        if defn.name in self._actors:
             raise ValueError(f"Actor {defn.name!r} is already running")
 
         if defn.actor_type in ("python", "typescript"):
@@ -152,10 +158,12 @@ class ActorRuntime:
         )
 
         ref = actor_cls.start()
-        self._refs[defn.name] = ref
-        self._defs[defn.name] = defn
-        self._resources[defn.name] = self._build_resources(defn)
-        self._ai_events[defn.name] = resolved_events
+        self._actors[defn.name] = _ActorState(
+            ref=ref,
+            defn=defn,
+            resources=self._build_resources(defn),
+            ai_events=resolved_events,
+        )
         self._register_crons(defn.name, resolved_crons)
 
         proxy = ref.proxy()
@@ -188,53 +196,49 @@ class ActorRuntime:
             )
 
         ref = actor_cls.start()
-        self._refs[defn.name] = ref
-        self._defs[defn.name] = defn
-        self._resources[defn.name] = self._build_resources(defn)
-
-        # Discover events and crons from the running actor (available after on_start).
         proxy = ref.proxy()
-        self._code_events[defn.name] = proxy.get_events().get(timeout=15)
+        code_events = proxy.get_events().get(timeout=15)
         code_crons = proxy.get_crons().get(timeout=15)
-        self._code_crons[defn.name] = code_crons
+        self._actors[defn.name] = _ActorState(
+            ref=ref,
+            defn=defn,
+            resources=self._build_resources(defn),
+            code_events=code_events,
+            code_crons=code_crons,
+        )
         self._register_code_crons(defn.name, code_crons)
         _log.info("Started %s code actor %r", defn.actor_type, defn.name)
 
     def pause(self, name: str) -> None:
-        if name not in self._refs:
+        if name not in self._actors:
             raise KeyError(f"Actor {name!r} is not running")
-        self._paused.add(name)
-        self._queued.setdefault(name, [])
+        self._actors[name].paused = True
         _log.info("Paused actor %r", name)
 
     def resume(self, name: str) -> int:
         """Unpause an actor and flush its queued instructions. Returns the number flushed."""
-        if name not in self._refs:
+        if name not in self._actors:
             raise KeyError(f"Actor {name!r} is not running")
-        self._paused.discard(name)
-        queued = self._queued.pop(name, [])
+        state = self._actors[name]
+        state.paused = False
+        queued = state.queued[:]
+        state.queued.clear()
         for instruction in queued:
             try:
-                proxy = self._get_proxy(name)
-                proxy.instruct(instruction).get(timeout=360)
+                self._actors[name].ref.proxy().instruct(instruction).get(timeout=360)
             except Exception as exc:
                 _log.error("Failed to flush queued instruction for %r: %s", name, exc)
         _log.info("Resumed actor %r, flushed %d queued instruction(s)", name, len(queued))
         return len(queued)
 
     def is_paused(self, name: str) -> bool:
-        return name in self._paused
+        state = self._actors.get(name)
+        return state.paused if state else False
 
     def stop(self, name: str) -> None:
-        ref = self._refs.pop(name, None)
-        if ref is None:
+        state = self._actors.pop(name, None)
+        if state is None:
             raise KeyError(f"Actor {name!r} is not running")
-        self._defs.pop(name, None)
-        self._ai_events.pop(name, None)
-        self._code_events.pop(name, None)
-        self._code_crons.pop(name, None)
-        self._paused.discard(name)
-        self._queued.pop(name, None)
         try:
             for job in self._scheduler.get_jobs():
                 if job.id.startswith(f"cron-{name}-"):
@@ -242,19 +246,19 @@ class ActorRuntime:
         except Exception:
             pass
         try:
-            session = ref.proxy().get_session().get(timeout=5)
+            session = state.ref.proxy().get_session().get(timeout=5)
             if session:
                 self._save_session(name, session)
         except Exception as exc:
             _log.warning("Could not save session for actor %r: %s", name, exc)
         try:
-            ref.stop()
+            state.ref.stop()
         except Exception:
             pass
         _log.info("Stopped actor %r", name)
 
     def stop_all(self) -> None:
-        for name in list(self._refs):
+        for name in list(self._actors):
             try:
                 self.stop(name)
             except Exception:
@@ -267,12 +271,14 @@ class ActorRuntime:
     # ── Messaging ─────────────────────────────────────────────────────────────
 
     def instruct(self, name: str, text: str) -> str:
-        if name in self._paused:
-            self._queued.setdefault(name, []).append(text)
-            _log.info("Actor %r is paused — queued instruction (%d total)", name, len(self._queued[name]))
-            return f"⏸ Queued (actor is paused — {len(self._queued[name])} instruction(s) pending)"
-        proxy = self._get_proxy(name)
-        return proxy.instruct(text).get(timeout=360)
+        state = self._actors.get(name)
+        if state is None:
+            raise KeyError(f"Actor {name!r} is not running")
+        if state.paused:
+            state.queued.append(text)
+            _log.info("Actor %r is paused — queued instruction (%d total)", name, len(state.queued))
+            return f"⏸ Queued (actor is paused — {len(state.queued)} instruction(s) pending)"
+        return state.ref.proxy().instruct(text).get(timeout=360)
 
     def fire_event(self, name: str, event_name: str, context: str = "") -> dict:
         """Fire a named event on an actor, routing output to all configured target actors.
@@ -283,41 +289,42 @@ class ActorRuntime:
         target actors are configured the output is returned to the caller (self-loop).
         For code actors (or when the event is not found) delegates to proxy.fire_event.
         """
-        for evt in self._ai_events.get(name, []):
-            if evt.name == event_name:
-                instruction = f"{evt.prompt}\n\n{context}" if context else evt.prompt
-                output = self._get_proxy(name).instruct(instruction).get(timeout=360)
-                forwarded = []
-                for target in evt.target_actors:
-                    if target and target in self._refs:
-                        target_output = self.instruct(target, output)
-                        forwarded.append({"name": target, "prompt": output, "output": target_output})
-                return {"output": output, "forwarded": forwarded}
+        state = self._actors.get(name)
+        if state:
+            for evt in state.ai_events:
+                if evt.name == event_name:
+                    instruction = f"{evt.prompt}\n\n{context}" if context else evt.prompt
+                    output = state.ref.proxy().instruct(instruction).get(timeout=360)
+                    forwarded = []
+                    for target in evt.target_actors:
+                        if target and target in self._actors:
+                            target_output = self.instruct(target, output)
+                            forwarded.append({"name": target, "prompt": output, "output": target_output})
+                    return {"output": output, "forwarded": forwarded}
         output = self._get_proxy(name).fire_event(event_name, context).get(timeout=360)
         return {"output": output, "forwarded": []}
 
     def list_running(self) -> list[str]:
-        return list(self._refs)
+        return list(self._actors)
 
     # ── Code actor introspection ───────────────────────────────────────────────
 
     def get_actor_type(self, name: str) -> str:
-        if name not in self._refs:
+        if name not in self._actors:
             raise KeyError(f"Actor {name!r} is not running")
-        defn = self._defs.get(name)
-        return defn.actor_type if defn else "ai"
+        return self._actors[name].defn.actor_type
 
     def get_actor_events(self, name: str) -> list[dict]:
         """Return the discovered events for a code actor (empty list for AI actors)."""
-        if name not in self._refs:
+        if name not in self._actors:
             raise KeyError(f"Actor {name!r} is not running")
-        return list(self._code_events.get(name, []))
+        return list(self._actors[name].code_events)
 
     def get_actor_crons(self, name: str) -> list[dict]:
         """Return the discovered cron jobs for a code actor (empty list for AI actors)."""
-        if name not in self._refs:
+        if name not in self._actors:
             raise KeyError(f"Actor {name!r} is not running")
-        return list(self._code_crons.get(name, []))
+        return list(self._actors[name].code_crons)
 
     def get_actor_chat(self, name: str) -> str:
         """Return captured log output for a code actor (empty string for AI actors)."""
@@ -330,22 +337,24 @@ class ActorRuntime:
     # ── Agent resources ───────────────────────────────────────────────────────
 
     def get_resources(self, name: str) -> list[dict]:
-        return [r.to_dict() for r in self._resources.get(name, [])]
+        state = self._actors.get(name)
+        return [r.to_dict() for r in (state.resources if state else [])]
 
     def get_accessible_resources(self, actor_name: str) -> list[dict]:
         """Resources owned by the actor plus resources shared with it by others."""
-        result = list(self._resources.get(actor_name, []))
-        for owner, resources in self._resources.items():
+        state = self._actors.get(actor_name)
+        result = list(state.resources if state else [])
+        for owner, s in self._actors.items():
             if owner == actor_name:
                 continue
-            for r in resources:
+            for r in s.resources:
                 if actor_name in r.shared_with:
                     result.append(r)
         return [r.to_dict() for r in result]
 
     def add_resource(self, actor_name: str, data: dict) -> dict:
         """Add a dynamic resource to a running actor."""
-        if actor_name not in self._refs:
+        if actor_name not in self._actors:
             raise KeyError(f"Actor {actor_name!r} is not running")
         r = AgentResource(
             id=str(uuid.uuid4()),
@@ -356,13 +365,13 @@ class ActorRuntime:
             dynamic=True,
             shared_with=[],
         )
-        self._resources.setdefault(actor_name, []).append(r)
+        self._actors[actor_name].resources.append(r)
         _log.info("Actor %r added resource %r", actor_name, r.id)
         return r.to_dict()
 
     def delete_resource(self, actor_name: str, resource_id: str) -> None:
         """Delete a dynamic, unshared resource (raises if locked)."""
-        resources = self._resources.get(actor_name, [])
+        resources = self._actors[actor_name].resources if actor_name in self._actors else []
         for i, r in enumerate(resources):
             if r.id == resource_id:
                 if r.locked:
@@ -377,7 +386,8 @@ class ActorRuntime:
 
     def share_resource(self, actor_name: str, resource_id: str, target_actor: str) -> dict:
         """Share a resource with another actor (locks it)."""
-        for r in self._resources.get(actor_name, []):
+        resources = self._actors[actor_name].resources if actor_name in self._actors else []
+        for r in resources:
             if r.id == resource_id:
                 if target_actor not in r.shared_with:
                     r.shared_with.append(target_actor)
@@ -428,10 +438,10 @@ class ActorRuntime:
         return resources
 
     def _get_proxy(self, name: str) -> Any:
-        ref = self._refs.get(name)
-        if ref is None:
+        state = self._actors.get(name)
+        if state is None:
             raise KeyError(f"Actor {name!r} is not running")
-        return ref.proxy()
+        return state.ref.proxy()
 
     def _save_session(self, name: str, session: list[dict]) -> None:
         if self._sessions_dir is None:
@@ -473,15 +483,15 @@ class ActorRuntime:
                     ta: str | None = target_actor,
                     te: str | None = target_event,
                 ) -> None:
-                    if actor_name in self._paused:
-                        _log.debug("Skipping cron for paused actor %r", actor_name)
+                    state = self._actors.get(actor_name)
+                    if state is None or state.paused:
+                        _log.debug("Skipping cron for paused/stopped actor %r", actor_name)
                         return
                     try:
-                        proxy = self._refs[actor_name].proxy()
-                        output = proxy.instruct(p).get(timeout=360)
+                        output = state.ref.proxy().instruct(p).get(timeout=360)
                         with self._forwarded_log_lock:
                             self._forwarded_log.append({"name": actor_name, "prompt": p, "output": output})
-                        if ta and ta in self._refs:
+                        if ta and ta in self._actors:
                             if te:
                                 result = self.fire_event(ta, te, output)
                                 with self._forwarded_log_lock:
@@ -506,9 +516,11 @@ class ActorRuntime:
                 trigger = _make_cron_trigger(schedule)
 
                 def _run(actor_name: str = name, cn: str = cron_name) -> None:
+                    state = self._actors.get(actor_name)
+                    if state is None:
+                        return
                     try:
-                        proxy = self._refs[actor_name].proxy()
-                        proxy.run_cron(cn).get(timeout=360)
+                        state.ref.proxy().run_cron(cn).get(timeout=360)
                     except Exception as exc:
                         _log.error("Code cron %r for actor %r failed: %s", cn, actor_name, exc)
 

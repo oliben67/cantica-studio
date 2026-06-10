@@ -26,7 +26,6 @@ def _code_def(
 ) -> tuple[ActorDef, Path]:
     p = _write_py_module(tmp_path, code)
     defn = ActorDef(
-        id=f"urn:x:{name}",
         name=name,
         define_prompt="",
         actor_type=actor_type,
@@ -39,14 +38,14 @@ def _code_def(
 
 
 def test_actor_def_defaults_ai():
-    d = ActorDef(id="urn:x", name="bot", define_prompt="p")
+    d = ActorDef(name="bot", define_prompt="p")
     assert d.actor_type == "ai"
     assert d.script_path == ""
     assert d.script_command == ""
 
 
 def test_actor_def_python_type():
-    d = ActorDef(id="urn:x", name="w", define_prompt="", actor_type="python", script_path="/a/b.py")
+    d = ActorDef(name="w", define_prompt="", actor_type="python", script_path="/a/b.py")
     assert d.actor_type == "python"
     assert d.script_path == "/a/b.py"
 
@@ -170,7 +169,7 @@ def test_get_actor_type_ai():
     started_ref.proxy.return_value = MagicMock()
     with patch("studio_api.runtime._make_provider", return_value=None), \
          patch("pykka.ThreadingActor.start", return_value=started_ref):
-        rt.start(ActorDef(id="urn:x", name="ai-bot", define_prompt="p"), connector)
+        rt.start(ActorDef(name="ai-bot", define_prompt="p"), connector)
     assert rt.get_actor_type("ai-bot") == "ai"
     rt.stop_all()
 
@@ -229,10 +228,9 @@ def x(ctx): return ""
     )
     rt = ActorRuntime()
     rt.start(defn, MagicMock())
-    assert "worker" in rt._code_events
+    assert "worker" in rt._actors
     rt.stop("worker")
-    assert "worker" not in rt._code_events
-    assert "worker" not in rt._code_crons
+    assert "worker" not in rt._actors
     rt.stop_all()
 
 

@@ -51,33 +51,18 @@ def client(
     """FastAPI TestClient with mocked runtime, connector, and test workspace."""
     tmp_workspace.mkdir(parents=True, exist_ok=True)
 
-    # Inject test settings so all endpoints use tmp_workspace
     import studio_api.config as cfg_mod  # noqa: PLC0415
+    import studio_api.mcp_server as mcp_mod  # noqa: PLC0415
 
     test_settings = Settings(workspace=tmp_workspace)
     monkeypatch.setattr(cfg_mod, "_settings", test_settings)
 
     app = create_app()
 
-    from studio_api.api.v1 import prompts as prompts_ep  # noqa: PLC0415
-    from studio_api.api.v1 import runtime as runtime_ep  # noqa: PLC0415
-    import studio_api.mcp_server as mcp_mod  # noqa: PLC0415
-
-    from studio_api.api.v1 import resources as resources_ep  # noqa: PLC0415
-
-    # Enter the TestClient context (this triggers lifespan and sets real singletons),
-    # then immediately replace them with mocks so tests run against controlled fakes.
     with TestClient(app, raise_server_exceptions=True) as c:
-        prompts_ep._connector = mock_connector
-        runtime_ep._runtime = mock_runtime
-        runtime_ep._connector = mock_connector
-        resources_ep._runtime = mock_runtime
-        mcp_mod.init(WorkspaceFS(tmp_workspace))
+        # Override lifespan-created state with test doubles so all Depends calls
+        # and the mcp_server module receive the mocks.
+        app.state.runtime = mock_runtime
+        app.state.connector = mock_connector
+        mcp_mod.init(WorkspaceFS(tmp_workspace), mock_runtime)
         yield c
-
-    # Cleanup module-level singletons
-    prompts_ep._connector = None
-    runtime_ep._runtime = None
-    runtime_ep._connector = None
-    resources_ep._runtime = None
-    mcp_mod._fs = None

@@ -153,7 +153,6 @@ def mcp_with_rt(fs: WorkspaceFS, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         encoding="utf-8",
     )
     defn = ActorDef(
-        id="urn:x:res",
         name="res-actor",
         define_prompt="",
         actor_type="python",
@@ -222,7 +221,6 @@ async def test_read_actor_resource_directory(tmp_path: Path, monkeypatch: pytest
 
     rt = ActorRuntime()
     defn = ActorDef(
-        id="urn:x:dir",
         name="dir-actor",
         define_prompt="",
         directory="docs",
@@ -277,7 +275,7 @@ async def test_share_actor_resource_via_mcp(mcp_with_rt, tmp_path: Path):
     from studio_api.runtime import ActorDef  # noqa: PLC0415
     from unittest.mock import MagicMock  # noqa: PLC0415
     rt.start(
-        ActorDef(id="urn:x:a2", name="actor2", define_prompt="", actor_type="python",
+        ActorDef(name="actor2", define_prompt="", actor_type="python",
                  script_path=str(py_script2)),
         MagicMock(),
     )

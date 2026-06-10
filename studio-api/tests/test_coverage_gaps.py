@@ -2,7 +2,6 @@
 
 Grouped by source module:
   api/v1/graph.py      save_graph write-failure 500 path
-  api/v1/*.py          uninitialised-guard functions (_get, _rt, _cn)
   cantica_client.py    PromptInfo, network-exception handlers
   main.py              main() and __main__ guard
   mcp_server.py        code-actor lifecycle tools
@@ -16,7 +15,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from fastmcp import Client
 
@@ -24,7 +22,7 @@ import studio_api.mcp_server as mcp_mod
 from studio_api.cantica_client import CanticaConnector, PromptInfo
 from studio_api.config import CanticaServerConfig
 from studio_api.mcp_server import mcp
-from studio_api.runtime import ActorDef, ActorRuntime
+from studio_api.runtime import ActorDef, ActorRuntime, _ActorState
 from studio_api.workspace_fs import WorkspaceFS
 
 
@@ -32,7 +30,7 @@ from studio_api.workspace_fs import WorkspaceFS
 
 
 def _adef(name: str = "test-actor", **kw) -> ActorDef:
-    return ActorDef(id=f"urn:x:{name}", name=name, define_prompt="", **kw)
+    return ActorDef(name=name, define_prompt="", **kw)
 
 
 def _conn(content: str = "System prompt") -> MagicMock:
@@ -56,64 +54,6 @@ def test_save_graph_returns_500_on_write_error(client: TestClient) -> None:
         r = client.put("/v1/graph", json={"data": {}})
     assert r.status_code == 500
     assert "disk full" in r.json()["detail"]
-
-
-# ── api/v1/prompts.py:22 — _get() guard ──────────────────────────────────────
-
-
-def test_prompts_connector_guard_raises() -> None:
-    """_get() raises RuntimeError when _connector is None."""
-    import studio_api.api.v1.prompts as mod  # noqa: PLC0415
-
-    saved, mod._connector = mod._connector, None
-    try:
-        with pytest.raises(RuntimeError, match="not initialised"):
-            mod._get()
-    finally:
-        mod._connector = saved
-
-
-# ── api/v1/resources.py:25 — _rt() guard ─────────────────────────────────────
-
-
-def test_resources_rt_guard_raises_503() -> None:
-    """_rt() in resources endpoint raises HTTPException(503) when None."""
-    import studio_api.api.v1.resources as mod  # noqa: PLC0415
-
-    saved, mod._runtime = mod._runtime, None
-    try:
-        with pytest.raises(HTTPException) as exc:
-            mod._rt()
-        assert exc.value.status_code == 503
-    finally:
-        mod._runtime = saved
-
-
-# ── api/v1/runtime.py:29,35 — _rt() and _cn() guards ─────────────────────────
-
-
-def test_runtime_rt_guard_raises() -> None:
-    """_rt() in runtime endpoint raises RuntimeError when None."""
-    import studio_api.api.v1.runtime as mod  # noqa: PLC0415
-
-    saved, mod._runtime = mod._runtime, None
-    try:
-        with pytest.raises(RuntimeError, match="not initialised"):
-            mod._rt()
-    finally:
-        mod._runtime = saved
-
-
-def test_runtime_cn_guard_raises() -> None:
-    """_cn() in runtime endpoint raises RuntimeError when None."""
-    import studio_api.api.v1.runtime as mod  # noqa: PLC0415
-
-    saved, mod._connector = mod._connector, None
-    try:
-        with pytest.raises(RuntimeError, match="not initialised"):
-            mod._cn()
-    finally:
-        mod._connector = saved
 
 
 # ── cantica_client.py:22-25 — PromptInfo ─────────────────────────────────────
@@ -537,7 +477,7 @@ def test_code_cron_fires_run_cron_on_proxy() -> None:
     proxy = MagicMock()
     proxy.run_cron.return_value.get.return_value = "tick"
     ref = _ref(proxy)
-    rt._refs["code-worker"] = ref
+    rt._actors["code-worker"] = _ActorState(ref=ref, defn=ActorDef(name="code-worker", define_prompt=""))
 
     rt._register_code_crons("code-worker", [{"name": "tick", "schedule": "0 9 * * *"}])
     rt._scheduler.get_jobs()[0].func()
@@ -552,7 +492,7 @@ def test_code_cron_exception_is_logged_not_propagated() -> None:
     proxy = MagicMock()
     proxy.run_cron.return_value.get.side_effect = RuntimeError("script crashed")
     ref = _ref(proxy)
-    rt._refs["code-worker"] = ref
+    rt._actors["code-worker"] = _ActorState(ref=ref, defn=ActorDef(name="code-worker", define_prompt=""))
 
     rt._register_code_crons("code-worker", [{"name": "daily", "schedule": "0 9 * * *"}])
     rt._scheduler.get_jobs()[0].func()   # must not raise

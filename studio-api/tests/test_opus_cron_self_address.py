@@ -30,7 +30,6 @@ TIME_PROMPT = "What time is it?"
 
 def _actor_def(**kwargs) -> ActorDef:
     defaults = dict(
-        id="urn:cantica:studio:actor:time-checker",
         name="time-checker",
         define_prompt="",
         provider="claude",
@@ -146,7 +145,7 @@ def test_runtime_starts_opus_actor_with_correct_model() -> None:
         rt.start(_actor_def(), connector)
 
     assert "time-checker" in rt.list_running()
-    defn = rt._defs["time-checker"]
+    defn = rt._actors["time-checker"].defn
     assert defn.model == OPUS_MODEL
     rt.stop_all()
 

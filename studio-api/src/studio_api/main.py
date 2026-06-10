@@ -21,30 +21,24 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
-    from studio_api.api.v1 import prompts as prompts_ep  # noqa: PLC0415
-    from studio_api.api.v1 import runtime as runtime_ep  # noqa: PLC0415
-    from studio_api.api.v1 import resources as resources_ep  # noqa: PLC0415
     from studio_api import mcp_server  # noqa: PLC0415
 
     settings = get_settings()
     log.info("Studio API starting — workspace=%s", settings.workspace)
 
-    connector = CanticaConnector(settings.cantica_servers)
+    _app.state.connector = CanticaConnector(settings.cantica_servers)
     sessions_dir = settings.workspace / ".cantica-studio" / "sessions"
-    rt = ActorRuntime(sessions_dir=sessions_dir)
+    _app.state.runtime = ActorRuntime(sessions_dir=sessions_dir)
     fs = WorkspaceFS(settings.workspace)
 
-    prompts_ep.init(connector)
-    runtime_ep.init(rt, connector)
-    resources_ep.init(rt)
-    mcp_server.init(fs, rt)
+    mcp_server.init(fs, _app.state.runtime)
 
     log.info("Configured %d Cantica server(s)", len(settings.cantica_servers))
 
     yield
 
     log.info("Studio API stopping — shutting down actors")
-    rt.stop_all()
+    _app.state.runtime.stop_all()
 
 
 def create_app() -> FastAPI:

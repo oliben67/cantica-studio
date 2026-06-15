@@ -1,0 +1,303 @@
+import * as child_process from 'node:child_process';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import type { Platform } from './platform.js';
+
+const IMAGE = 'cantica-studio-api:latest';
+const CONTAINER = 'cantica-studio-api';
+const INTERNAL_PORT = 8043;
+
+export type StudioMode = 'native' | 'container';
+
+export class StudioManager {
+  private _nativeProc: child_process.ChildProcess | null = null;
+
+  constructor(private readonly platform: Platform) {}
+
+  dispose(): void {
+    if (this._nativeProc) {
+      try { this._nativeProc.kill(); } catch { /* ignore */ }
+      this._nativeProc = null;
+    }
+  }
+
+  /** Resolved canticaHome from settings or OS default. */
+  static canticaHome(platform: Platform): string {
+    const configured = platform.getConfig<string>('canticaScores', 'canticaHome', '');
+    return configured || path.join(os.homedir(), '.cantica');
+  }
+
+  /** Port for the local studio API (from settings or default). */
+  static studioPort(platform: Platform): number {
+    return platform.getConfig<number>('canticaScores', 'studioPort', INTERNAL_PORT);
+  }
+
+  /** URL for the local studio API. */
+  static studioUrl(platform: Platform): string {
+    return `http://localhost:${StudioManager.studioPort(platform)}`;
+  }
+
+  /** Returns true if Docker is available on PATH. */
+  async isDockerAvailable(): Promise<boolean> {
+    return new Promise((resolve) => {
+      child_process.exec('docker info', { timeout: 5000 }, (err) => resolve(!err));
+    });
+  }
+
+  /** Returns true if the container is currently running. */
+  async isRunning(): Promise<boolean> {
+    return new Promise((resolve) => {
+      child_process.exec(
+        `docker inspect --format "{{.State.Running}}" ${CONTAINER}`,
+        { timeout: 5000 },
+        (err, stdout) => resolve(!err && stdout.trim() === 'true'),
+      );
+    });
+  }
+
+  /** Returns true if the image exists locally. */
+  async imageExists(): Promise<boolean> {
+    return new Promise((resolve) => {
+      child_process.exec(
+        `docker image inspect ${IMAGE}`,
+        { timeout: 5000 },
+        (err) => resolve(!err),
+      );
+    });
+  }
+
+  /** Pull the image from the registry. */
+  async pullImage(report: (message: string) => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+      report(`Pulling ${IMAGE}…`);
+      this.platform.log(`[studio] Pulling ${IMAGE}`);
+      const proc = child_process.spawn('docker', ['pull', IMAGE], { stdio: 'pipe' });
+      proc.stdout.on('data', (d: Buffer) => this.platform.log(d.toString()));
+      proc.stderr.on('data', (d: Buffer) => this.platform.log(d.toString()));
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`docker pull exited with code ${code}`));
+        }
+      });
+    });
+  }
+
+  /** Start the container. Assumes the image is present. */
+  async start(report: (message: string) => void): Promise<void> {
+    const port = StudioManager.studioPort(this.platform);
+    const home = StudioManager.canticaHome(this.platform);
+
+    // Remove a stopped/dead container with the same name first.
+    await new Promise<void>((resolve) => {
+      child_process.exec(`docker rm -f ${CONTAINER}`, { timeout: 5000 }, () => resolve());
+    });
+
+    report('Starting Cantica Studio API container…');
+    this.platform.log(`[studio] Starting container — home=${home} port=${port}`);
+
+    // Collect AI provider API keys: platform config takes priority, then host env.
+    const apiKeys: [string, string][] = [
+      ['ANTHROPIC_API_KEY', (this.platform.getConfig<string>('canticaScores', 'anthropicApiKey', '')).trim() || (process.env['ANTHROPIC_API_KEY'] ?? '')],
+      ['OPENAI_API_KEY',    (this.platform.getConfig<string>('canticaScores', 'openaiApiKey', '')).trim()    || (process.env['OPENAI_API_KEY']    ?? '')],
+      ['GEMINI_API_KEY',    (this.platform.getConfig<string>('canticaScores', 'geminiApiKey', '')).trim()    || (process.env['GEMINI_API_KEY']    ?? '')],
+      ['GITHUB_TOKEN',      (this.platform.getConfig<string>('canticaScores', 'githubToken', '')).trim()     || (process.env['GITHUB_TOKEN']      ?? '')],
+    ];
+
+    const args = [
+      'run',
+      '-d',
+      '--name', CONTAINER,
+      '--restart', 'unless-stopped',
+      '-p', `${port}:${INTERNAL_PORT}`,
+      '-v', `${home}:/cantica-home`,
+      '-e', `CANTICA_HOME=/cantica-home`,
+      '-e', `CANTICA_PORT=${INTERNAL_PORT}`,
+    ];
+
+    for (const [key, value] of apiKeys) {
+      if (value) args.push('-e', `${key}=${value}`);
+    }
+
+    args.push(IMAGE);
+
+    await new Promise<void>((resolve, reject) => {
+      child_process.execFile('docker', args, { timeout: 15_000 }, (err, stdout, stderr) => {
+        if (err) {
+          this.platform.log(`[studio] start error: ${stderr}`);
+          reject(new Error(`Failed to start container: ${stderr || err.message}`));
+        } else {
+          this.platform.log(`[studio] Container started: ${stdout.trim()}`);
+          resolve();
+        }
+      });
+    });
+  }
+
+  /** Stop the studio API — native process or Docker container. */
+  async stop(mode: StudioMode = 'container'): Promise<void> {
+    if (mode === 'native') return this.stopNative();
+    return new Promise((resolve) => {
+      this.platform.log('[studio] Stopping container');
+      child_process.exec(`docker rm -f ${CONTAINER}`, { timeout: 10_000 }, () => resolve());
+    });
+  }
+
+  /** Returns true if the API is already responding on its health endpoint. */
+  async isHealthy(): Promise<boolean> {
+    const url = `${StudioManager.studioUrl(this.platform)}/health`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Poll the health endpoint until it responds ok or timeout expires.
+   * Returns true when healthy, false on timeout.
+   */
+  async waitUntilHealthy(
+    timeoutMs = 30_000,
+    intervalMs = 1_000,
+  ): Promise<boolean> {
+    const url = `${StudioManager.studioUrl(this.platform)}/health`;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
+        if (res.ok) return true;
+      } catch {
+        // not ready yet
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    return false;
+  }
+
+  // ── Native mode ───────────────────────────────────────────────────────────
+
+  isNativeRunning(): boolean {
+    return this._nativeProc != null && this._nativeProc.exitCode === null && !this._nativeProc.killed;
+  }
+
+  async startNative(report: (message: string) => void): Promise<void> {
+    const port = StudioManager.studioPort(this.platform);
+    const home = StudioManager.canticaHome(this.platform);
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      STUDIO_PORT: String(port),
+      STUDIO_WORKSPACE: home,
+    };
+
+    // Forward API keys from platform config or host environment.
+    for (const [cfg, envKey] of [
+      ['anthropicApiKey', 'ANTHROPIC_API_KEY'],
+      ['openaiApiKey', 'OPENAI_API_KEY'],
+      ['geminiApiKey', 'GEMINI_API_KEY'],
+      ['githubToken', 'GITHUB_TOKEN'],
+    ] as [string, string][]) {
+      const val = (this.platform.getConfig<string>('canticaScores', cfg, '')).trim() || (process.env[envKey] ?? '');
+      if (val) env[envKey] = val;
+    }
+
+    report('Starting Cantica Studio API (native)…');
+    this.platform.log(`[studio] Native start — port=${port} workspace=${home}`);
+
+    await new Promise<void>((resolve, reject) => {
+      const proc = child_process.spawn('studio', [], { env, stdio: 'pipe', detached: false });
+      proc.stdout?.on('data', (d: Buffer) => this.platform.log(d.toString().trimEnd()));
+      proc.stderr?.on('data', (d: Buffer) => this.platform.log(d.toString().trimEnd()));
+      proc.on('error', (err) => reject(new Error(`Failed to start studio: ${err.message}`)));
+      // Resolve once the process is alive (a short delay so uvicorn can bind).
+      setTimeout(() => {
+        if (proc.exitCode === null) { this._nativeProc = proc; resolve(); }
+        else reject(new Error(`studio exited immediately (code ${proc.exitCode})`));
+      }, 800);
+    });
+  }
+
+  async stopNative(): Promise<void> {
+    if (!this._nativeProc) return;
+    this.platform.log('[studio] Stopping native process');
+    this._nativeProc.kill('SIGTERM');
+    this._nativeProc = null;
+  }
+
+  async ensureRunningNative(): Promise<string | undefined> {
+    if (this.isNativeRunning()) return StudioManager.studioUrl(this.platform);
+    if (await this.isHealthy()) return StudioManager.studioUrl(this.platform);
+
+    return this.platform.withProgress('Cantica Studio', async (report) => {
+      try {
+        await this.startNative(report);
+        report('Waiting for API to become ready…');
+        const healthy = await this.waitUntilHealthy(15_000);
+        if (!healthy) {
+          void this.platform.showError('Cantica Studio API did not become healthy in time.');
+          return undefined;
+        }
+        return StudioManager.studioUrl(this.platform);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.platform.log(`[studio] Native error: ${message}`);
+        void this.platform.showError(`Cantica Studio: ${message}`);
+        return undefined;
+      }
+    });
+  }
+
+  /**
+   * Ensure the local studio API is running.
+   * Shows progress UI and handles image pulling if needed.
+   * Returns the local URL if successful, or undefined on failure.
+   */
+  async ensureRunning(mode: StudioMode = 'container'): Promise<string | undefined> {
+    if (mode === 'native') return this.ensureRunningNative();
+    if (!(await this.isDockerAvailable())) {
+      void this.platform.showError(
+        'Docker is required for the local Cantica Studio. Install Docker Desktop and try again.',
+        'Get Docker',
+      ).then((choice) => {
+        if (choice === 'Get Docker') {
+          this.platform.openExternal('https://www.docker.com/products/docker-desktop/');
+        }
+      });
+      return undefined;
+    }
+
+    if (await this.isRunning()) {
+      return StudioManager.studioUrl(this.platform);
+    }
+
+    if (await this.isHealthy()) {
+      return StudioManager.studioUrl(this.platform);
+    }
+
+    return this.platform.withProgress('Cantica Studio', async (report) => {
+      try {
+        if (!(await this.imageExists())) {
+          await this.pullImage(report);
+        }
+        await this.start(report);
+        report('Waiting for API to become ready…');
+        const healthy = await this.waitUntilHealthy();
+        if (!healthy) {
+          void this.platform.showError(
+            'Cantica Studio API did not become healthy in time.',
+          );
+          return undefined;
+        }
+        return StudioManager.studioUrl(this.platform);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.platform.log(`[studio] Error: ${message}`);
+        void this.platform.showError(`Cantica Studio: ${message}`);
+        return undefined;
+      }
+    });
+  }
+}

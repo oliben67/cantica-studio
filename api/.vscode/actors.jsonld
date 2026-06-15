@@ -1,0 +1,49 @@
+{
+  "@context": {
+    "@vocab": "https://cantica.dev/studio/",
+    "schema": "http://schema.org/",
+    "name": "schema:name"
+  },
+  "@type": "ActorGraph",
+  "@id": "urn:cantica:studio:graph:my-songbook",
+  "name": "my-songbook",
+  "actors": [
+    {
+      "@type": "AIActor",
+      "@id": "urn:cantica:studio:actor:actor-1781432986038-1-46d6945d",
+      "name": "actor-1",
+      "actorType": "ai",
+      "definePrompt": null,
+      "provider": "copilot",
+      "model": "auto",
+      "maxTokens": 4096,
+      "maxHistory": 10,
+      "position": {
+        "x": 208.50988507780067,
+        "y": 222.39207415355546
+      },
+      "promptEvents": [],
+      "cronJobs": [],
+      "resources": []
+    },
+    {
+      "@type": "AIActor",
+      "@id": "urn:cantica:studio:actor:actor-1781442858174-1-46d6945d",
+      "name": "actor-1",
+      "actorType": "ai",
+      "definePrompt": null,
+      "provider": "claude",
+      "model": "claude-sonnet-4-6",
+      "maxTokens": 4096,
+      "maxHistory": 10,
+      "position": {
+        "x": 242.38140151657547,
+        "y": 109.40204538208775
+      },
+      "promptEvents": [],
+      "cronJobs": [],
+      "resources": []
+    }
+  ],
+  "edges": []
+}

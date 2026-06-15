@@ -1,0 +1,69 @@
+[project]
+name = "studio-api"
+version = "0.1.0"
+description = "AI Actor Studio API — run actor-ai agents with MCP and Cantica prompt integration"
+readme = "README.md"
+authors = [
+    { name = "Olivier Steck", email = "osteck@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "fastmcp>=2.0",
+    "actor-ai>=0.3.6",
+    "httpx>=0.28",
+    "apscheduler>=3.10",
+    "cryptography>=44.0.0",
+    "pyjwt>=2.9",
+]
+
+[project.scripts]
+studio = "studio_api.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/studio_api"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=7.1.0",
+    "httpx>=0.28",
+    "respx>=0.21",
+]
+
+[tool.uv.sources]
+# actor-ai lives three levels up from studio-api/
+actor-ai = { path = "../../../actor-ai", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short --cov=studio_api --cov-report=term-missing"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["studio_api"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+partial_branches = [
+    "#\\s*(pragma[:\\s]\\s*no branch)",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["F401"]

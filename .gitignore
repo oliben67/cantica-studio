@@ -2,9 +2,14 @@
 __pycache__/
 *.pyc
 *.pyo
+.venv/
 
 # Node.js
-vscode/node_modules/
+node_modules/
 
-# VS Code Extension build artifacts
-vscode/dist/
+# Build artifacts
+dist/
+*.vsix
+
+# Copilot
+.copilot/

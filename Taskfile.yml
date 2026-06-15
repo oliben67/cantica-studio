@@ -3,8 +3,11 @@ version: '3'
 
 includes:
   vscode:
-    taskfile: ./vscode/Taskfile.yml
-    dir: ./vscode
+    taskfile: ./clients/vscode/Taskfile.yml
+    dir: ./clients/vscode
+  studio:
+    taskfile: ./clients/studio-app/Taskfile.yml
+    dir: ./clients/studio-app
 
 # ── Default ────────────────────────────────────────────────────────────────
 tasks:
@@ -15,9 +18,22 @@ tasks:
 
   # ── Convenience shorthands ────────────────────────────────────────────────
   install:
-    desc: Install all UI sub-project dependencies
+    desc: Install all UI sub-project dependencies (vscode + studio-app)
     cmds:
       - task: vscode:install
+      - task: studio:install
+
+  build:
+    desc: Build all UI sub-projects (development mode)
+    cmds:
+      - task: vscode:compile
+      - task: studio:build
+
+  build:prod:
+    desc: Build all UI sub-projects (production/minified)
+    cmds:
+      - task: vscode:compile:prod
+      - task: studio:build:prod
 
   check:
     desc: Run all quality gates across UI sub-projects
@@ -45,11 +61,13 @@ tasks:
       - task: vscode:ci
 
   clean:
-    desc: Remove build artefacts across UI sub-projects
+    desc: Remove build artefacts across UI sub-projects (vscode + studio-app)
     cmds:
       - task: vscode:clean
+      - task: studio:clean
 
   clean:all:
-    desc: Remove build artefacts and node_modules across UI sub-projects
+    desc: Remove build artefacts and node_modules across UI sub-projects (vscode + studio-app)
     cmds:
       - task: vscode:clean:all
+      - task: studio:clean:all

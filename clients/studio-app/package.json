@@ -1,0 +1,20 @@
+{
+  "name": "cantica-studio-app",
+  "version": "0.1.0",
+  "description": "Cantica Studio — standalone Electron app",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "node esbuild.js",
+    "build:prod": "node esbuild.js --production",
+    "start": "electron .",
+    "dev": "node esbuild.js --watch"
+  },
+  "dependencies": {
+    "electron": "^35.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}

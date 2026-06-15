@@ -1,0 +1,40 @@
+# https://taskfile.dev  —  requires Task ≥ 3.28
+version: '3'
+
+tasks:
+  default:
+    desc: List all available tasks
+    silent: true
+    cmd: task --list
+
+  install:
+    desc: Install dependencies
+    cmd: npm install
+
+  build:
+    desc: Build the Electron app (dev, with source maps)
+    cmd: node esbuild.js
+
+  build:prod:
+    desc: Build the Electron app (production, minified)
+    cmd: node esbuild.js --production
+
+  start:
+    desc: Build and launch the Electron app (unsets ELECTRON_RUN_AS_NODE set by VSCode)
+    cmds:
+      - task: build
+      - cmd: env -u ELECTRON_RUN_AS_NODE ./node_modules/.bin/electron .
+
+  dev:
+    desc: Launch the already-built Electron app (no rebuild)
+    cmd: env -u ELECTRON_RUN_AS_NODE ./node_modules/.bin/electron .
+
+  clean:
+    desc: Remove build artefacts
+    cmd: rm -rf dist
+
+  clean:all:
+    desc: Remove build artefacts and node_modules
+    cmds:
+      - task: clean
+      - cmd: rm -rf node_modules

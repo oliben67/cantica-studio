@@ -1,0 +1,41 @@
+# https://taskfile.dev
+version: '3'
+
+tasks:
+  default:
+    silent: true
+    cmd: task --list
+
+  install:
+    desc: Install studio-api and cantica-api (editable) into the local virtualenv
+    cmds:
+      - pip install -e ../../cantica-api
+      - pip install -e .
+
+  serve:
+    desc: Run the studio-api dev server (auto-reload, port 8043)
+    env:
+      CANTICA_HOST: "127.0.0.1"
+      CANTICA_PORT: "8043"
+    cmd: .venv/bin/python -m uvicorn studio_api.main:app --reload --host 127.0.0.1 --port 8043
+
+  build:image:
+    desc: Build the cantica-studio-api Docker image
+    dir: ../..
+    cmd: |
+      docker build \
+        -f cantica-studio/api/Dockerfile \
+        -t cantica-studio-api:latest \
+        .
+
+  up:
+    desc: Start studio-api via docker-compose
+    cmd: docker compose up -d
+
+  down:
+    desc: Stop studio-api container
+    cmd: docker compose down
+
+  logs:
+    desc: Follow studio-api container logs
+    cmd: docker compose logs -f

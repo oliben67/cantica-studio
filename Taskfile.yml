@@ -66,6 +66,16 @@ tasks:
       - task: vscode:clean
       - task: studio:clean
 
+  app:
+    desc: Build and launch the Cantica Studio Electron app
+    cmds:
+      - task: studio:start
+
+  app:dev:
+    desc: Launch the already-built Cantica Studio Electron app (no rebuild)
+    cmds:
+      - task: studio:dev
+
   clean:all:
     desc: Remove build artefacts and node_modules across UI sub-projects (vscode + studio-app)
     cmds:

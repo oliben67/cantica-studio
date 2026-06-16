@@ -5,45 +5,82 @@
     "name": "schema:name"
   },
   "@type": "ActorGraph",
-  "@id": "urn:cantica:studio:graph:my-songbook",
-  "name": "my-songbook",
+  "@id": "urn:cantica:studio:graph:events-test",
+  "name": "events-test",
   "actors": [
     {
       "@type": "AIActor",
-      "@id": "urn:cantica:studio:actor:actor-1781432986038-1-46d6945d",
-      "name": "actor-1",
+      "@id": "urn:cantica:studio:actor:actor-1780776386736-1",
+      "name": "sender",
       "actorType": "ai",
-      "definePrompt": null,
+      "definePrompt": "You are an event sender. When the user asks about time or says to fire the ask-for-time event, call fire_event with event_name='ask-for-time'.",
       "provider": "copilot",
-      "model": "auto",
+      "model": "gpt-5-mini",
       "maxTokens": 4096,
       "maxHistory": 10,
       "position": {
-        "x": 208.50988507780067,
-        "y": 222.39207415355546
+        "x": 242.31162605645594,
+        "y": -237.56512809796163
+      },
+      "promptEvents": [
+        {
+          "@type": "PromptEvent",
+          "name": "ask-for-time",
+          "prompt": "What time is it?",
+          "targetActors": [
+            "receiver"
+          ]
+        }
+      ],
+      "cronJobs": [],
+      "resources": []
+    },
+    {
+      "@type": "AIActor",
+      "@id": "urn:cantica:studio:actor:actor-1780776406315-2",
+      "name": "receiver",
+      "actorType": "ai",
+      "definePrompt": "When you receive a ask for time message, display it in the chat panel",
+      "provider": "copilot",
+      "model": "gpt-5-mini",
+      "maxTokens": 4096,
+      "maxHistory": 10,
+      "position": {
+        "x": 694.4178900557449,
+        "y": 23.328201142631087
       },
       "promptEvents": [],
       "cronJobs": [],
       "resources": []
     },
     {
-      "@type": "AIActor",
-      "@id": "urn:cantica:studio:actor:actor-1781442858174-1-46d6945d",
-      "name": "actor-1",
-      "actorType": "ai",
+      "@type": "CodeActor",
+      "@id": "urn:cantica:studio:actor:code-1781099279348-2",
+      "name": "python-1",
+      "actorType": "python",
       "definePrompt": null,
-      "provider": "claude",
-      "model": "claude-sonnet-4-6",
-      "maxTokens": 4096,
-      "maxHistory": 10,
+      "provider": "",
+      "model": "",
+      "maxTokens": 0,
+      "maxHistory": 0,
       "position": {
-        "x": 242.38140151657547,
-        "y": 109.40204538208775
+        "x": 327.6909894787725,
+        "y": 274.2536634125222
       },
       "promptEvents": [],
       "cronJobs": [],
       "resources": []
     }
   ],
-  "edges": []
+  "edges": [
+    {
+      "@type": "ActorMessage",
+      "@id": "urn:cantica:studio:edge:edge-1780776495749-1",
+      "from": "urn:cantica:studio:actor:actor-1780776386736-1",
+      "to": "urn:cantica:studio:actor:actor-1780776406315-2",
+      "prompt": "What time is it?",
+      "label": "ask-for-time",
+      "kind": "event"
+    }
+  ]
 }

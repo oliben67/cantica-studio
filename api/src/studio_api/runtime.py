@@ -182,12 +182,16 @@ class ActorRuntime:
         # Probe to resolve the Copilot "auto" model in the background so the UI can
         # update without waiting for the first instruction.  The probe sends a minimal
         # message; the extension polls GET /actors/{name}/model until it resolves.
+        # IMPORTANT: route through the pykka proxy so the probe runs in the actor thread
+        # and is serialized with real instructions.  Calling the provider directly from a
+        # raw thread causes concurrent Copilot CLI sessions → duplicate function-call IDs.
         if defn.provider.lower() == "copilot" and defn.model == "auto":
-            threading.Thread(
-                target=ai_provider.probe_resolved_model,
-                daemon=True,
-                name=f"copilot-probe-{defn.name}",
-            ).start()
+            def _probe() -> None:
+                try:
+                    proxy.probe_resolved_model().get(timeout=30)
+                except Exception as exc:
+                    _log.debug("Copilot model probe failed for %r: %s", defn.name, exc)
+            threading.Thread(target=_probe, daemon=True, name=f"copilot-probe-{defn.name}").start()
         return None
 
     def _start_code_actor(self, defn: ActorDef) -> None:

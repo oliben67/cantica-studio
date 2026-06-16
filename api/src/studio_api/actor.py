@@ -118,6 +118,15 @@ class StudioActor(AIActor):
                     _log.error("fire_event %r _instruct_actor(%r) failed: %s", event_name, target, exc)
         return output
 
+    def probe_resolved_model(self) -> str | None:
+        """Probe the Copilot 'auto' model from within the actor thread.
+
+        Called through the pykka proxy so it is serialized with real instructions —
+        prevents concurrent Copilot CLI access that causes duplicate function-call IDs.
+        """
+        fn = getattr(self.provider, "probe_resolved_model", None)
+        return fn() if callable(fn) else None
+
     def restore_session(self, messages: list[dict]) -> None:
         """Replace the current session history with a previously saved snapshot."""
         self._session = list(messages)

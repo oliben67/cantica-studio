@@ -48,7 +48,7 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     yield
 
     log.info("Studio API stopping — shutting down actors")
-    _app.state.runtime.stop_all()
+    _app.state.runtime.shutdown()
 
 
 def create_app() -> FastAPI:

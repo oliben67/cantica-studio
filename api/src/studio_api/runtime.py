@@ -282,6 +282,10 @@ class ActorRuntime:
                 self.stop(name)
             except Exception:
                 pass
+
+    def shutdown(self) -> None:
+        """Stop all actors and tear down the scheduler.  Call only on process exit."""
+        self.stop_all()
         try:
             self._scheduler.shutdown(wait=False)
         except Exception:
@@ -532,6 +536,10 @@ class ActorRuntime:
             return []
 
     def _register_crons(self, name: str, crons: list[CronJobDef]) -> None:
+        if not crons:
+            return
+        if not self._scheduler.running:
+            self._scheduler.start()
         for i, cron in enumerate(crons):
             label = cron.name
             job_id = f"cron-{name}-{i}-{label}"

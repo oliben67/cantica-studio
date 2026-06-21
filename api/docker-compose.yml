@@ -4,7 +4,7 @@ services:
       context: ../..        # repo root (cantica-studio/ lives under cantica-project/)
       dockerfile: cantica-studio/studio-api/Dockerfile
     image: studio-api:latest
-    container_name: studio-api
+    container_name: cantica-studio-api
     restart: unless-stopped
     ports:
       - "${STUDIO_PORT:-8043}:8043"

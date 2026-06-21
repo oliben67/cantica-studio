@@ -10,6 +10,7 @@ export interface PromptEventDef {
   prompt: PromptRef;
   filePattern?: string;
   targetActors?: string[];   // empty = self; multiple = broadcast
+  sendResponse?: boolean;    // true = fire this actor first, forward response; false (default) = send prompt directly
 }
 
 export interface CronJobDef {
@@ -18,6 +19,7 @@ export interface CronJobDef {
   prompt: PromptRef;
   targetActor?: string;
   targetEvent?: string;
+  sendResponse?: boolean;  // true = fire this actor first, forward response; false (default) = send prompt directly
 }
 
 export interface AgentResource {
@@ -94,8 +96,6 @@ export interface ExtensionSettings {
   canticaHome: string;
   studioPort: number;
   autoStartStudio: boolean;
-  /** Per-provider model constraints. null = open; [] = disabled; [..] = allowlist. */
-  providerModels: Record<string, string[] | null>;
 }
 
 // ── API call log ──────────────────────────────────────────────────────────────
@@ -131,7 +131,10 @@ export type IncomingMessage =
   | { type: 'error'; message: string }
   | { type: 'deleteSelected' }
   | { type: 'resetGraph' }
-  | { type: 'triggerSave' };
+  | { type: 'triggerSave' }
+  | { type: 'studioStatus'; health: 'healthy' | 'starting' | 'down'; url: string; version?: string; uptimeSeconds?: number; workspace?: string; containerized?: boolean }
+  | { type: 'updateSongbooks'; entries: unknown[]; activeFile: string | null }
+  | { type: 'studioMode'; mode: 'native' | 'container' };
 
 /** Messages sent FROM the webview TO the extension host. */
 export type OutgoingMessage =

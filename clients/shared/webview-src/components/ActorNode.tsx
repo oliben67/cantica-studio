@@ -50,6 +50,8 @@ function Handles({ edges, type }: { edges: EdgeHandleInfo[]; type: 'source' | 't
   );
 }
 
+const TS_RE = /^\[(\d{2}:\d{2}:\d{2})\] ([\s\S]*)$/;
+
 function ChatPanel({
   outputLines, scrollRef, onExpand, emptyLabel,
 }: {
@@ -67,9 +69,17 @@ function ChatPanel({
       </div>
       {lastTen.length > 0 ? (
         <div className="cs-actor-output-lines" ref={scrollRef}>
-          {lastTen.map((line, i) => (
-            <p key={i} className="cs-actor-output-text">{line}</p>
-          ))}
+          {lastTen.map((line, i) => {
+            const m = TS_RE.exec(line);
+            const ts = m?.[1];
+            const text = m ? (m[2] ?? line) : line;
+            return (
+              <p key={i} className="cs-actor-output-text">
+                {ts && <span className="cs-msg-ts">{ts}</span>}
+                {text}
+              </p>
+            );
+          })}
         </div>
       ) : (
         <p className="cs-actor-output-text" style={{ opacity: 0.45 }}>{emptyLabel}</p>
@@ -87,11 +97,16 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   const promptRef = useRef<HTMLInputElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
+  const [nameTaken, setNameTaken] = useState(false);
+  const [roleExpanded, setRoleExpanded] = useState(false);
   const {
-    runningActors, pausedActors, actorOutputs, selectActor, updateActor,
+    graph, runningActors, pausedActors, actorOutputs, selectActor, updateActor,
     openEventsModal, openCronsModal, openActorMenu, openProviderMenu,
     actorChatVisible, toggleChat, openChatModal, dynamicModels, resolvedModels,
+    studioHealth,
   } = useStore();
+
+  const serverUp = studioHealth === 'healthy';
 
   const isCode = actor.actorType === 'python' || actor.actorType === 'typescript';
   const running = runningActors.has(actor.name);
@@ -125,8 +140,13 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
 
   function commitName() {
     const trimmed = nameVal.trim();
-    if (trimmed && trimmed !== actor.name) updateActor(actor.id, { name: trimmed });
-    else setNameVal(actor.name);
+    if (!trimmed) { setNameVal(actor.name); setEditing(false); setNameTaken(false); return; }
+    if (trimmed !== actor.name) {
+      const duplicate = graph.actors.some(a => a.id !== actor.id && a.name === trimmed);
+      if (duplicate) { setNameTaken(true); inputRef.current?.focus(); return; }
+      updateActor(actor.id, { name: trimmed });
+    }
+    setNameTaken(false);
     setEditing(false);
   }
 
@@ -187,7 +207,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
 
         <div
           className="cs-actor-provider"
-          onClick={e => { e.stopPropagation(); if (!isCode) openProviderMenu(actor.id, e.clientX, e.clientY); }}
+          onClick={e => { e.stopPropagation(); if (!isCode && !running) openProviderMenu(actor.id, e.clientX, e.clientY); }}
           title={isCode ? actor.actorType : running ? 'Running — stop the actor to change model or provider' : actor.model === 'auto' ? 'Copilot auto — model resolves on first run' : 'Click to change provider / model'}
         >
           <span className="cs-actor-badge" style={{ background: color }}>{typeLabel}</span>
@@ -198,20 +218,23 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             ref={inputRef}
             className="cs-actor-name-input"
             value={nameVal}
-            onChange={e => setNameVal(e.target.value)}
+            onChange={e => { setNameVal(e.target.value); setNameTaken(false); }}
             onBlur={commitName}
             onKeyDown={e => {
               if (e.key === 'Enter') e.currentTarget.blur();
-              if (e.key === 'Escape') { setNameVal(actor.name); setEditing(false); }
+              if (e.key === 'Escape') { setNameVal(actor.name); setEditing(false); setNameTaken(false); }
               e.stopPropagation();
             }}
             onClick={e => e.stopPropagation()}
+            title={nameTaken ? `Name "${nameVal.trim()}" is already used by another actor` : undefined}
+            style={nameTaken ? { borderColor: '#ef4444', outline: '1px solid #ef4444' } : undefined}
           />
         ) : (
           <span
             className="cs-actor-name"
-            title="Click to rename"
-            onClick={e => { e.stopPropagation(); setEditing(true); }}
+            title={running ? 'Stop the actor to rename' : 'Click to rename'}
+            onClick={e => { e.stopPropagation(); if (!running) setEditing(true); }}
+            style={running ? { cursor: 'default' } : undefined}
           >{actor.name}</span>
         )}
 
@@ -255,8 +278,9 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
               <button
                 className="cs-actor-btn cs-actor-btn--prompt"
                 style={{ marginLeft: 'auto' }}
+                disabled={!serverUp}
                 onClick={e => { e.stopPropagation(); vscode.postMessage({ type: 'runActor', name: actor.name, instruction: '__start__' }); if (!chatVisible) toggleChat(actor.id); }}
-                title="Start code actor"
+                title={!serverUp ? 'Studio server is not running' : 'Start code actor'}
               >▶ Start</button>
             ) : (
               <button
@@ -294,14 +318,27 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
             )}
           </div>
 
-          {(actor.definePrompt.uri || actor.definePrompt.content) && (
-            <div className="cs-actor-define-prompt">
-              <span className="cs-actor-section-label">role</span>
-              <span className="cs-actor-prompt-ref">
-                {actor.definePrompt.uri ?? (actor.definePrompt.content ?? '').slice(0, 50)}
-              </span>
-            </div>
-          )}
+          {(actor.definePrompt.uri || actor.definePrompt.content) && (() => {
+            const roleText = actor.definePrompt.uri ?? (actor.definePrompt.content ?? '');
+            return (
+              <div className={`cs-actor-define-prompt${roleExpanded ? ' cs-actor-define-prompt--expanded' : ''}`}>
+                <div className="cs-actor-role-header">
+                  <span className="cs-actor-section-label" style={{ marginBottom: 0 }}>role</span>
+                  <button
+                    className="cs-actor-role-toggle"
+                    onClick={e => { e.stopPropagation(); setRoleExpanded(v => !v); }}
+                    title={roleExpanded ? 'Collapse role' : 'Expand role'}
+                  >{roleExpanded ? '▲' : '▼'}</button>
+                </div>
+                <span
+                  className={`cs-actor-prompt-ref${roleExpanded ? ' cs-actor-prompt-ref--expanded' : ''}`}
+                  title={roleText}
+                >
+                  {roleText}
+                </span>
+              </div>
+            );
+          })()}
 
           {chatVisible && (
             <ChatPanel
@@ -318,9 +355,9 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
               <button
                 className="cs-actor-btn cs-actor-btn--prompt"
                 style={{ marginLeft: 'auto' }}
-                disabled={!modelAvailable}
+                disabled={!modelAvailable || !serverUp}
                 onClick={startActor}
-                title={modelAvailable ? 'Start actor' : `Model "${actor.model}" is not available — update the model to start`}
+                title={!serverUp ? 'Studio server is not running' : !modelAvailable ? `Model "${actor.model}" is not available — update the model to start` : 'Start actor'}
               >▶ Start</button>
             ) : (
               <>

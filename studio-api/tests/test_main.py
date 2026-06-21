@@ -17,7 +17,11 @@ def test_health_endpoint():
     with _client() as c:
         r = c.get("/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "studio-api"}
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "studio-api"
+    assert body["local_mode"] is True
+    assert body["auth_enabled"] is False
 
 
 def test_discovery_endpoint():

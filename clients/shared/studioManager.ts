@@ -9,6 +9,14 @@ const INTERNAL_PORT = 8043;
 
 export type StudioMode = 'native' | 'container';
 
+/** Provider API keys resolved at startup (SecretStorage > settings > host env). */
+export interface ProviderApiKeys {
+  anthropicApiKey?: string;
+  openaiApiKey?: string;
+  geminiApiKey?: string;
+  githubToken?: string;
+}
+
 export class StudioManager {
   private _nativeProc: child_process.ChildProcess | null = null;
 
@@ -84,8 +92,13 @@ export class StudioManager {
     });
   }
 
+  /** Resolve a single provider key: passed keys (SecretStorage) > host env. */
+  private _resolveKey(passed: string | undefined, envKey: string): string {
+    return passed?.trim() || (process.env[envKey] ?? '');
+  }
+
   /** Start the container. Assumes the image is present. */
-  async start(report: (message: string) => void): Promise<void> {
+  async start(report: (message: string) => void, keys?: ProviderApiKeys): Promise<void> {
     const port = StudioManager.studioPort(this.platform);
     const home = StudioManager.canticaHome(this.platform);
 
@@ -97,12 +110,12 @@ export class StudioManager {
     report('Starting Cantica Studio API container…');
     this.platform.log(`[studio] Starting container — home=${home} port=${port}`);
 
-    // Collect AI provider API keys: platform config takes priority, then host env.
+    // Resolve API keys: passed keys (SecretStorage) > host env.
     const apiKeys: [string, string][] = [
-      ['ANTHROPIC_API_KEY', (this.platform.getConfig<string>('canticaScores', 'anthropicApiKey', '')).trim() || (process.env['ANTHROPIC_API_KEY'] ?? '')],
-      ['OPENAI_API_KEY',    (this.platform.getConfig<string>('canticaScores', 'openaiApiKey', '')).trim()    || (process.env['OPENAI_API_KEY']    ?? '')],
-      ['GEMINI_API_KEY',    (this.platform.getConfig<string>('canticaScores', 'geminiApiKey', '')).trim()    || (process.env['GEMINI_API_KEY']    ?? '')],
-      ['GITHUB_TOKEN',      (this.platform.getConfig<string>('canticaScores', 'githubToken', '')).trim()     || (process.env['GITHUB_TOKEN']      ?? '')],
+      ['ANTHROPIC_API_KEY', this._resolveKey(keys?.anthropicApiKey, 'ANTHROPIC_API_KEY')],
+      ['OPENAI_API_KEY',    this._resolveKey(keys?.openaiApiKey,    'OPENAI_API_KEY')],
+      ['GEMINI_API_KEY',    this._resolveKey(keys?.geminiApiKey,    'GEMINI_API_KEY')],
+      ['GITHUB_TOKEN',      this._resolveKey(keys?.githubToken,     'GITHUB_TOKEN')],
     ];
 
     const args = [
@@ -135,13 +148,29 @@ export class StudioManager {
     });
   }
 
-  /** Stop the studio API — native process or Docker container. */
+  /** Stop the studio API — native process or Docker container, with port-kill fallback. */
   async stop(mode: StudioMode = 'container'): Promise<void> {
-    if (mode === 'native') return this.stopNative();
-    return new Promise((resolve) => {
+    if (mode === 'native') {
+      await this.stopNative();
+    } else {
+      // Kill tracked native process first (may coexist with container attempt).
+      if (this.isNativeRunning()) await this.stopNative();
       this.platform.log('[studio] Stopping container');
-      child_process.exec(`docker rm -f ${CONTAINER}`, { timeout: 10_000 }, () => resolve());
-    });
+      await new Promise<void>((resolve) => {
+        child_process.exec(`docker rm -f ${CONTAINER}`, { timeout: 10_000 }, () => resolve());
+      });
+    }
+    // Fallback: if the server is still reachable (e.g. started externally), kill it by port.
+    if (await this.isHealthy()) {
+      const port = StudioManager.studioPort(this.platform);
+      this.platform.log(`[studio] Server still up after stop — killing port ${port}`);
+      await new Promise<void>((resolve) => {
+        const cmd = process.platform === 'darwin'
+          ? `lsof -ti :${port} | xargs kill -9 2>/dev/null; true`
+          : `fuser -k ${port}/tcp 2>/dev/null; true`;
+        child_process.exec(cmd, { timeout: 5_000 }, () => resolve());
+      });
+    }
   }
 
   /** Returns true if the API is already responding on its health endpoint. */
@@ -183,7 +212,7 @@ export class StudioManager {
     return this._nativeProc != null && this._nativeProc.exitCode === null && !this._nativeProc.killed;
   }
 
-  async startNative(report: (message: string) => void): Promise<void> {
+  async startNative(report: (message: string) => void, keys?: ProviderApiKeys): Promise<void> {
     const port = StudioManager.studioPort(this.platform);
     const home = StudioManager.canticaHome(this.platform);
 
@@ -193,14 +222,14 @@ export class StudioManager {
       STUDIO_WORKSPACE: home,
     };
 
-    // Forward API keys from platform config or host environment.
-    for (const [cfg, envKey] of [
-      ['anthropicApiKey', 'ANTHROPIC_API_KEY'],
-      ['openaiApiKey', 'OPENAI_API_KEY'],
-      ['geminiApiKey', 'GEMINI_API_KEY'],
-      ['githubToken', 'GITHUB_TOKEN'],
-    ] as [string, string][]) {
-      const val = (this.platform.getConfig<string>('canticaScores', cfg, '')).trim() || (process.env[envKey] ?? '');
+    // Resolve API keys: passed keys (SecretStorage) > host env.
+    for (const [envKey, passedKey] of [
+      ['ANTHROPIC_API_KEY', keys?.anthropicApiKey],
+      ['OPENAI_API_KEY',    keys?.openaiApiKey],
+      ['GEMINI_API_KEY',    keys?.geminiApiKey],
+      ['GITHUB_TOKEN',      keys?.githubToken],
+    ] as [string, string | undefined][]) {
+      const val = this._resolveKey(passedKey, envKey);
       if (val) env[envKey] = val;
     }
 
@@ -227,13 +256,13 @@ export class StudioManager {
     this._nativeProc = null;
   }
 
-  async ensureRunningNative(): Promise<string | undefined> {
+  async ensureRunningNative(keys?: ProviderApiKeys): Promise<string | undefined> {
     if (this.isNativeRunning()) return StudioManager.studioUrl(this.platform);
     if (await this.isHealthy()) return StudioManager.studioUrl(this.platform);
 
     return this.platform.withProgress('Cantica Studio', async (report) => {
       try {
-        await this.startNative(report);
+        await this.startNative(report, keys);
         report('Waiting for API to become ready…');
         const healthy = await this.waitUntilHealthy(15_000);
         if (!healthy) {
@@ -255,8 +284,8 @@ export class StudioManager {
    * Shows progress UI and handles image pulling if needed.
    * Returns the local URL if successful, or undefined on failure.
    */
-  async ensureRunning(mode: StudioMode = 'container'): Promise<string | undefined> {
-    if (mode === 'native') return this.ensureRunningNative();
+  async ensureRunning(mode: StudioMode = 'container', keys?: ProviderApiKeys): Promise<string | undefined> {
+    if (mode === 'native') return this.ensureRunningNative(keys);
     if (!(await this.isDockerAvailable())) {
       void this.platform.showError(
         'Docker is required for the local Cantica Studio. Install Docker Desktop and try again.',
@@ -282,7 +311,7 @@ export class StudioManager {
         if (!(await this.imageExists())) {
           await this.pullImage(report);
         }
-        await this.start(report);
+        await this.start(report, keys);
         report('Waiting for API to become ready…');
         const healthy = await this.waitUntilHealthy();
         if (!healthy) {

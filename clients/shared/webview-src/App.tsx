@@ -317,6 +317,7 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
         case 'providerModels': store.setDynamicModels(msg.models); break;
         case 'actorOutput':
           store.appendOutput(msg.name, msg.output);
+          store.openChatIfHidden(msg.name);
           break;
         case 'actorModelResolved':
           store.setResolvedModel(msg.name, msg.model);
@@ -337,8 +338,10 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
         case 'triggerSave':
           vscode.postMessage({ type: 'saveGraph', graph: useStore.getState().graph });
           break;
-        case 'updateSongbooks':
         case 'studioStatus':
+          store.setStudioHealth(msg.health);
+          break;
+        case 'updateSongbooks':
         case 'studioMode':
           break; // handled by the Electron sidebar
         default: {

@@ -124,6 +124,7 @@ class ActorRuntime:
                 target_actors=e.get("targetActors") or (
                     [e["targetActor"]] if e.get("targetActor") else []
                 ),
+                send_response=bool(e.get("sendResponse", False)),
             )
             for e in defn.prompt_events
         ]
@@ -135,6 +136,7 @@ class ActorRuntime:
                 name=c.get("name", ""),
                 target_actor=c.get("targetActor") or None,
                 target_event=c.get("targetEvent") or None,
+                send_response=bool(c.get("sendResponse", False)),
             )
             for c in defn.cron_jobs
         ]
@@ -345,9 +347,10 @@ class ActorRuntime:
         """Fire a named event on an actor, routing output to all configured target actors.
 
         Returns {"output": str, "forwarded": [{"name": str, "prompt": str, "output": str}]}.
-        For AI actors: runs the event's resolved prompt via instruct() on self, then
-        forwards the output to every target actor listed in target_actors.  If no
-        target actors are configured the output is returned to the caller (self-loop).
+        For AI actors with send_response=True (default legacy behaviour): runs the event
+        prompt via instruct() on self first, then forwards the response to every target.
+        For AI actors with send_response=False: sends the event prompt directly to each
+        target without consulting the firing actor (self-loop still uses instruct()).
         For code actors (or when the event is not found) delegates to proxy.fire_event.
         """
         state = self._actors.get(name)
@@ -355,13 +358,40 @@ class ActorRuntime:
             for evt in state.ai_events:
                 if evt.name == event_name:
                     instruction = f"{evt.prompt}\n\n{context}" if context else evt.prompt
-                    output = state.ref.proxy().instruct(instruction).get(timeout=360)
                     forwarded = []
-                    for target in evt.target_actors:
-                        if target and target in self._actors:
-                            target_output = self.instruct(target, output)
-                            forwarded.append({"name": target, "prompt": output, "output": target_output})
-                    return {"output": output, "forwarded": forwarded}
+
+                    if not evt.target_actors or evt.send_response:
+                        # Self-loop or sendResponse=True: instruct the firing actor first.
+                        output = state.ref.proxy().instruct(instruction).get(timeout=360)
+                        for target in evt.target_actors:
+                            if target and target in self._actors:
+                                target_output = self.instruct(target, output)
+                                forwarded.append({
+                                    "name": target, "prompt": output, "output": target_output,
+                                })
+                            elif target:
+                                forwarded.append({
+                                    "name": name,
+                                    "prompt": f"⚡ {event_name}",
+                                    "output": f"⚠ '{target}' is not running — event not forwarded",
+                                })
+                        return {"output": output, "forwarded": forwarded}
+                    else:
+                        # sendResponse=False: send prompt directly to targets.
+                        output = instruction
+                        for target in evt.target_actors:
+                            if target and target in self._actors:
+                                target_output = self.instruct(target, instruction)
+                                forwarded.append({
+                                    "name": target, "prompt": instruction, "output": target_output,
+                                })
+                            elif target:
+                                forwarded.append({
+                                    "name": name,
+                                    "prompt": f"⚡ {event_name}",
+                                    "output": f"⚠ '{target}' is not running — event not forwarded",
+                                })
+                        return {"output": output, "forwarded": forwarded}
         output = self._get_proxy(name).fire_event(event_name, context).get(timeout=360)
         return {"output": output, "forwarded": []}
 
@@ -548,30 +578,66 @@ class ActorRuntime:
                 target_actor = cron.target_actor
                 target_event = cron.target_event
                 prompt = cron.prompt
+                send_response = cron.send_response
 
                 def _run(
                     actor_name: str = name,
                     p: str = prompt,
                     ta: str | None = target_actor,
                     te: str | None = target_event,
+                    sr: bool = send_response,
+                    lbl: str = label,
                 ) -> None:
                     state = self._actors.get(actor_name)
                     if state is None or state.paused:
                         _log.debug("Skipping cron for paused/stopped actor %r", actor_name)
                         return
                     try:
-                        output = state.ref.proxy().instruct(p).get(timeout=360)
-                        with self._forwarded_log_lock:
-                            self._forwarded_log.append({"name": actor_name, "prompt": p, "output": output})
-                        if ta and ta in self._actors:
+                        if ta and ta in self._actors and not sr:
+                            # sendResponse=False: prompt goes directly to target.
+                            # Also log a routing status to the source actor's panel.
+                            with self._forwarded_log_lock:
+                                self._forwarded_log.append({
+                                    "name": actor_name,
+                                    "prompt": f"⏰ {lbl}",
+                                    "output": f"→ sending to '{ta}'",
+                                })
                             if te:
-                                result = self.fire_event(ta, te, output)
+                                fwd = self.fire_event(ta, te, p)
                                 with self._forwarded_log_lock:
-                                    self._forwarded_log.extend(result.get("forwarded", []))
+                                    self._forwarded_log.extend(fwd.get("forwarded", []))
                             else:
-                                target_output = self.instruct(ta, output)
+                                target_output = self.instruct(ta, p)
                                 with self._forwarded_log_lock:
-                                    self._forwarded_log.append({"name": ta, "prompt": output, "output": target_output})
+                                    self._forwarded_log.append({
+                                        "name": ta, "prompt": p, "output": target_output,
+                                    })
+                        else:
+                            # sendResponse=True (or no target): fire actor first.
+                            output = state.ref.proxy().instruct(p).get(timeout=360)
+                            with self._forwarded_log_lock:
+                                self._forwarded_log.append({
+                                    "name": actor_name, "prompt": p, "output": output,
+                                })
+                            if ta and ta in self._actors:
+                                if te:
+                                    result = self.fire_event(ta, te, output)
+                                    with self._forwarded_log_lock:
+                                        self._forwarded_log.extend(result.get("forwarded", []))
+                                else:
+                                    target_output = self.instruct(ta, output)
+                                    with self._forwarded_log_lock:
+                                        self._forwarded_log.append({
+                                            "name": ta, "prompt": output, "output": target_output,
+                                        })
+                            elif ta:
+                                # Target specified but not running.
+                                with self._forwarded_log_lock:
+                                    self._forwarded_log.append({
+                                        "name": actor_name,
+                                        "prompt": f"⏰ {lbl}",
+                                        "output": f"⚠ '{ta}' is not running — could not forward",
+                                    })
                     except Exception as exc:
                         _log.error("Cron job for %r failed: %s", actor_name, exc)
 

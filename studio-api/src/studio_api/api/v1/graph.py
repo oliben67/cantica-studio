@@ -7,6 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from studio_api.api.v1.deps import require_permission
 from studio_api.config import get_settings
 
 router = APIRouter()
@@ -16,7 +17,7 @@ class GraphPayload(BaseModel):
     data: dict
 
 
-@router.get("")
+@router.get("", dependencies=[require_permission("graph:read")])
 def load_graph() -> dict:
     """Return the actor graph JSON-LD from the workspace file."""
     path = get_settings().graph_path
@@ -28,7 +29,7 @@ def load_graph() -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.put("")
+@router.put("", dependencies=[require_permission("graph:write")])
 def save_graph(payload: GraphPayload) -> dict:
     """Persist the actor graph JSON-LD to the workspace file."""
     path = get_settings().graph_path

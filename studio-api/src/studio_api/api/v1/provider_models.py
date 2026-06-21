@@ -43,7 +43,7 @@ def _models_for(provider_key: str, refresh: bool = False) -> list[str]:
 _PROVIDERS = ["claude", "gpt", "gemini", "copilot", "mistral"]
 
 
-@router.get("/models")
+@router.get("")
 async def provider_models(
     refresh: bool = Query(default=False, description="Clear server-side cache before fetching"),
 ) -> dict[str, list[str]]:

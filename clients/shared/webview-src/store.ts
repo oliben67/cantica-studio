@@ -2,23 +2,28 @@ import { create } from 'zustand';
 import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings, LogEntry, McpLogEntry } from './types';
 
 let _idSeq = 0;
-const nextId = (prefix: string) => `${prefix}-${Date.now()}-${++_idSeq}`;
 
-/** Deterministic 8-char hex fingerprint of provider:model, baked into AIActor ids. */
-function providerModelHash(provider: string, model: string): string {
-  const s = `${provider}:${model}`;
+/** DJB2 8-char hex hash of any string. */
+function _h(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) ^ s.charCodeAt(i)) >>> 0;
   return h.toString(16).padStart(8, '0');
 }
 
+/** Compound actor ID: urn:cantica:studio:actor:{baseHash}:{nameHash}:{providerModelHash} */
+function actorId(base: string, name: string, provider: string, model: string): string {
+  return `urn:cantica:studio:actor:${_h(base)}:${_h(name)}:${_h(`${provider}:${model}`)}`;
+}
+
 function defaultActor(pos = { x: 100, y: 100 }): AIActorDef {
   const provider = 'claude';
   const model = 'claude-sonnet-4-6';
-  const base = nextId('actor');
+  const seq = ++_idSeq;
+  const name = `actor-${seq}`;
+  // Use timestamp+seq as the base hash — placeholder for file path when no file is loaded
   return {
-    id: `urn:cantica:studio:actor:${base}-${providerModelHash(provider, model)}`,
-    name: `actor-${_idSeq}`,
+    id: actorId(`${Date.now()}-${seq}`, name, provider, model),
+    name,
     actorType: 'ai',
     definePrompt: {},
     provider,
@@ -35,7 +40,7 @@ function defaultActor(pos = { x: 100, y: 100 }): AIActorDef {
 function defaultCodeActor(type: 'python' | 'typescript', pos = { x: 100, y: 100 }): AIActorDef {
   const seq = ++_idSeq;
   return {
-    id: `urn:cantica:studio:actor:${nextId('code')}`,
+    id: `urn:cantica:studio:actor:code-${Date.now()}-${seq}`,
     name: `${type}-${seq}`,
     actorType: type,
     scriptPath: '',
@@ -127,6 +132,7 @@ interface GraphState {
 
   actorChatVisible: Record<string, boolean>;
   toggleChat: (actorId: string) => void;
+  openChatIfHidden: (name: string) => void;
 
   chatModalActorId: string | null;
   openChatModal: (actorId: string) => void;
@@ -147,6 +153,9 @@ interface GraphState {
   clearLog: () => void;
   toggleLog: () => void;
 
+  studioHealth: 'healthy' | 'starting' | 'down' | null;
+  setStudioHealth: (health: 'healthy' | 'starting' | 'down') => void;
+
 }
 
 export const useStore = create<GraphState>((set) => ({
@@ -163,7 +172,6 @@ export const useStore = create<GraphState>((set) => ({
     servers: [], serverUrl: 'http://localhost:8042', authToken: '',
     explorerSide: 'left', canticaHome: '', studioPort: 8043,
     autoStartStudio: true,
-    providerModels: {},
   },
   explorerSide: 'left',
 
@@ -194,12 +202,43 @@ export const useStore = create<GraphState>((set) => ({
     })),
 
   updateActor: (id, patch) =>
-    set((s) => ({
-      graph: {
-        ...s.graph,
-        actors: s.graph.actors.map((a) => (a.id === id ? { ...a, ...patch } : a)),
-      },
-    })),
+    set((s) => {
+      const actor = s.graph.actors.find(a => a.id === id);
+      if (!actor) return s;
+      const updated = { ...actor, ...patch };
+
+      // When provider or model changes on an AI actor, recompute the model-hash
+      // segment of the compound ID and remap any edges that reference the old ID.
+      let newId = id;
+      if ((patch.provider !== undefined || patch.model !== undefined) && actor.actorType === 'ai') {
+        const prefix = 'urn:cantica:studio:actor:';
+        const local = id.slice(prefix.length);
+        const parts = local.split(':');
+        if (parts.length === 3 && parts[0] && parts[1]) {
+          // New compound format — update third segment only
+          newId = `${prefix}${parts[0]}:${parts[1]}:${_h(`${updated.provider}:${updated.model}`)}`;
+        } else {
+          // Legacy format (actor-{ts}-{seq}[-{hash}]) — strip old hash, append new
+          const base = local.replace(/-[0-9a-f]{8}$/, '');
+          newId = `${prefix}${base}-${_h(`${updated.provider}:${updated.model}`)}`;
+        }
+        updated.id = newId;
+      }
+
+      return {
+        graph: {
+          ...s.graph,
+          actors: s.graph.actors.map(a => a.id === id ? updated : a),
+          edges: newId !== id
+            ? s.graph.edges.map(e => ({
+                ...e,
+                ...(e.from === id ? { from: newId } : {}),
+                ...(e.to === id ? { to: newId } : {}),
+              }))
+            : s.graph.edges,
+        },
+      };
+    }),
 
   removeActor: (id) =>
     set((s) => ({
@@ -217,7 +256,7 @@ export const useStore = create<GraphState>((set) => ({
         ...s.graph,
         edges: [
           ...s.graph.edges,
-          { ...edge, id: `urn:cantica:studio:edge:${nextId('edge')}` },
+          { ...edge, id: `urn:cantica:studio:edge:edge-${Date.now()}-${++_idSeq}` },
         ],
       },
     })),
@@ -242,7 +281,7 @@ export const useStore = create<GraphState>((set) => ({
         ...s.graph,
         edges: [
           ...s.graph.edges.filter((e) => e.from !== actorId),
-          ...edges.map((e) => ({ ...e, id: `urn:cantica:studio:edge:${nextId('edge')}` })),
+          ...edges.map((e) => ({ ...e, id: `urn:cantica:studio:edge:edge-${Date.now()}-${++_idSeq}` })),
         ],
       },
     })),
@@ -289,8 +328,10 @@ export const useStore = create<GraphState>((set) => ({
   appendOutput: (name, text) =>
     set((s) => {
       const next = new Map(s.actorOutputs);
+      const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const stamped = `[${ts}] ${text}`;
       const prev = next.get(name) ?? '';
-      next.set(name, prev ? `${prev}\n${text}` : text);
+      next.set(name, prev ? `${prev}\n${stamped}` : stamped);
       return { actorOutputs: next };
     }),
 
@@ -329,6 +370,11 @@ export const useStore = create<GraphState>((set) => ({
   toggleChat: (actorId) => set(s => ({
     actorChatVisible: { ...s.actorChatVisible, [actorId]: !s.actorChatVisible[actorId] },
   })),
+  openChatIfHidden: (name) => set(s => {
+    const actor = s.graph.actors.find(a => a.name === name);
+    if (!actor || s.actorChatVisible[actor.id]) return {};
+    return { actorChatVisible: { ...s.actorChatVisible, [actor.id]: true } };
+  }),
 
   chatModalActorId: null,
   openChatModal: (actorId) => set({ chatModalActorId: actorId }),
@@ -350,5 +396,8 @@ export const useStore = create<GraphState>((set) => ({
     set((s) => ({ mcpLogEntries: s.mcpLogEntries.length >= 200 ? [...s.mcpLogEntries.slice(-199), entry] : [...s.mcpLogEntries, entry] })),
   clearLog: () => set({ logEntries: [], mcpLogEntries: [] }),
   toggleLog: () => set(s => ({ logVisible: !s.logVisible })),
+
+  studioHealth: null,
+  setStudioHealth: (health) => set({ studioHealth: health }),
 
 }));

@@ -10,6 +10,7 @@ export interface PromptEventDef {
   prompt: PromptRef;
   filePattern?: string;
   targetActors?: string[];   // empty = self; multiple = broadcast
+  sendResponse?: boolean;    // true = fire this actor first, forward response; false (default) = send prompt directly
 }
 
 export interface CronJobDef {
@@ -18,6 +19,7 @@ export interface CronJobDef {
   prompt: PromptRef;
   targetActor?: string;
   targetEvent?: string;
+  sendResponse?: boolean;  // true = fire this actor first, forward response; false (default) = send prompt directly
 }
 
 export interface AgentResource {
@@ -100,11 +102,11 @@ export interface ExtensionSettings {
   explorerSide: 'left' | 'right';
   canticaHome: string;
   studioMode: 'local' | 'remote';
+  /** How to start the Studio API locally: native CLI or Docker container. */
+  studioRunMode: 'native' | 'container';
   studioBaseUrl: string;
   studioPort: number;
   autoStartStudio: boolean;
-  /** Per-provider model constraints. null = open; [] = disabled; [..] = allowlist. */
-  providerModels: Record<string, string[] | null>;
 }
 
 // ── API call log ──────────────────────────────────────────────────────────────

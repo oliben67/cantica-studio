@@ -5,63 +5,33 @@
     "name": "schema:name"
   },
   "@type": "ActorGraph",
-  "@id": "urn:cantica:studio:graph:events-test",
-  "name": "events-test",
+  "@id": "urn:cantica:studio:graph:new-song",
+  "name": "new-song",
   "actors": [
     {
       "@type": "AIActor",
-      "@id": "urn:cantica:studio:actor:actor-1780948014561-6",
-      "name": "cron-actor",
+      "@id": "urn:cantica:studio:actor:actor-1780263094569-1",
+      "name": "actor-1",
       "actorType": "ai",
       "definePrompt": null,
-      "provider": "copilot",
-      "model": "gpt-5-mini",
+      "provider": "claude",
+      "model": "claude-sonnet-4-6",
       "maxTokens": 4096,
       "maxHistory": 10,
       "position": {
-        "x": -246.49762385717491,
-        "y": 121.28541586770838
+        "x": 255.42830059282102,
+        "y": 94.78808509854511
       },
       "promptEvents": [],
       "cronJobs": [
         {
           "@type": "CronJob",
-          "name": "ask-for-time",
           "schedule": "*/5 * * * *",
-          "prompt": "What time is it",
-          "targetActor": "cron-target"
+          "prompt": "Show time"
         }
       ],
       "resources": []
-    },
-    {
-      "@type": "AIActor",
-      "@id": "urn:cantica:studio:actor:actor-1780948049235-7",
-      "name": "cron-target",
-      "actorType": "ai",
-      "definePrompt": null,
-      "provider": "copilot",
-      "model": "gpt-5-mini",
-      "maxTokens": 4096,
-      "maxHistory": 10,
-      "position": {
-        "x": 143.1067662951212,
-        "y": 409.91996699693175
-      },
-      "promptEvents": [],
-      "cronJobs": [],
-      "resources": []
     }
   ],
-  "edges": [
-    {
-      "@type": "ActorMessage",
-      "@id": "urn:cantica:studio:edge:edge-1781099061436-2",
-      "from": "urn:cantica:studio:actor:actor-1780948014561-6",
-      "to": "urn:cantica:studio:actor:actor-1780948049235-7",
-      "prompt": "What time is it",
-      "label": "ask-for-time",
-      "kind": "cron"
-    }
-  ]
+  "edges": []
 }

@@ -178,17 +178,23 @@ describe('runtime state', () => {
   it('appendOutput appends with a newline separator', () => {
     useStore.getState().appendOutput('bot', 'line1');
     useStore.getState().appendOutput('bot', 'line2');
-    expect(useStore.getState().actorOutputs.get('bot')).toBe('line1\nline2');
+    const result = useStore.getState().actorOutputs.get('bot')!;
+    expect(result).toMatch(/\[\d{2}:\d{2}:\d{2}\] line1/);
+    expect(result).toMatch(/\[\d{2}:\d{2}:\d{2}\] line2/);
+    expect(result).toContain('\n');
   });
 
   it('appendOutput creates the entry if none exists', () => {
     useStore.getState().appendOutput('new-actor', 'first');
-    expect(useStore.getState().actorOutputs.get('new-actor')).toBe('first');
+    const result = useStore.getState().actorOutputs.get('new-actor')!;
+    expect(result).toMatch(/\[\d{2}:\d{2}:\d{2}\] first/);
   });
 
   it('appendOutput does not add a leading newline when empty', () => {
     useStore.getState().appendOutput('bot', 'only line');
-    expect(useStore.getState().actorOutputs.get('bot')).toBe('only line');
+    const result = useStore.getState().actorOutputs.get('bot')!;
+    expect(result).toMatch(/\[\d{2}:\d{2}:\d{2}\] only line/);
+    expect(result).not.toMatch(/^\n/);
   });
 });
 

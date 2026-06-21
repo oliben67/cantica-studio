@@ -10,11 +10,13 @@ services:
       - "${STUDIO_PORT:-8043}:8043"
     volumes:
       - "${STUDIO_WORKSPACE:-${PWD}}:/workspace"
+      - "${CANTICA_HOME:-${HOME}/.cantica}:/cantica-home"
     environment:
       STUDIO_WORKSPACE: /workspace
       STUDIO_HOST: 0.0.0.0
       STUDIO_PORT: 8043
       STUDIO_LOG_LEVEL: info
+      CANTICA_HOME: /cantica-home
       # JSON array of Cantica servers, e.g.:
       # STUDIO_CANTICA_SERVERS: '[{"url":"http://host.docker.internal:8042","auth_token":""}]'
       STUDIO_CANTICA_SERVERS: "${STUDIO_CANTICA_SERVERS:-[]}"

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+from contextlib import contextmanager
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from studio_api.main import create_app
@@ -11,6 +15,18 @@ def _client() -> TestClient:
     """Create a TestClient with the app but bypass lifespan (no pykka/APScheduler)."""
     app = create_app()
     return TestClient(app, raise_server_exceptions=True)
+
+
+@contextmanager
+def _auth_client():
+    """TestClient with STUDIO_AUTH_ENABLED=true and a fresh settings cache."""
+    import studio_api.config as _cfg
+    with patch.dict(os.environ, {"STUDIO_AUTH_ENABLED": "true"}):
+        _cfg._settings = None
+        try:
+            yield TestClient(create_app(), raise_server_exceptions=True)
+        finally:
+            _cfg._settings = None
 
 
 def test_health_endpoint():
@@ -71,19 +87,19 @@ def test_cors_headers():
 
 
 def test_v1_graph_endpoint_requires_auth():
-    with _client() as c:
+    with _auth_client() as c:
         r = c.get("/v1/graph")
     assert r.status_code == 401
 
 
 def test_v1_prompts_endpoint_requires_auth():
-    with _client() as c:
+    with _auth_client() as c:
         r = c.get("/v1/prompts")
     assert r.status_code == 401
 
 
 def test_v1_runtime_actors_endpoint_requires_auth():
-    with _client() as c:
+    with _auth_client() as c:
         r = c.get("/v1/runtime/actors")
     assert r.status_code == 401
 

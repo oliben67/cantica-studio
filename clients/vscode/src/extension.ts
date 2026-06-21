@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { ActorsPanel } from './actors-panel.js';
 import { clearCredentials, generateKeyPair, loadCredentials, makeCachedAssertion, publicKeyFromPrivate, saveCredentials } from './auth.js';
+import { loadProviderKeys } from './provider-keys.js';
+import { configureProviderKeys, isSetupDone, publishSetupContext, runSetupWizard } from './setup-wizard.js';
 import type { SongbookFolderItem, SongbookItem, SongbookNode } from './songbooks-provider.js';
 import { SongbooksProvider } from './songbooks-provider.js';
 import { SONGBOOKS_SCHEME, SongbooksFileSystemProvider } from './songbooks-fs-provider.js';
@@ -27,6 +29,7 @@ function readSettings(): ExtensionSettings {
   ];
 
   const studioMode = (cfg.get<string>('studioMode') ?? 'local') as 'local' | 'remote';
+  const studioRunMode = (cfg.get<string>('studioRunMode') ?? 'container') as 'native' | 'container';
   const studioPort = cfg.get<number>('studioPort') ?? 8043;
   const remoteUrl = (cfg.get<string>('studioUrl') ?? '').trim();
   const studioBaseUrl = studioMode === 'remote' && remoteUrl
@@ -40,10 +43,10 @@ function readSettings(): ExtensionSettings {
     explorerSide: (cfg.get<string>('explorerSide') ?? 'left') as 'left' | 'right',
     canticaHome: cfg.get<string>('canticaHome') ?? '',
     studioMode,
+    studioRunMode,
     studioBaseUrl,
     studioPort,
     autoStartStudio: cfg.get<boolean>('autoStartStudio') ?? true,
-    providerModels: cfg.get<Record<string, string[] | null>>('providerModels') ?? {},
   };
 }
 
@@ -75,6 +78,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const studio = new StudioManager();
   let _songbookClipboard: SongbookItem | undefined;
   context.subscriptions.push(studio);
+
+  // Publish setup-done context key so viewsWelcome when-clauses can react immediately.
+  publishSetupContext(context);
 
   // Seed isRegistered immediately from globalState (sync) so the UI shows the right
   // button from the first frame, then verify with SecretStorage (async) and correct if needed.
@@ -111,13 +117,33 @@ export function activate(context: vscode.ExtensionContext): void {
       await client.registerClientKey(creds.clientId, publicKeyFromPrivate(creds.privateKeyPem));
       getAuth = makeCachedAssertion(creds, settings.studioBaseUrl);
       _registeredWithCurrent = true;
+      // Push provider keys from SecretStorage into the server DB so they
+      // persist across restarts regardless of how the server was launched.
+      const providerKeys = await loadProviderKeys(context.secrets);
+      void client.syncProviderKeys(providerKeys);
     } catch {
       // API not ready yet; will retry on next healthy tick.
     }
   }
 
+  let _lastStudioStatus: { health: StudioHealth; info?: StudioInfo } = { health: 'down' };
+
+  function _buildStudioStatusMsg(health: StudioHealth, info?: StudioInfo) {
+    return {
+      type: 'studioStatus' as const,
+      health,
+      url: info?.url ?? settings.studioBaseUrl,
+      ...(info?.version !== undefined ? { version: info.version } : {}),
+      ...(info?.uptimeSeconds !== undefined ? { uptimeSeconds: info.uptimeSeconds } : {}),
+      ...(info?.workspace !== undefined ? { workspace: info.workspace } : {}),
+      ...(info?.containerized !== undefined ? { containerized: info.containerized } : {}),
+    };
+  }
+
   function _applyHealth(status: StudioHealth, info?: StudioInfo): void {
+    _lastStudioStatus = info !== undefined ? { health: status, info } : { health: status };
     studioProvider.setStatus(status, info);
+    ActorsPanel.current?.setStudioStatus(_buildStudioStatusMsg(status, info));
   }
 
   let _healthPollTimer: ReturnType<typeof setInterval> | undefined;
@@ -165,6 +191,7 @@ export function activate(context: vscode.ExtensionContext): void {
   songbooksProvider.setFileIcon(vscode.Uri.joinPath(context.extensionUri, 'icons', 'music-sheet.png'));
   const serversProvider = new ServersProvider();
   const studioProvider = new StudioProvider();
+  studioProvider.setSetupDone(isSetupDone(context));
 
   const songbooksView = vscode.window.createTreeView('canticaScores.songbooksView', {
     treeDataProvider: songbooksProvider,
@@ -186,6 +213,7 @@ export function activate(context: vscode.ExtensionContext): void {
     songbooksView.onDidChangeVisibility((e) => {
       if (e.visible) {
         const panel = ActorsPanel.show(context, client, settings);
+        panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
         void panel.pushGraph();
       }
     }),
@@ -237,11 +265,13 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('canticaScores.openPanel', () => {
       const panel = ActorsPanel.show(context, client, settings);
+      panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
       void panel.pushGraph();
     }),
 
     vscode.commands.registerCommand('canticaScores.newActor', () => {
       const panel = ActorsPanel.show(context, client, settings);
+      panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
       void panel.pushGraph().then(() => {
         void panel['panel']?.webview.postMessage({ type: 'addActor' });
       });
@@ -254,6 +284,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('canticaScores.loadGraph', async () => {
       const panel = ActorsPanel.show(context, client, settings);
+      panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
       await panel.pushGraph();
     }),
 
@@ -261,9 +292,35 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'canticaScores');
     }),
 
-    vscode.commands.registerCommand('canticaScores.startLocalStudio', async () => {
+    vscode.commands.registerCommand('canticaScores.configureProviderKeys', async () => {
+      const keys = await configureProviderKeys(context);
+      if (keys) void client.syncProviderKeys(keys);
+    }),
+
+    vscode.commands.registerCommand('canticaScores.setupStudio', async () => {
+      const result = await runSetupWizard(context);
+      studioProvider.setSetupDone(isSetupDone(context));
+      if (!result) return;
+      if (result.mode === 'remote') return; // coming soon — no server to start
+      settings = readSettings();
+      client = new StudioClient(settings.studioBaseUrl, () => getAuth?.() ?? null);
       setStatusStarting();
-      const url = await studio.ensureRunning();
+      const url = await studio.ensureRunning(result.runMode, result.keys);
+      if (url) {
+        _registeredWithCurrent = false;
+        void vscode.window.showInformationMessage(`Studio API running at ${url}`);
+        void ActorsPanel.refreshProviderModels(client);
+      }
+    }),
+
+    vscode.commands.registerCommand('canticaScores.startLocalStudio', async () => {
+      if (!isSetupDone(context)) {
+        void vscode.commands.executeCommand('canticaScores.setupStudio');
+        return;
+      }
+      setStatusStarting();
+      const keys = await loadProviderKeys(context.secrets);
+      const url = await studio.ensureRunning(settings.studioRunMode, keys);
       if (url) {
         settings = readSettings();
         client = new StudioClient(settings.studioBaseUrl, () => getAuth?.() ?? null);
@@ -274,14 +331,16 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('canticaScores.stopLocalStudio', async () => {
-      await studio.stop();
+      _applyHealth('down');
+      await studio.stop(settings.studioRunMode);
       void vscode.window.showInformationMessage('Studio API stopped.');
     }),
 
     vscode.commands.registerCommand('canticaScores.restartLocalStudio', async () => {
-      await studio.stop();
+      await studio.stop(settings.studioRunMode);
       setStatusStarting();
-      const url = await studio.ensureRunning();
+      const keys = await loadProviderKeys(context.secrets);
+      const url = await studio.ensureRunning(settings.studioRunMode, keys);
       if (url) {
         settings = readSettings();
         client = new StudioClient(settings.studioBaseUrl, () => getAuth?.() ?? null);
@@ -483,6 +542,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const graph = parseGraph(raw);
         await client.saveGraph(graph);
         const panel = ActorsPanel.show(context, client, settings);
+        panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
         panel.setActiveSongbook(item.uri);
         songbooksProvider.setActive(item.uri);
         await panel.pushGraph();
@@ -500,6 +560,7 @@ export function activate(context: vscode.ExtensionContext): void {
         await client.saveGraph(graph);
         await vscode.window.showTextDocument(item.uri, { viewColumn: vscode.ViewColumn.One, preview: false });
         const panel = ActorsPanel.show(context, client, settings);
+        panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
         panel.setActiveSongbook(item.uri);
         songbooksProvider.setActive(item.uri);
         await panel.pushGraph();
@@ -827,10 +888,26 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshProviders();
 
     if (settings.studioMode === 'local' && settings.autoStartStudio) {
+      // First-time run: show the setup wizard instead of starting blindly.
+      if (!isSetupDone(context)) {
+        const result = await runSetupWizard(context);
+        if (!result || result.mode === 'remote') return;
+        settings = readSettings();
+        client = new StudioClient(settings.studioBaseUrl, () => getAuth?.() ?? null);
+        setStatusStarting();
+        const url = await studio.ensureRunning(result.runMode, result.keys);
+        if (url) {
+          _registeredWithCurrent = false;
+          void ActorsPanel.refreshProviderModels(client);
+        }
+        return;
+      }
+
       setStatusStarting();
-      await studio.ensureRunning();
+      const keys = await loadProviderKeys(context.secrets);
+      await studio.ensureRunning(settings.studioRunMode, keys);
       settings = readSettings();
-      client = new StudioClient(settings.studioBaseUrl);
+      client = new StudioClient(settings.studioBaseUrl, () => getAuth?.() ?? null);
       void ActorsPanel.refreshProviderModels(client);
     }
   })();

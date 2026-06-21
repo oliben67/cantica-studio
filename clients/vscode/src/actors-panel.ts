@@ -25,6 +25,16 @@ export class ActorsPanel {
   private _activeSongbookUri: vscode.Uri | undefined;
   get activeSongbookUri(): vscode.Uri | undefined { return this._activeSongbookUri; }
 
+  /** Last studioStatus to send — queued before ready, posted immediately after. */
+  private _pendingStudioStatus: (ToWebview & { type: 'studioStatus' }) | null = null;
+  private _webviewReady = false;
+
+  /** Push server health to the webview. Safe to call before ready fires. */
+  setStudioStatus(msg: ToWebview & { type: 'studioStatus' }): void {
+    this._pendingStudioStatus = msg;
+    if (this._webviewReady) void this.post(msg);
+  }
+
   static show(
     context: vscode.ExtensionContext,
     client: StudioClient,
@@ -85,10 +95,12 @@ export class ActorsPanel {
 
     switch (raw['type']) {
       case 'ready':
+        this._webviewReady = true;
         await this.pushSettings();
         await this.pushGraph();
         await this.pushPrompts();
         void this.pushProviderModels(true);
+        if (this._pendingStudioStatus) void this.post(this._pendingStudioStatus);
         break;
 
       case 'saveGraph': {
@@ -129,7 +141,10 @@ export class ActorsPanel {
           if (uri) {
             songbookUri = vscode.Uri.parse(uri);
             const bytes = await vscode.workspace.fs.readFile(songbookUri);
-            graph = parseGraph(JSON.parse(Buffer.from(bytes).toString('utf-8')) as Record<string, unknown>);
+            graph = parseGraph(JSON.parse(Buffer.from(bytes).toString('utf-8')) as Record<string, unknown>, songbookUri.fsPath);
+            // Write back immediately so compound IDs are persisted in the file.
+            const migrated = Buffer.from(JSON.stringify(serializeGraph(graph), null, 2), 'utf-8');
+            await vscode.workspace.fs.writeFile(songbookUri, migrated);
           } else if (content) {
             graph = parseGraph(content);
           } else {
@@ -164,7 +179,7 @@ export class ActorsPanel {
 
         // ── 2. Start the actor if not yet running ─────────────────────────────
         if (!alreadyRunning) {
-          const graph = await this.client.loadGraph();
+          const graph = await this.client.loadGraph(this._activeSongbookUri?.fsPath);
           const def = graph?.actors.find(a => a.name === name);
           if (!def) {
             await this.post({
@@ -183,6 +198,9 @@ export class ActorsPanel {
               await this.post({ type: 'actorOutput', name, output: initialOutput });
             }
             await this.post({ type: 'actorOutput', name, output: `✓ Ready · ${tag}` });
+            // Push the graph with compound IDs so actor nodes reflect the updated IDs.
+            await this.post({ type: 'loadGraph', graph });
+            await this._writeCompoundIds(graph);
             await this.post({ type: 'actorStatus', name, running: true });
             if (resolvedModel) {
               await this.post({ type: 'actorModelResolved', name, model: resolvedModel });
@@ -249,7 +267,7 @@ export class ActorsPanel {
           break;
         }
 
-        const graph = await this.client.loadGraph();
+        const graph = await this.client.loadGraph(this._activeSongbookUri?.fsPath);
         const def = graph?.actors.find(a => a.name === name);
         if (!def) {
           await this.post({ type: 'actorOutput', name, output: '⚠ Actor not found in graph — could not restart' });
@@ -263,6 +281,8 @@ export class ActorsPanel {
             await this.post({ type: 'actorOutput', name, output: initialOutput });
           }
           await this.post({ type: 'actorOutput', name, output: '✓ Ready' });
+          await this.post({ type: 'loadGraph', graph });
+          await this._writeCompoundIds(graph);
           await this.post({ type: 'actorStatus', name, running: true });
           if (resolvedModel) {
             await this.post({ type: 'actorModelResolved', name, model: resolvedModel });
@@ -338,8 +358,11 @@ export class ActorsPanel {
         break;
 
       case 'playSongbook': {
-        const graph = await this.client.loadGraph();
+        const graph = await this.client.loadGraph(this._activeSongbookUri?.fsPath);
         if (!graph) break;
+        // Push compound IDs to the webview before starting any actors.
+        await this.post({ type: 'loadGraph', graph });
+        await this._writeCompoundIds(graph);
         let runningNames: string[] = [];
         try { runningNames = await this.client.listRunning(); } catch { /* ignore */ }
         for (const actor of graph.actors) {
@@ -386,7 +409,7 @@ export class ActorsPanel {
   }
 
   async pushGraph(): Promise<void> {
-    const graph = await this.client.loadGraph();
+    const graph = await this.client.loadGraph(this._activeSongbookUri?.fsPath);
     if (graph) {
       await this.post({ type: 'loadGraph', graph });
       await this.registerFileSaveWatcher(graph);
@@ -454,6 +477,16 @@ export class ActorsPanel {
     return undefined;
   }
 
+  private async _writeCompoundIds(graph: ActorGraph): Promise<void> {
+    if (!this._activeSongbookUri) return;
+    try {
+      const content = Buffer.from(JSON.stringify(serializeGraph(graph), null, 2), 'utf-8');
+      await vscode.workspace.fs.writeFile(this._activeSongbookUri, content);
+    } catch {
+      // Non-fatal: IDs are updated in-memory; the file will be synced on next save.
+    }
+  }
+
   private _attachLogCallback(): void {
     this.client.onLog = (entry) => { void this.post({ type: 'apiLog', entry }); };
   }
@@ -501,7 +534,7 @@ export class ActorsPanel {
     this.disposables.push(watcher);
   }
 
-  private async post(msg: ToWebview): Promise<void> {
+  async post(msg: ToWebview): Promise<void> {
     await this.panel.webview.postMessage(msg);
   }
 

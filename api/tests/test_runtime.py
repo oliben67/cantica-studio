@@ -357,20 +357,17 @@ def test_actor_def_code_fields():
 # ── fire_event routing to target actor ────────────────────────────────────────
 
 
-def test_fire_event_routes_output_to_target_actor():
-    """When an event has targetActors, instruct() runs on self then output is forwarded."""
+def test_fire_event_routes_prompt_directly_to_target_by_default():
+    """Default sendResponse=False: prompt goes straight to target, source not consulted."""
     rt = ActorRuntime()
     connector = _mock_connector()
 
     proxy_a = MagicMock()
-    proxy_a.instruct.return_value.get.return_value = "source-output"
     proxy_b = MagicMock()
     proxy_b.instruct.return_value.get.return_value = "target-reply"
 
-    ref_a = MagicMock()
-    ref_a.proxy.return_value = proxy_a
-    ref_b = MagicMock()
-    ref_b.proxy.return_value = proxy_b
+    ref_a = MagicMock(); ref_a.proxy.return_value = proxy_a
+    ref_b = MagicMock(); ref_b.proxy.return_value = proxy_b
 
     with patch("studio_api.runtime._make_provider", return_value=None), \
          patch("pykka.ThreadingActor.start", side_effect=[ref_a, ref_b]):
@@ -385,20 +382,52 @@ def test_fire_event_routes_output_to_target_actor():
         rt.start(_actor_def("target"), connector)
 
     result = rt.fire_event("source", "process", "ctx")
-    assert result["output"] == "source-output"          # returns self output
+    assert result["output"] == "p\n\nctx"               # instruction, source not consulted
+    assert result["forwarded"] == [{"name": "target", "prompt": "p\n\nctx", "output": "target-reply"}]
+    proxy_a.instruct.assert_not_called()                 # source skipped
+    proxy_b.instruct.assert_called_once_with("p\n\nctx") # target gets prompt directly
+    rt.stop_all()
+
+
+def test_fire_event_routes_output_to_target_when_send_response_true():
+    """sendResponse=True: source instructed first, output forwarded to target."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_a = MagicMock()
+    proxy_a.instruct.return_value.get.return_value = "source-output"
+    proxy_b = MagicMock()
+    proxy_b.instruct.return_value.get.return_value = "target-reply"
+
+    ref_a = MagicMock(); ref_a.proxy.return_value = proxy_a
+    ref_b = MagicMock(); ref_b.proxy.return_value = proxy_b
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", side_effect=[ref_a, ref_b]):
+        rt.start(
+            _actor_def(
+                "source",
+                prompt_events=[{"name": "process", "prompt": "p",
+                                "targetActors": ["target"], "sendResponse": True}],
+            ),
+            connector,
+        )
+        rt.start(_actor_def("target"), connector)
+
+    result = rt.fire_event("source", "process", "ctx")
+    assert result["output"] == "source-output"
     assert result["forwarded"] == [{"name": "target", "prompt": "source-output", "output": "target-reply"}]
     proxy_a.instruct.assert_called_once_with("p\n\nctx")
-    proxy_b.instruct.assert_called_once_with("source-output")  # forwarded to target
+    proxy_b.instruct.assert_called_once_with("source-output")
     rt.stop_all()
 
 
 def test_fire_event_routes_to_multiple_targets():
-    """Events are always direct: output forwarded to every actor in targetActors."""
+    """Default sendResponse=False: prompt broadcast directly to every actor in targetActors."""
     rt = ActorRuntime()
     connector = _mock_connector()
 
     proxy_src = MagicMock()
-    proxy_src.instruct.return_value.get.return_value = "src-out"
     proxy_b = MagicMock()
     proxy_b.instruct.return_value.get.return_value = "b-reply"
     proxy_c = MagicMock()
@@ -422,14 +451,14 @@ def test_fire_event_routes_to_multiple_targets():
         rt.start(_actor_def("bot-c"), connector)
 
     result = rt.fire_event("source", "broadcast", "hello")
-    assert result["output"] == "src-out"
+    assert result["output"] == "Announce:\n\nhello"   # instruction, source not consulted
     assert result["forwarded"] == [
-        {"name": "bot-b", "prompt": "src-out", "output": "b-reply"},
-        {"name": "bot-c", "prompt": "src-out", "output": "c-reply"},
+        {"name": "bot-b", "prompt": "Announce:\n\nhello", "output": "b-reply"},
+        {"name": "bot-c", "prompt": "Announce:\n\nhello", "output": "c-reply"},
     ]
-    proxy_src.instruct.assert_called_once_with("Announce:\n\nhello")
-    proxy_b.instruct.assert_called_once_with("src-out")
-    proxy_c.instruct.assert_called_once_with("src-out")
+    proxy_src.instruct.assert_not_called()
+    proxy_b.instruct.assert_called_once_with("Announce:\n\nhello")
+    proxy_c.instruct.assert_called_once_with("Announce:\n\nhello")
     rt.stop_all()
 
 
@@ -439,7 +468,6 @@ def test_fire_event_legacy_single_target_actor_key():
     connector = _mock_connector()
 
     proxy_a = MagicMock()
-    proxy_a.instruct.return_value.get.return_value = "out"
     proxy_b = MagicMock()
     proxy_b.instruct.return_value.get.return_value = "ok"
 
@@ -461,7 +489,8 @@ def test_fire_event_legacy_single_target_actor_key():
     evts = rt._actors["source"].ai_events
     assert evts[0].target_actors == ["target"]   # promoted to list
     rt.fire_event("source", "ping")
-    proxy_b.instruct.assert_called_once_with("out")
+    proxy_a.instruct.assert_not_called()          # source skipped (send_response=False)
+    proxy_b.instruct.assert_called_once_with("p") # target gets prompt directly
     rt.stop_all()
 
 

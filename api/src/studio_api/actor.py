@@ -17,6 +17,9 @@ class PromptEventDef:
     prompt: str                          # resolved content (not a URI at runtime)
     file_pattern: str | None = None
     target_actors: list[str] = field(default_factory=list)  # actors to route output to (empty = self)
+    # When True: fire this actor with the prompt first, forward its response to targets.
+    # When False (default): send the prompt directly to target actors without consulting this actor.
+    send_response: bool = False
 
 
 @dataclass
@@ -26,6 +29,9 @@ class CronJobDef:
     name: str                        # human-readable label, required
     target_actor: str | None = None
     target_event: str | None = None
+    # When True: instruct the firing actor with the prompt first, forward its response to target.
+    # When False (default): send the prompt directly to the target actor.
+    send_response: bool = False
 
 
 @dataclass

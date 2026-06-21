@@ -1,8 +1,16 @@
+import path from 'path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: [
+      { find: /^zustand(.*)/, replacement: path.resolve(__dirname, 'node_modules/zustand$1') },
+      { find: /^react-dom(.*)/, replacement: path.resolve(__dirname, 'node_modules/react-dom$1') },
+      { find: /^react(.*)/, replacement: path.resolve(__dirname, 'node_modules/react$1') },
+    ],
+  },
   test: {
     environment: 'jsdom',
     globals: true,

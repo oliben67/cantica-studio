@@ -32,6 +32,13 @@ def test_cron_job_def_fields():
 # ── StudioActor ───────────────────────────────────────────────────────────────
 
 
+class _MockProvider:
+    """Minimal provider stub: returns a predictable string without calling any LLM."""
+    def run(self, system: str, messages: list, tools: list, dispatcher: object, max_tokens: int) -> str:
+        content = messages[-1]["content"] if messages else ""
+        return f"[mock reply to: {content[:40]}]"
+
+
 def _make_actor(
     *,
     events: list[PromptEventDef] | None = None,
@@ -46,9 +53,11 @@ def _make_actor(
         prompt_events = _events
         cron_jobs = []
         outbox = _outbox
+        provider = _MockProvider()
+        max_tokens = 1024
 
-        def instruct(self, instruction: str, **_kw) -> str:  # type: ignore[override]
-            return f"[mock reply to: {instruction[:40]}]"
+        def _effective_system_prompt(self) -> str:
+            return self.system_prompt
 
     return _MockActor
 

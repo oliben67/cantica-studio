@@ -107,11 +107,10 @@ describe('ProviderMenu running lock', () => {
     });
     openMenuFor('urn:x:a1');
     render(<ProviderMenu />);
-    // The notice banner specifically contains "Running"
+    // The notice banner contains "Running"
     expect(screen.getByText(/Running/i)).toBeInTheDocument();
-    // Provider name appears inside the banner text
     const notice = document.querySelector('.cs-provider-notice');
-    expect(notice?.textContent).toContain('Claude');
+    expect(notice?.textContent).toContain('model and provider cannot be changed');
   });
 
   it('disables model buttons from other providers when running', () => {
@@ -127,7 +126,7 @@ describe('ProviderMenu running lock', () => {
     expect(gptBtn).toBeDisabled();
   });
 
-  it('keeps same-provider buttons enabled when running', () => {
+  it('disables all model buttons (including same-provider) when running', () => {
     useStore.setState({
       graph: graph([actor({ provider: 'claude' })]),
       runningActors: new Set(['bot']),
@@ -136,7 +135,7 @@ describe('ProviderMenu running lock', () => {
     render(<ProviderMenu />);
 
     const claudeBtn = screen.getByRole('button', { name: 'claude-opus-4-8' });
-    expect(claudeBtn).not.toBeDisabled();
+    expect(claudeBtn).toBeDisabled();
   });
 
   it('clicking a disabled button does not update the actor', () => {
@@ -154,7 +153,7 @@ describe('ProviderMenu running lock', () => {
     expect(updated.model).toBe('claude-sonnet-4-6');
   });
 
-  it('allows switching model within same provider while running', () => {
+  it('clicking any model button while running does not update the actor', () => {
     useStore.setState({
       graph: graph([actor({ provider: 'claude', model: 'claude-sonnet-4-6' })]),
       runningActors: new Set(['bot']),
@@ -165,7 +164,7 @@ describe('ProviderMenu running lock', () => {
     fireEvent.click(screen.getByRole('button', { name: 'claude-haiku-4-5' }));
 
     const updated = useStore.getState().graph.actors[0]!;
-    expect(updated.model).toBe('claude-haiku-4-5');
+    expect(updated.model).toBe('claude-sonnet-4-6');   // unchanged
     expect(updated.provider).toBe('claude');
   });
 });

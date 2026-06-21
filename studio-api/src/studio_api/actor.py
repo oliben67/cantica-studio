@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from actor_ai import AIActor, tool
 
@@ -57,7 +58,7 @@ class AgentResource:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "AgentResource":
+    def from_dict(cls, d: dict) -> AgentResource:
         return cls(
             id=d["id"],
             name=d.get("name", d["id"]),
@@ -81,6 +82,13 @@ class StudioActor(AIActor):
     # Signature: (actor_name: str, instruction: str) -> str
     _instruct_actor: Callable[[str, str], str] | None = None
 
+    # Separate stateless provider used exclusively inside fire_event.
+    # Using self.provider concurrently from within a tool dispatch (which runs
+    # via run_in_executor inside the SDK session loop) creates two overlapping
+    # Copilot CLI sessions that corrupt each other → 400 duplicate call ID errors.
+    # The runtime sets this to a non-SDK HTTP provider; falls back to self.provider.
+    _event_provider: Any | None = None
+
     @tool
     def fire_event(self, event_name: str, context: str = "") -> str:
         """Fire a named prompt event on this actor.
@@ -94,22 +102,31 @@ class StudioActor(AIActor):
         instruction = evt.prompt
         if context:
             instruction = f"{instruction}\n\n{context}"
-        # Call the provider directly with tools=[] to prevent the LLM from calling
-        # fire_event again (which would cause infinite recursion). This also avoids
-        # asyncio nesting issues: the Copilot SDK path dispatches tools via
-        # run_in_executor so this method already runs in a plain thread (no event loop),
-        # meaning asyncio.run() inside provider.run() works without wrapping.
-        try:
-            output = self.provider.run( # type: ignore
-                system=self._effective_system_prompt(),
-                messages=[{"role": "user", "content": instruction}],
-                tools=[],
-                dispatcher=lambda name, args: None,
-                max_tokens=self.max_tokens,
-            )
-        except Exception as exc:
-            _log.error("fire_event %r provider.run failed: %s", event_name, exc, exc_info=True)
-            raise
+
+        if evt.send_response:
+            # sendResponse=True: run this actor's LLM on the prompt, forward the reply.
+            # Use _event_provider (a stateless HTTP clone) when available to avoid the
+            # concurrent-session issue — the SDK Copilot provider is already inside an
+            # active session loop when this tool dispatch runs; a second concurrent call
+            # produces duplicate function-call IDs.
+            event_provider = self._event_provider or self.provider  # type: ignore[attr-defined]
+            try:
+                output = event_provider.run(
+                    system=self._effective_system_prompt(),
+                    messages=[{"role": "user", "content": instruction}],
+                    tools=[],
+                    dispatcher=lambda name, args: None,
+                    max_tokens=self.max_tokens,
+                )
+            except Exception as exc:
+                _log.error("fire_event %r provider.run failed: %s", event_name, exc, exc_info=True)
+                raise
+        else:
+            # sendResponse=False (default): send the raw event prompt to targets without
+            # consulting this actor's LLM.  This also avoids the concurrent-session bug
+            # that occurs when provider.run() is called from inside a tool dispatch.
+            output = instruction
+
         if self._instruct_actor and evt.target_actors:
             for target in evt.target_actors:
                 try:

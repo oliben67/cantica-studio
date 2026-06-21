@@ -9,12 +9,18 @@ type MsgKind = 'user' | 'ai' | 'system';
 interface ChatMsg {
   kind: MsgKind;
   text: string;
+  ts?: string;
 }
 
+const TS_RE = /^\[(\d{2}:\d{2}:\d{2})\] ([\s\S]*)$/;
+
 function parseLine(line: string): ChatMsg {
-  if (line.startsWith('> ')) return { kind: 'user', text: line.slice(2) };
-  if (/^[⏳✓⚠ℹ]/.test(line)) return { kind: 'system', text: line };
-  return { kind: 'ai', text: line };
+  const m = TS_RE.exec(line);
+  const ts = m?.[1];
+  const content = m ? (m[2] ?? line) : line;
+  if (content.startsWith('> ')) return { kind: 'user', text: content.slice(2), ts };
+  if (/^[⏳✓⚠ℹ]/.test(content)) return { kind: 'system', text: content, ts };
+  return { kind: 'ai', text: content, ts };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -86,17 +92,23 @@ export function ChatModal() {
             messages.map((msg, i) => (
               <div key={i} className={`cs-chat-row cs-chat-row--${msg.kind}`}>
                 {msg.kind === 'user' ? (
-                  <button
-                    className="cs-chat-bubble cs-chat-bubble--user"
-                    onClick={() => handlePromptClick(msg.text)}
-                    title="Click to edit and resend"
-                  >
-                    {msg.text}
-                  </button>
+                  <div className="cs-chat-msg-wrap cs-chat-msg-wrap--user">
+                    {msg.ts && <span className="cs-msg-ts cs-msg-ts--user">{msg.ts}</span>}
+                    <button
+                      className="cs-chat-bubble cs-chat-bubble--user"
+                      onClick={() => handlePromptClick(msg.text)}
+                      title="Click to edit and resend"
+                    >
+                      {msg.text}
+                    </button>
+                  </div>
                 ) : (
-                  <span className={`cs-chat-bubble cs-chat-bubble--${msg.kind}`}>
-                    {msg.text}
-                  </span>
+                  <div className="cs-chat-msg-wrap">
+                    {msg.ts && <span className="cs-msg-ts">{msg.ts}</span>}
+                    <span className={`cs-chat-bubble cs-chat-bubble--${msg.kind}`}>
+                      {msg.text}
+                    </span>
+                  </div>
                 )}
               </div>
             ))

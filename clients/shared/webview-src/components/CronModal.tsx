@@ -35,13 +35,14 @@ function CronBuilder({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-type Draft = { id: string; name: string; schedule: string; promptContent: string; targetActor: string; targetEvent: string };
+type Draft = { id: string; name: string; schedule: string; promptContent: string; targetActor: string; targetEvent: string; sendResponse: boolean };
 
 let _seq = 0;
 const uid = () => `c${Date.now()}${++_seq}`;
 
 function Inner({ actor, focusLabel }: { actor: AIActorDef; focusLabel: string | null }) {
-  const { graph, updateActor, replaceActorEdges, closeCronsModal } = useStore();
+  const { graph, updateActor, replaceActorEdges, closeCronsModal, runningActors } = useStore();
+  const isRunning = runningActors.has(actor.name);
   const allActors = graph.actors;
   const focusRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -56,11 +57,12 @@ function Inner({ actor, focusLabel }: { actor: AIActorDef; focusLabel: string | 
       promptContent: c.prompt.content ?? c.prompt.uri ?? '',
       targetActor: c.targetActor ?? '',
       targetEvent: c.targetEvent ?? '',
+      sendResponse: c.sendResponse ?? false,
     }))
   );
 
   function add() {
-    setDrafts(prev => [...prev, { id: uid(), name: '', schedule: '* * * * *', promptContent: '', targetActor: '', targetEvent: '' }]);
+    setDrafts(prev => [...prev, { id: uid(), name: '', schedule: '* * * * *', promptContent: '', targetActor: '', targetEvent: '', sendResponse: false }]);
   }
   function setName(id: string, v: string)     { setDrafts(p => p.map(d => d.id === id ? { ...d, name: v } : d)); }
   function setSchedule(id: string, v: string) { setDrafts(p => p.map(d => d.id === id ? { ...d, schedule: v } : d)); }
@@ -69,6 +71,7 @@ function Inner({ actor, focusLabel }: { actor: AIActorDef; focusLabel: string | 
     setDrafts(p => p.map(d => d.id === id ? { ...d, targetActor: v, targetEvent: '' } : d));
   }
   function setTargetEvent(id: string, v: string) { setDrafts(p => p.map(d => d.id === id ? { ...d, targetEvent: v } : d)); }
+  function setSendResponse(id: string, v: boolean) { setDrafts(p => p.map(d => d.id === id ? { ...d, sendResponse: v } : d)); }
   function remove(id: string) { setDrafts(p => p.filter(d => d.id !== id)); }
 
   function buildCrons() {
@@ -80,6 +83,7 @@ function Inner({ actor, focusLabel }: { actor: AIActorDef; focusLabel: string | 
         prompt: d.promptContent.trim() ? { content: d.promptContent.trim() } : { content: '' },
         ...(d.targetActor.trim() ? { targetActor: d.targetActor.trim() } : {}),
         ...(d.targetEvent.trim() ? { targetEvent: d.targetEvent.trim() } : {}),
+        ...(d.sendResponse ? { sendResponse: true } : {}),
       }));
   }
 
@@ -130,7 +134,7 @@ function Inner({ actor, focusLabel }: { actor: AIActorDef; focusLabel: string | 
                     autoComplete="off"
                   />
                   <button className="cs-modal-save-btn" title="Save (keep open)" onClick={saveEntry}>💾</button>
-                  <button className="cs-modal-remove-btn" onClick={() => remove(d.id)}>✕</button>
+                  <button className="cs-modal-remove-btn" disabled={isRunning} title={isRunning ? 'Stop the actor to remove cron jobs' : undefined} onClick={() => remove(d.id)}>✕</button>
                 </div>
 
                 <CronBuilder value={d.schedule} onChange={v => setSchedule(d.id, v)} />
@@ -159,6 +163,22 @@ function Inner({ actor, focusLabel }: { actor: AIActorDef; focusLabel: string | 
                   </label>
                 )}
 
+                {crossActor && (
+                  <label className="cs-prop-label cs-send-response-label" style={{ marginTop: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={d.sendResponse}
+                      onChange={e => setSendResponse(d.id, e.target.checked)}
+                      style={{ marginRight: 6 }}
+                    />
+                    Send response
+                    <span
+                      className="cs-modal-hint"
+                      title="When checked: the prompt is first sent to this actor; its response is then forwarded to the target actor. When unchecked: the prompt itself is sent directly to the target actor (this actor is not consulted)."
+                    > ⓘ</span>
+                  </label>
+                )}
+
                 <label className="cs-prop-label" style={{ marginTop: 4 }}>
                   Prompt
                   <span className="cs-modal-hint"> — what the actor should do on this schedule</span>
@@ -176,7 +196,13 @@ function Inner({ actor, focusLabel }: { actor: AIActorDef; focusLabel: string | 
         </div>
 
         <div className="cs-modal-footer">
-          <button className="cs-modal-btn" style={{ marginRight: 'auto' }} onClick={add}>+ Add Cron</button>
+          <button
+            className="cs-modal-btn"
+            style={{ marginRight: 'auto' }}
+            disabled={isRunning}
+            title={isRunning ? 'Stop the actor to add new cron jobs' : undefined}
+            onClick={add}
+          >+ Add Cron</button>
           <button className="cs-modal-btn cs-modal-btn--primary" onClick={save}>Save All</button>
           <button className="cs-modal-btn" onClick={closeCronsModal}>Cancel</button>
         </div>

@@ -8,7 +8,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from studio_api.api.v1.deps import ConnectorDep, RuntimeDep
+from studio_api.api.v1.deps import ConnectorDep, RuntimeDep, require_permission
 from studio_api.runtime import ActorDef
 
 _log = logging.getLogger(__name__)
@@ -40,12 +40,12 @@ class EventRequest(BaseModel):
     context: str = ""
 
 
-@router.get("/actors")
+@router.get("/actors", dependencies=[require_permission("runtime:read")])
 def list_actors(rt: RuntimeDep) -> list[str]:
     return rt.list_running()
 
 
-@router.post("/actors", status_code=201)
+@router.post("/actors", status_code=201, dependencies=[require_permission("runtime:start")])
 async def start_actor(body: StartActorRequest, rt: RuntimeDep, cn: ConnectorDep) -> dict:
     defn = ActorDef(**body.model_dump())
     try:
@@ -60,7 +60,7 @@ async def start_actor(body: StartActorRequest, rt: RuntimeDep, cn: ConnectorDep)
     return result
 
 
-@router.post("/actors/{name}/pause")
+@router.post("/actors/{name}/pause", dependencies=[require_permission("runtime:start")])
 def pause_actor(name: str, rt: RuntimeDep) -> dict:
     try:
         rt.pause(name)
@@ -69,7 +69,7 @@ def pause_actor(name: str, rt: RuntimeDep) -> dict:
     return {"name": name, "status": "paused"}
 
 
-@router.post("/actors/{name}/resume")
+@router.post("/actors/{name}/resume", dependencies=[require_permission("runtime:start")])
 def resume_actor(name: str, rt: RuntimeDep) -> dict:
     try:
         flushed = rt.resume(name)
@@ -78,7 +78,7 @@ def resume_actor(name: str, rt: RuntimeDep) -> dict:
     return {"name": name, "status": "running", "queued_flushed": flushed}
 
 
-@router.delete("/actors/{name}", status_code=204)
+@router.delete("/actors/{name}", status_code=204, dependencies=[require_permission("runtime:stop")])
 async def stop_actor(name: str, rt: RuntimeDep) -> None:
     try:
         await asyncio.to_thread(rt.stop, name)
@@ -86,7 +86,7 @@ async def stop_actor(name: str, rt: RuntimeDep) -> None:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/actors/{name}/instruct")
+@router.post("/actors/{name}/instruct", dependencies=[require_permission("runtime:instruct")])
 async def instruct_actor(name: str, body: InstructRequest, rt: RuntimeDep) -> dict:
     try:
         output = await asyncio.to_thread(rt.instruct, name, body.instruction)
@@ -97,7 +97,7 @@ async def instruct_actor(name: str, body: InstructRequest, rt: RuntimeDep) -> di
     return {"name": name, "output": output}
 
 
-@router.post("/actors/{name}/event/{event_name}")
+@router.post("/actors/{name}/event/{event_name}", dependencies=[require_permission("runtime:instruct")])
 async def fire_event(name: str, event_name: str, body: EventRequest, rt: RuntimeDep) -> dict:
     try:
         result = await asyncio.to_thread(rt.fire_event, name, event_name, body.context)
@@ -110,7 +110,7 @@ async def fire_event(name: str, event_name: str, body: EventRequest, rt: Runtime
     return {"name": name, "event": event_name, "output": result["output"], "forwarded": result.get("forwarded", [])}
 
 
-@router.get("/actors/{name}/events")
+@router.get("/actors/{name}/events", dependencies=[require_permission("runtime:read")])
 def list_actor_events(name: str, rt: RuntimeDep) -> list[dict]:
     """Return events declared by a code actor (empty for AI actors)."""
     try:
@@ -119,7 +119,7 @@ def list_actor_events(name: str, rt: RuntimeDep) -> list[dict]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/actors/{name}/crons")
+@router.get("/actors/{name}/crons", dependencies=[require_permission("runtime:read")])
 def list_actor_crons(name: str, rt: RuntimeDep) -> list[dict]:
     """Return cron jobs declared by a code actor (empty for AI actors)."""
     try:
@@ -128,7 +128,7 @@ def list_actor_crons(name: str, rt: RuntimeDep) -> list[dict]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/actors/{name}/chat")
+@router.get("/actors/{name}/chat", dependencies=[require_permission("runtime:read")])
 async def get_actor_chat(name: str, rt: RuntimeDep) -> dict:
     """Return captured chat/log output from a code actor."""
     try:
@@ -140,20 +140,20 @@ async def get_actor_chat(name: str, rt: RuntimeDep) -> dict:
     return {"name": name, "chat": chat}
 
 
-@router.get("/notifications")
+@router.get("/notifications", dependencies=[require_permission("runtime:read")])
 def drain_notifications(rt: RuntimeDep) -> list[dict]:
     """Drain and return accumulated actor-to-actor forwarded-prompt notifications."""
     return rt.drain_notifications()
 
 
-@router.get("/mcp-log")
+@router.get("/mcp-log", dependencies=[require_permission("runtime:read")])
 def drain_mcp_log() -> list[dict]:
     """Drain and return accumulated MCP tool-call log entries."""
     from studio_api.mcp_server import drain_mcp_log as _drain  # noqa: PLC0415
     return _drain()
 
 
-@router.get("/actors/{name}/type")
+@router.get("/actors/{name}/type", dependencies=[require_permission("runtime:read")])
 def get_actor_type(name: str, rt: RuntimeDep) -> dict:
     """Return the type of a running actor: 'ai', 'python', or 'typescript'."""
     try:

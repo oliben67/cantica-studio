@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { StudioManager as SharedStudioManager } from '../../shared/studioManager.js';
 import type { Platform } from '../../shared/platform.js';
+import type { ProviderApiKeys, StudioMode } from '../../shared/studioManager.js';
+
+export type { ProviderApiKeys, StudioMode };
 
 export type { Platform } from '../../shared/platform.js';
 
@@ -91,16 +94,16 @@ export class StudioManager implements vscode.Disposable {
     return this._shared.imageExists();
   }
 
-  async stop(): Promise<void> {
-    return this._shared.stop();
+  async stop(mode?: StudioMode): Promise<void> {
+    return this._shared.stop(mode);
   }
 
   async waitUntilHealthy(timeoutMs?: number, intervalMs?: number): Promise<boolean> {
     return this._shared.waitUntilHealthy(timeoutMs, intervalMs);
   }
 
-  async ensureRunning(): Promise<string | undefined> {
-    return this._shared.ensureRunning();
+  async ensureRunning(mode: StudioMode = 'container', keys?: ProviderApiKeys): Promise<string | undefined> {
+    return this._shared.ensureRunning(mode, keys);
   }
 
   dispose(): void {

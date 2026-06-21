@@ -13,3 +13,8 @@ dist/
 
 # Copilot
 .copilot/
+
+# Runtime / workspace data
+.cantica-studio/
+actor_ai-*.whl
+**/actors.jsonld

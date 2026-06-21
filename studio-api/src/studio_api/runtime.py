@@ -54,7 +54,7 @@ class _ActorState:
 
 
 def _make_provider(provider: str, model: str) -> Any:
-    from actor_ai import Claude, Copilot, Gemini, GPT, Mistral  # noqa: PLC0415
+    from actor_ai import GPT, Claude, Copilot, Gemini, Mistral  # noqa: PLC0415
 
     p = provider.lower()
     if p == "claude":
@@ -71,6 +71,32 @@ def _make_provider(provider: str, model: str) -> Any:
         f"Unknown provider {provider!r}. "
         "Expected one of: claude, gpt, openai, gemini, copilot, mistral."
     )
+
+
+def _make_event_provider(provider: str, model: str) -> Any:
+    """Return a stateless provider for fire_event's nested LLM call.
+
+    The SDK-mode Copilot provider uses a subprocess-based session; calling it
+    concurrently from inside an active tool dispatch creates two overlapping CLI
+    sessions that share state → 400 "Duplicate function-call ID" errors.
+    Using the OpenAI-compatible HTTP endpoint (use_sdk=False) for the nested
+    call sidesteps the subprocess entirely.  All other providers are stateless
+    HTTP by default and can reuse the same factory.
+    """
+    from actor_ai import GPT, Claude, Copilot, Gemini, Mistral  # noqa: PLC0415
+
+    p = provider.lower()
+    if p == "copilot":
+        return Copilot(model, use_sdk=False, timeout=300.0)
+    if p == "claude":
+        return Claude(model)
+    if p in ("gpt", "openai"):
+        return GPT(model)
+    if p == "gemini":
+        return Gemini(model)
+    if p == "mistral":
+        return Mistral(model)
+    raise ValueError(f"Unknown provider {provider!r}")
 
 
 def _make_cron_trigger(schedule: str) -> CronTrigger:
@@ -135,6 +161,16 @@ class ActorRuntime:
             for c in defn.cron_jobs
         ]
 
+        # For sendResponse=True events: create a stateless HTTP clone of the provider
+        # so that fire_event's nested LLM call doesn't run concurrently with the outer
+        # SDK session (which would produce duplicate function-call IDs).  Non-fatal —
+        # the actor's main provider is used as fallback if this fails (e.g. missing token).
+        try:
+            event_provider: Any | None = _make_event_provider(defn.provider, defn.model)
+        except Exception as exc:
+            _log.warning("Could not create event provider for %r — falling back: %s", defn.name, exc)
+            event_provider = None
+
         actor_cls = type(
             defn.name,
             (StudioActor,),
@@ -142,6 +178,7 @@ class ActorRuntime:
                 "system_prompt": system_prompt,
                 "actor_name": defn.name,
                 "provider": _make_provider(defn.provider, defn.model),
+                "_event_provider": event_provider,
                 "max_tokens": defn.max_tokens,
                 "max_history": defn.max_history,
                 "prompt_events": resolved_events,

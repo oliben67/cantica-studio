@@ -58,8 +58,13 @@
       },
       {
         "view": "canticaScores.studioView",
-        "contents": "Manage the local Studio API container.\n[▶  Start Studio API](command:canticaScores.startLocalStudio)\n[■  Stop Studio API](command:canticaScores.stopLocalStudio)\n[↺  Restart Studio API](command:canticaScores.restartLocalStudio)",
-        "when": "config.canticaScores.studioMode == local"
+        "contents": "Studio is not set up yet.\n[$(gear)  Setup Studio](command:canticaScores.setupStudio)",
+        "when": "config.canticaScores.studioMode == local && !cantica.studioSetupDone"
+      },
+      {
+        "view": "canticaScores.studioView",
+        "contents": "Manage the local Studio API.\n[▶  Start Studio API](command:canticaScores.startLocalStudio)\n[■  Stop Studio API](command:canticaScores.stopLocalStudio)\n[↺  Restart Studio API](command:canticaScores.restartLocalStudio)",
+        "when": "config.canticaScores.studioMode == local && cantica.studioSetupDone"
       },
       {
         "view": "canticaScores.studioView",
@@ -68,6 +73,12 @@
       }
     ],
     "commands": [
+      {
+        "command": "canticaScores.setupStudio",
+        "title": "Setup Studio",
+        "category": "Cantica Studio",
+        "icon": "$(gear)"
+      },
       {
         "command": "canticaScores.openPanel",
         "title": "Open Workspace",
@@ -97,6 +108,12 @@
         "title": "Configure Servers",
         "category": "Cantica Studio",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "canticaScores.configureProviderKeys",
+        "title": "Configure Providers",
+        "category": "Cantica Studio",
+        "icon": "$(wrench)"
       },
       {
         "command": "canticaScores.register",
@@ -312,12 +329,12 @@
         {
           "command": "canticaScores.register",
           "when": "view == canticaScores.studioView && !canticaScores.isRegistered",
-          "group": "navigation@0"
+          "group": "navigation@1"
         },
         {
           "command": "canticaScores.unregister",
           "when": "view == canticaScores.studioView && canticaScores.isRegistered",
-          "group": "navigation@0"
+          "group": "navigation@1"
         },
         {
           "command": "canticaScores.startLocalStudio",
@@ -517,12 +534,24 @@
           "scope": "machine-overridable",
           "order": 6
         },
+        "canticaScores.studioRunMode": {
+          "type": "string",
+          "enum": ["container", "native"],
+          "enumDescriptions": [
+            "Run Studio API in a Docker container (requires Docker Desktop).",
+            "Run Studio API as a native process using the 'studio' CLI (requires pip install)."
+          ],
+          "default": "container",
+          "markdownDescription": "_(local mode only)_ How to start the Studio API locally. Set automatically by the Setup wizard.",
+          "scope": "machine-overridable",
+          "order": 7
+        },
         "canticaScores.studioUrl": {
           "type": "string",
           "default": "",
           "markdownDescription": "Studio API base URL used when `#canticaScores.studioMode#` is **remote** (e.g. `https://studio.example.com`). Ignored in **local** mode.",
           "scope": "machine-overridable",
-          "order": 7
+          "order": 8
         },
         "canticaScores.studioPort": {
           "type": "number",
@@ -537,56 +566,6 @@
           "markdownDescription": "_(local mode only)_ Auto-start the Studio API container when the extension activates.",
           "scope": "machine-overridable",
           "order": 9
-        },
-        "canticaScores.anthropicApiKey": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "_(local mode only)_ Anthropic API key (`ANTHROPIC_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
-          "scope": "machine",
-          "order": 10
-        },
-        "canticaScores.openaiApiKey": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "_(local mode only)_ OpenAI API key (`OPENAI_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
-          "scope": "machine",
-          "order": 11
-        },
-        "canticaScores.geminiApiKey": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "_(local mode only)_ Google Gemini API key (`GEMINI_API_KEY`) injected into the Studio API container. Restart the Studio API after changing.",
-          "scope": "machine",
-          "order": 12
-        },
-        "canticaScores.githubToken": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "_(local mode only)_ GitHub token (`GITHUB_TOKEN`) injected into the Studio API container. Required for the **Copilot** provider. Falls back to the `GITHUB_TOKEN` environment variable if empty. Restart the Studio API after changing.",
-          "scope": "machine",
-          "order": 13
-        },
-        "canticaScores.providerModels": {
-          "type": "object",
-          "default": {},
-          "additionalProperties": {
-            "oneOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Exact list of allowed model names"
-              },
-              {
-                "type": "null",
-                "description": "Any model name is accepted (open / unconstrained)"
-              }
-            ]
-          },
-          "markdownDescription": "_(local mode only)_ Restrict which models are available per provider in the UI.\n\n- `\"claude\": [\"claude-3-5-sonnet-20241022\"]` — only that model shown for Claude\n- `\"gpt\": []` — GPT provider hidden entirely\n- `\"copilot\": null` — any model name accepted (no restriction)\n- omit a provider key — falls back to the built-in default model list\n\nChanges take effect immediately without reloading.",
-          "scope": "window",
-          "order": 14
         }
       }
     },

@@ -71,11 +71,17 @@ function ensureSongbooksWorkspaceFolder(): void {
   }
 }
 
+// Module-level refs so deactivate() can access them.
+let _studio: StudioManager | null = null;
+let _studioRunMode: 'native' | 'container' = 'container';
+
 export function activate(context: vscode.ExtensionContext): void {
   let settings = readSettings();
   let getAuth: (() => string | null) | undefined;
   let client = new StudioClient(settings.studioBaseUrl, () => getAuth?.() ?? null);
   const studio = new StudioManager();
+  _studio = studio;
+  _studioRunMode = settings.studioRunMode;
   let _songbookClipboard: SongbookItem | undefined;
   context.subscriptions.push(studio);
 
@@ -146,7 +152,7 @@ export function activate(context: vscode.ExtensionContext): void {
   function _applyHealth(status: StudioHealth, info?: StudioInfo): void {
     _lastStudioStatus = info !== undefined ? { health: status, info } : { health: status };
     studioProvider.setStatus(status, info);
-    ActorsPanel.current?.setStudioStatus(_buildStudioStatusMsg(status, info));
+    ActorsPanel.broadcastStudioStatus(_buildStudioStatusMsg(status, info));
   }
 
   let _healthPollTimer: ReturnType<typeof setInterval> | undefined;
@@ -193,7 +199,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const songbooksProvider = new SongbooksProvider();
   songbooksProvider.setFileIcon(vscode.Uri.joinPath(context.extensionUri, 'icons', 'music-sheet.png'));
   const serversProvider = new ServersProvider();
-  const studioProvider = new StudioProvider();
+  const studioProvider = new StudioProvider(context.extensionUri);
 
   const songbooksView = vscode.window.createTreeView('canticaScores.songbooksView', {
     treeDataProvider: songbooksProvider,
@@ -212,12 +218,8 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    songbooksView.onDidChangeVisibility((e) => {
-      if (e.visible) {
-        const panel = ActorsPanel.show(context, client, settings);
-        panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
-        void panel.pushGraph();
-      }
+    songbooksView.onDidChangeVisibility((_e) => {
+      // No auto-open: panels are opened explicitly by viewSongbook / editSongbook commands.
     }),
   );
 
@@ -532,7 +534,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('canticaScores.viewSongbook', async (item?: SongbookItem) => {
       if (!item) return;
       const fsPath = item.uri.fsPath;
-      if (fsPath.endsWith('.yaml') || fsPath.endsWith('.yml')) {
+      const isJson = fsPath.endsWith('.json') || fsPath.endsWith('.jsonld');
+      if (!isJson) {
+        // Non-JSON files (yaml, etc.) open in the text editor
         await vscode.window.showTextDocument(item.uri, { viewColumn: vscode.ViewColumn.One, preview: false });
         songbooksProvider.setActive(item.uri);
         return;
@@ -541,12 +545,13 @@ export function activate(context: vscode.ExtensionContext): void {
         const bytes = await vscode.workspace.fs.readFile(item.uri);
         const raw = JSON.parse(Buffer.from(bytes).toString('utf-8')) as Record<string, unknown>;
         const graph = parseGraph(raw);
-        await client.saveGraph(graph);
-        const panel = ActorsPanel.show(context, client, settings);
-        panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
-        panel.setActiveSongbook(item.uri);
+        try { await client.saveGraph(graph); } catch { /* studio may not be running */ }
         songbooksProvider.setActive(item.uri);
-        await panel.pushGraph();
+        const panel = ActorsPanel.show(context, client, settings, item.uri);
+        panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
+        if (panel.activeSongbookUri?.fsPath === item.uri.fsPath) {
+          void panel.pushGraph();
+        }
       } catch (err) {
         void vscode.window.showErrorMessage(`Could not open songbook: ${String(err)}`);
       }
@@ -558,13 +563,14 @@ export function activate(context: vscode.ExtensionContext): void {
         const bytes = await vscode.workspace.fs.readFile(item.uri);
         const raw = JSON.parse(Buffer.from(bytes).toString('utf-8')) as Record<string, unknown>;
         const graph = parseGraph(raw);
-        await client.saveGraph(graph);
+        try { await client.saveGraph(graph); } catch { /* studio may not be running */ }
         await vscode.window.showTextDocument(item.uri, { viewColumn: vscode.ViewColumn.One, preview: false });
-        const panel = ActorsPanel.show(context, client, settings);
-        panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
-        panel.setActiveSongbook(item.uri);
         songbooksProvider.setActive(item.uri);
-        await panel.pushGraph();
+        const panel = ActorsPanel.show(context, client, settings, item.uri);
+        panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
+        if (panel.activeSongbookUri?.fsPath === item.uri.fsPath) {
+          void panel.pushGraph();
+        }
       } catch (err) {
         void vscode.window.showErrorMessage(`Could not open songbook: ${String(err)}`);
       }
@@ -833,6 +839,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('canticaScores')) {
         settings = readSettings();
+        _studioRunMode = settings.studioRunMode;
         client = new StudioClient(settings.studioBaseUrl);
         ActorsPanel.current?.updateSettings(settings, client);
         fsProvider.updateRoot(songbooksRoot(settings.canticaHome));
@@ -914,6 +921,19 @@ export function activate(context: vscode.ExtensionContext): void {
   })();
 }
 
-export function deactivate(): void {
-  // VS Code disposes subscriptions automatically
+export async function deactivate(): Promise<void> {
+  if (!_studio) return;
+  const nativeUp = _studio.isNativeRunning();
+  const containerUp = _studioRunMode === 'container' && await _studio.isRunning();
+  if (!nativeUp && !containerUp) return;
+
+  const answer = await vscode.window.showInformationMessage(
+    'Cantica Studio server is still running. Stop it now?',
+    { modal: true },
+    'Stop Server',
+    'Keep Running',
+  );
+  if (answer === 'Stop Server') {
+    await _studio.stop(_studioRunMode);
+  }
 }

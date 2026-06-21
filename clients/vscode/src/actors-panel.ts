@@ -4,15 +4,26 @@ import { serializeGraph, parseGraph, type StudioClient } from './studio-client.j
 
 export class ActorsPanel {
   static readonly viewType = 'canticaScores.panel';
-  private static _current: ActorsPanel | undefined;
-  static get current(): ActorsPanel | undefined { return ActorsPanel._current; }
+  private static readonly _panels: Map<string, ActorsPanel> = new Map();
+
+  static get current(): ActorsPanel | undefined {
+    return [...ActorsPanel._panels.values()].find(p => p.panel.active)
+      ?? [...ActorsPanel._panels.values()].at(-1);
+  }
 
   /** Call after studio API becomes ready so the webview gets a fresh model list. */
   static async refreshProviderModels(client: StudioClient): Promise<void> {
-    if (ActorsPanel._current) {
-      ActorsPanel._current.client = client;
-      ActorsPanel._current._attachLogCallback();
-      await ActorsPanel._current.pushProviderModels(true);
+    for (const p of ActorsPanel._panels.values()) {
+      p.client = client;
+      p._attachLogCallback();
+      await p.pushProviderModels(true);
+    }
+  }
+
+  /** Broadcast a studio status update to every open panel. */
+  static broadcastStudioStatus(msg: ToWebview & { type: 'studioStatus' }): void {
+    for (const p of ActorsPanel._panels.values()) {
+      p.setStudioStatus(msg);
     }
   }
 
@@ -23,6 +34,8 @@ export class ActorsPanel {
   private fileSaveWatcher: vscode.Disposable | undefined;
   private _notifPollTimer: ReturnType<typeof setInterval> | undefined;
   private _activeSongbookUri: vscode.Uri | undefined;
+  /** True after stopSongbook until the next playSongbook. Prevents runActor from auto-restarting stopped actors. */
+  private _workspaceStopped = false;
   get activeSongbookUri(): vscode.Uri | undefined { return this._activeSongbookUri; }
 
   /** Last studioStatus to send — queued before ready, posted immediately after. */
@@ -35,29 +48,41 @@ export class ActorsPanel {
     if (this._webviewReady) void this.post(msg);
   }
 
+  /** Open or reveal the panel for a given URI. Each URI gets its own VS Code tab in the same editor group. */
   static show(
     context: vscode.ExtensionContext,
     client: StudioClient,
     settings: ExtensionSettings,
+    uri?: vscode.Uri,
   ): ActorsPanel {
-    if (ActorsPanel._current !== undefined) {
-      ActorsPanel._current.panel.reveal(vscode.ViewColumn.Beside, true);
-      ActorsPanel._current.client = client;
-      ActorsPanel._current.settings = settings;
-      return ActorsPanel._current;
+    if (uri) {
+      const existing = ActorsPanel._panels.get(uri.fsPath);
+      if (existing) {
+        existing.panel.reveal(vscode.ViewColumn.Two, false);
+        existing.client = client;
+        existing.settings = settings;
+        return existing;
+      }
+    } else if (ActorsPanel._panels.size > 0) {
+      const last = [...ActorsPanel._panels.values()].at(-1)!;
+      last.panel.reveal(vscode.ViewColumn.Two, true);
+      last.client = client;
+      last.settings = settings;
+      return last;
     }
+
+    const title = uri ? _displayName(uri) : 'Songbook';
     const panel = vscode.window.createWebviewPanel(
       ActorsPanel.viewType,
-      'Songbook',
-      { viewColumn: vscode.ViewColumn.Two, preserveFocus: false },
+      title,
+      { viewColumn: vscode.ViewColumn.Two, preserveFocus: uri !== undefined ? false : true },
       {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')],
         retainContextWhenHidden: true,
       },
     );
-    ActorsPanel._current = new ActorsPanel(panel, context, client, settings);
-    return ActorsPanel._current;
+    return new ActorsPanel(panel, context, client, settings, uri);
   }
 
   private constructor(
@@ -65,10 +90,13 @@ export class ActorsPanel {
     context: vscode.ExtensionContext,
     client: StudioClient,
     settings: ExtensionSettings,
+    uri?: vscode.Uri,
   ) {
     this.panel = panel;
     this.client = client;
     this.settings = settings;
+    this._activeSongbookUri = uri;
+    if (uri) ActorsPanel._panels.set(uri.fsPath, this);
     this._attachLogCallback();
     this.panel.webview.html = this.buildHtml(context);
     this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'icons', 'activitybar.svg');
@@ -101,6 +129,7 @@ export class ActorsPanel {
         await this.pushPrompts();
         void this.pushProviderModels(true);
         if (this._pendingStudioStatus) void this.post(this._pendingStudioStatus);
+        await this.post({ type: 'activeSongbookChanged', path: this._activeSongbookUri?.fsPath ?? null });
         break;
 
       case 'saveGraph': {
@@ -153,6 +182,7 @@ export class ActorsPanel {
           try { await this.client.saveGraph(graph); } catch { /* API may not be running */ }
           if (songbookUri) this.setActiveSongbook(songbookUri);
           await this.post({ type: 'loadGraph', graph });
+          await this.post({ type: 'activeSongbookChanged', path: songbookUri?.fsPath ?? null });
         } catch (err) {
           void vscode.window.showErrorMessage(`Could not open songbook: ${String(err)}`);
         }
@@ -178,6 +208,13 @@ export class ActorsPanel {
         }
 
         // ── 2. Start the actor if not yet running ─────────────────────────────
+        if (!alreadyRunning && this._workspaceStopped && !isStartOnly) {
+          await this.post({
+            type: 'actorOutput', name,
+            output: '⏸ Workspace stopped — click Play (▶) to start all actors before sending prompts.',
+          });
+          break;
+        }
         if (!alreadyRunning) {
           const graph = await this.client.loadGraph(this._activeSongbookUri?.fsPath);
           const def = graph?.actors.find(a => a.name === name);
@@ -358,6 +395,7 @@ export class ActorsPanel {
         break;
 
       case 'playSongbook': {
+        this._workspaceStopped = false;
         const graph = await this.client.loadGraph(this._activeSongbookUri?.fsPath);
         if (!graph) break;
         // Push compound IDs to the webview before starting any actors.
@@ -395,6 +433,7 @@ export class ActorsPanel {
       }
 
       case 'stopSongbook': {
+        this._workspaceStopped = true;
         try {
           const { stopped } = await this.client.stopAllActors();
           for (const name of stopped) {
@@ -439,8 +478,8 @@ export class ActorsPanel {
 
   setActiveSongbook(uri: vscode.Uri | undefined): void {
     this._activeSongbookUri = uri;
-    const name = uri?.path.split('/').pop()?.replace(/\.jsonld$/i, '');
-    this.panel.title = name ? `${name} - Songbook` : 'Songbook';
+    const name = uri?.path.split('/').pop()?.replace(/\.[^.]+$/, '');
+    this.panel.title = name ?? 'Songbook';
   }
 
   private async detectSongbookUri(graph: ActorGraph): Promise<vscode.Uri | undefined> {
@@ -605,7 +644,7 @@ export class ActorsPanel {
   }
 
   dispose(): void {
-    ActorsPanel._current = undefined;
+    if (this._activeSongbookUri) ActorsPanel._panels.delete(this._activeSongbookUri.fsPath);
     if (this._notifPollTimer !== undefined) {
       clearInterval(this._notifPollTimer);
       this._notifPollTimer = undefined;
@@ -615,6 +654,12 @@ export class ActorsPanel {
     for (const d of this.disposables) d.dispose();
     this.disposables.length = 0;
   }
+}
+
+function _displayName(uri: vscode.Uri): string {
+  const base = uri.path.split('/').pop() ?? '';
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(0, dot) : base;
 }
 
 function _nonce(): string {

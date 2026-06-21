@@ -32,6 +32,7 @@ import { useStore } from './store';
 import type { ActorEdgeDef, EdgeHandleInfo, HandleSide, IncomingMessage } from './types';
 import { vscode } from './vscode';
 
+
 const NODE_TYPES = { actorNode: ActorNode };
 const EDGE_TYPES = { actorEdge: ActorEdge };
 
@@ -297,7 +298,8 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
       if (state.graph !== prev.graph && !state.remoteLoad) {
         clearTimeout(timer);
         timer = setTimeout(() => {
-          vscode.postMessage({ type: 'saveGraph', graph: useStore.getState().graph });
+          const s = useStore.getState();
+          vscode.postMessage({ type: 'saveGraph', graph: s.graph, ...(s.activeSongbookPath ? { path: s.activeSongbookPath } : {}) });
         }, 400);
       }
     });
@@ -335,13 +337,20 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
           if (store.selectedActorId) store.removeActor(store.selectedActorId);
           break;
         case 'resetGraph':     store.resetGraph(); break;
-        case 'triggerSave':
-          vscode.postMessage({ type: 'saveGraph', graph: useStore.getState().graph });
+        case 'triggerSave': {
+          const s = useStore.getState();
+          vscode.postMessage({ type: 'saveGraph', graph: s.graph, ...(s.activeSongbookPath ? { path: s.activeSongbookPath } : {}) });
           break;
+        }
         case 'studioStatus':
           store.setStudioHealth(msg.health);
           break;
+        case 'activeSongbookChanged':
+          store.setActiveSongbookPath(msg.path);
+          break;
         case 'updateSongbooks':
+          // Handled by Electron Sidebar.tsx; VS Code uses native tabs.
+          break;
         case 'studioMode':
           break; // handled by the Electron sidebar
         default: {

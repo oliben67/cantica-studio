@@ -15,6 +15,14 @@ from studio_api.runtime import ActorRuntime
 from studio_api.workspace_fs import WorkspaceFS
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cantica_home(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirect CANTICA_HOME to a separate per-test temp dir so tests never touch ~/.cantica
+    and the per-test tmp_path workspace is not polluted with a 'cantica' subdirectory."""
+    cantica_home = tmp_path_factory.mktemp("cantica_home")
+    monkeypatch.setenv("CANTICA_HOME", str(cantica_home))
+
+
 @pytest.fixture
 def tmp_workspace(tmp_path: Path) -> Path:
     return tmp_path / "workspace"

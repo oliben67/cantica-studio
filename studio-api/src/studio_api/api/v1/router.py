@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from studio_api.api.v1 import access, auth, graph, prompts, provider_models, resources, runtime
+from studio_api.api.v1 import access, auth, graph, groups, prompts, provider_models, resources, runtime
 from studio_api.api.v1.deps import get_current_user
 from studio_api.api.v1.users import roles_router, users_router
 
@@ -23,6 +23,7 @@ _protected.include_router(resources.router, prefix="/resources", tags=["resource
 _protected.include_router(provider_models.router, prefix="/models", tags=["models"])
 _protected.include_router(users_router, prefix="/users", tags=["users"])
 _protected.include_router(roles_router, prefix="/roles", tags=["roles"])
+_protected.include_router(groups.router, prefix="/groups", tags=["groups"])
 
 # Combined v1 router included by main.py at /v1
 router = APIRouter()

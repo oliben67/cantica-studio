@@ -28,6 +28,7 @@ class CurrentUser:
     email: str
     roles: list[str] = field(default_factory=list)
     permissions: list[str] = field(default_factory=list)
+    group_id: str | None = None
 
     def has(self, permission: str) -> bool:
         return _ALL in self.permissions or permission in self.permissions
@@ -71,6 +72,7 @@ async def get_current_user(
             email=payload.get("email", ""),
             roles=payload.get("roles", []),
             permissions=payload.get("permissions", []),
+            group_id=payload.get("group_id"),
         )
 
     # ── API token path (opaque token looked up by hash) ───────────────────────

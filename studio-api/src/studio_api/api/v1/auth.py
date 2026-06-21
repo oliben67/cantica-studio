@@ -9,13 +9,12 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from studio_api.api.v1.deps import CurrentUserDep, DbSession, require_permission
+from studio_api.auth.backends import get_auth_backend
 from studio_api.auth.jwt import create_access_token
-from studio_api.auth.password import verify_password
 from studio_api.config import get_settings
-from studio_api.orm.models import ApiToken, Role, User
+from studio_api.orm.models import ApiToken
 
 router = APIRouter()
 
@@ -60,19 +59,18 @@ def login(body: LoginRequest, db: DbSession) -> LoginResponse:
     if settings.local_mode:
         raise HTTPException(status_code=400, detail="Login not available in local mode")
 
-    user = db.scalar(
-        select(User)
-        .options(selectinload(User.roles).selectinload(Role.permissions))
-        .where(User.email == body.email, User.is_active.is_(True))
-    )
-    if user is None or not verify_password(body.password, user.password_hash):
+    backend = get_auth_backend(settings, session=db)
+    result = backend.authenticate(body.email, body.password)
+    if result is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    user = backend.sync_user(db, result)
 
     permissions = list({p.name for role in user.roles for p in role.permissions})
     token = create_access_token(
         user_id=user.id,
         roles=[r.name for r in user.roles],
         permissions=permissions,
+        group_id=user.group_id,
         secret=settings.jwt_secret,
         expire_minutes=settings.jwt_expire_minutes,
     )

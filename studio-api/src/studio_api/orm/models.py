@@ -38,6 +38,26 @@ role_permissions_table = Table(
 
 # ── Core entities ─────────────────────────────────────────────────────────────
 
+class Group(Base):
+    """A named group of users that can own a shared set of provider keys."""
+
+    __tablename__ = "groups"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    description: Mapped[str] = mapped_column(String(500), default="")
+    # Opaque identifier used by an external directory (LDAP DN, OIDC groups claim).
+    # Empty string means manual-only membership.
+    external_id: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    members: Mapped[list["User"]] = relationship("User", back_populates="group")
+    providers: Mapped[list["Provider"]] = relationship(
+        "Provider", back_populates="group", cascade="all, delete-orphan"
+    )
+
+
 class User(Base):
     """Stores core user profile and credentials."""
 
@@ -49,17 +69,22 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(100), default="")
     last_name: Mapped[str] = mapped_column(String(100), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # At most one group per user; structural enforcement via single nullable FK.
+    group_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
+    group: Mapped["Group | None"] = relationship("Group", back_populates="members")
     roles: Mapped[list[Role]] = relationship(
         "Role", secondary=user_roles_table, back_populates="users"
     )
     api_tokens: Mapped[list[ApiToken]] = relationship(
         "ApiToken", back_populates="user", cascade="all, delete-orphan"
     )
-    providers: Mapped[list[Provider]] = relationship(
-        "Provider", back_populates="user", cascade="all, delete-orphan"
+    providers: Mapped[list["Provider"]] = relationship(
+        "Provider", back_populates="user", cascade="all"
     )
 
 
@@ -116,13 +141,17 @@ class ApiToken(Base):
 
 
 class Provider(Base):
-    """A registered LLM / tool provider owned by a user."""
+    """A registered LLM / tool provider owned by a user OR a group (never both)."""
 
     __tablename__ = "providers"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    # Exactly one of user_id / group_id is set; enforced at application layer.
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    group_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True
     )
     # Human-readable name, e.g. "Anthropic", "My OpenAI Account"
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -132,7 +161,8 @@ class Provider(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
-    user: Mapped[User] = relationship("User", back_populates="providers")
+    user: Mapped["User | None"] = relationship("User", back_populates="providers")
+    group: Mapped["Group | None"] = relationship("Group", back_populates="providers")
     tokens: Mapped[list[ProviderToken]] = relationship(
         "ProviderToken", back_populates="provider", cascade="all, delete-orphan"
     )

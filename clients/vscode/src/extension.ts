@@ -117,10 +117,13 @@ export function activate(context: vscode.ExtensionContext): void {
       await client.registerClientKey(creds.clientId, publicKeyFromPrivate(creds.privateKeyPem));
       getAuth = makeCachedAssertion(creds, settings.studioBaseUrl);
       _registeredWithCurrent = true;
-      // Push provider keys from SecretStorage into the server DB so they
-      // persist across restarts regardless of how the server was launched.
-      const providerKeys = await loadProviderKeys(context.secrets);
-      void client.syncProviderKeys(providerKeys);
+      // Push provider keys from SecretStorage into the server DB — only in local
+      // mode. In remote mode the server manages its own keys; the extension only
+      // holds a JWT.
+      if (settings.studioMode !== 'remote') {
+        const providerKeys = await loadProviderKeys(context.secrets);
+        void client.syncProviderKeys(providerKeys);
+      }
     } catch {
       // API not ready yet; will retry on next healthy tick.
     }

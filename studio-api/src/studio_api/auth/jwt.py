@@ -16,10 +16,11 @@ def create_access_token(
     permissions: list[str],
     secret: str,
     expire_minutes: int,
+    group_id: str | None = None,
 ) -> str:
     """Return a signed JWT with RBAC claims embedded."""
     now = datetime.now(timezone.utc)
-    payload = {
+    payload: dict = {
         "iss": "studio-api",
         "sub": user_id,
         "iat": now,
@@ -27,6 +28,8 @@ def create_access_token(
         "roles": roles,
         "permissions": permissions,
     }
+    if group_id is not None:
+        payload["group_id"] = group_id
     return jwt.encode(payload, secret, algorithm=ALGORITHM)
 
 

@@ -165,10 +165,12 @@ def test_revoke_api_token(auth_client: TestClient) -> None:
 # ── User CRUD (local mode via conftest `client`) ──────────────────────────────
 
 
-def test_list_users_empty(client: TestClient) -> None:
+def test_list_users_contains_local_user(client: TestClient) -> None:
+    # In local mode, ensure_local_user always seeds local@studio.local at startup.
     r = client.get("/v1/users")
     assert r.status_code == 200
-    assert r.json() == []
+    emails = [u["email"] for u in r.json()]
+    assert "local@studio.local" in emails
 
 
 def test_create_and_retrieve_user(client: TestClient) -> None:

@@ -40,6 +40,9 @@ BUILTIN_PERMISSIONS: list[tuple[str, str]] = [
     # API token management
     ("tokens:read",       "List API tokens"),
     ("tokens:write",      "Create and revoke API tokens"),
+    # Group management
+    ("groups:read",       "View groups and their membership"),
+    ("groups:write",      "Create, update, delete groups and manage membership"),
 ]
 
 # ── Built-in roles ────────────────────────────────────────────────────────────
@@ -58,6 +61,7 @@ BUILTIN_ROLES: dict[str, dict] = {
             "resources:read", "resources:write",
             "providers:write",
             "tokens:read", "tokens:write",
+            "groups:read",
         ],
     },
     "viewer": {

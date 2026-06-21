@@ -44,7 +44,36 @@ class Settings(BaseSettings):
     admin_email: str = "admin@studio.local"
     admin_password: str = ""  # STUDIO_ADMIN_PASSWORD — required to seed in non-local mode
 
+    # ── Auth backend selector ─────────────────────────────────────────────────
+    # "local" (default) | "ldap" | "oidc"
+    auth_backend: str = "local"
+
+    # ── LDAP (auth_backend = "ldap") ──────────────────────────────────────────
+    ldap_host: str = ""
+    ldap_port: int = 389
+    ldap_base_dn: str = ""
+    ldap_group_attr: str = "memberOf"
+    # JSON map: external group DN → Studio group name
+    # e.g. '{"cn=studio-admins,dc=corp,dc=com": "admins"}'
+    ldap_group_map_raw: str = "{}"
+
+    # ── OIDC (auth_backend = "oidc") ──────────────────────────────────────────
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_group_claim: str = "groups"
+    # JSON map: OIDC groups claim value → Studio group name
+    # e.g. '{"studio-admins": "admins"}'
+    oidc_group_map_raw: str = "{}"
+
     model_config = SettingsConfigDict(env_prefix="STUDIO_")
+
+    @property
+    def ldap_group_map(self) -> dict[str, str]:
+        return json.loads(self.ldap_group_map_raw)
+
+    @property
+    def oidc_group_map(self) -> dict[str, str]:
+        return json.loads(self.oidc_group_map_raw)
 
     @field_validator("workspace", mode="before")
     @classmethod

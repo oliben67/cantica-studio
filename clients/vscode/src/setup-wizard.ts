@@ -15,7 +15,6 @@ import type { ProviderApiKeys } from '../../shared/studioManager.js';
 import { loadProviderKeys, saveProviderKeys } from './provider-keys.js';
 
 export const SETUP_DONE_KEY = 'cantica.studioSetupDone';
-export const SETUP_DONE_CTX = 'cantica.studioSetupDone';
 
 /** True if the one-time setup has already been completed. */
 export function isSetupDone(context: vscode.ExtensionContext): boolean {
@@ -24,7 +23,7 @@ export function isSetupDone(context: vscode.ExtensionContext): boolean {
 
 /** Push the setup-done state as a VS Code context key (for when-clause use in package.json). */
 export function publishSetupContext(context: vscode.ExtensionContext): void {
-  void vscode.commands.executeCommand('setContext', SETUP_DONE_CTX, isSetupDone(context));
+  void vscode.commands.executeCommand('setContext', SETUP_DONE_KEY, isSetupDone(context));
 }
 
 /** Allow re-running the wizard (e.g. from a "Reconfigure" command). */

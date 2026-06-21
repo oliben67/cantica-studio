@@ -50,26 +50,6 @@
       {
         "view": "canticaScores.songbooksView",
         "contents": "No songbooks yet.\n[$(new-file)  New Songbook](command:canticaScores.newSongbook)\n[$(new-folder)  New Folder](command:canticaScores.newSongbookFolder)"
-      },
-      {
-        "view": "canticaScores.studioView",
-        "contents": "[$(key)  Register Client Key](command:canticaScores.register)",
-        "when": "!canticaScores.isRegistered"
-      },
-      {
-        "view": "canticaScores.studioView",
-        "contents": "Studio is not set up yet.\n[$(gear)  Setup Studio](command:canticaScores.setupStudio)",
-        "when": "config.canticaScores.studioMode == local && !cantica.studioSetupDone"
-      },
-      {
-        "view": "canticaScores.studioView",
-        "contents": "Manage the local Studio API.\n[▶  Start Studio API](command:canticaScores.startLocalStudio)\n[■  Stop Studio API](command:canticaScores.stopLocalStudio)\n[↺  Restart Studio API](command:canticaScores.restartLocalStudio)",
-        "when": "config.canticaScores.studioMode == local && cantica.studioSetupDone"
-      },
-      {
-        "view": "canticaScores.studioView",
-        "contents": "Connected to remote Studio API.",
-        "when": "config.canticaScores.studioMode == remote"
       }
     ],
     "commands": [

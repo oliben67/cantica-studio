@@ -191,7 +191,6 @@ export function activate(context: vscode.ExtensionContext): void {
   songbooksProvider.setFileIcon(vscode.Uri.joinPath(context.extensionUri, 'icons', 'music-sheet.png'));
   const serversProvider = new ServersProvider();
   const studioProvider = new StudioProvider();
-  studioProvider.setSetupDone(isSetupDone(context));
 
   const songbooksView = vscode.window.createTreeView('canticaScores.songbooksView', {
     treeDataProvider: songbooksProvider,
@@ -299,7 +298,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand('canticaScores.setupStudio', async () => {
       const result = await runSetupWizard(context);
-      studioProvider.setSetupDone(isSetupDone(context));
       if (!result) return;
       if (result.mode === 'remote') return; // coming soon — no server to start
       settings = readSettings();

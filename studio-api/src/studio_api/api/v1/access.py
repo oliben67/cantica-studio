@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from studio_api.api.v1.deps import CurrentUserDep, DbSession, require_permission
-from studio_api.orm.models import Provider, ProviderToken, User
+from studio_api.api.v1.provider_models import PROVIDER_TYPES
+from studio_api.orm.models import Provider, ProviderToken
 
 router = APIRouter()
 
-VALID_TYPES = {"claude", "gpt", "gemini", "copilot", "mistral"}
+VALID_TYPES = set(PROVIDER_TYPES)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -74,23 +73,11 @@ def _get_provider_or_404(db: DbSession, provider_id: str, user_id: str) -> Provi
     return p
 
 
-def _resolve_user_id(db: DbSession, current_user: CurrentUserDep) -> str:
-    """Return the DB user id for the current user, or the local user id in local mode."""
-    from studio_api.orm.seed import LOCAL_USER_EMAIL  # noqa: PLC0415
-
-    if current_user.user_id == "local":
-        local = db.scalar(select(User).where(User.email == LOCAL_USER_EMAIL))
-        if local is None:
-            raise HTTPException(status_code=500, detail="Local user not found in database")
-        return local.id
-    return current_user.user_id
-
-
 # ── Provider CRUD ─────────────────────────────────────────────────────────────
 
 @router.get("", dependencies=[require_permission("providers:read")])
 def list_providers(db: DbSession, current_user: CurrentUserDep) -> list[dict]:
-    user_id = _resolve_user_id(db, current_user)
+    user_id = current_user.user_id
     providers = db.scalars(
         select(Provider)
         .where(Provider.user_id == user_id)
@@ -104,7 +91,7 @@ def list_providers(db: DbSession, current_user: CurrentUserDep) -> list[dict]:
 def create_provider(body: ProviderCreate, db: DbSession, current_user: CurrentUserDep) -> dict:
     if body.type not in VALID_TYPES:
         raise HTTPException(status_code=422, detail=f"Invalid provider type {body.type!r}. Must be one of: {', '.join(sorted(VALID_TYPES))}")
-    user_id = _resolve_user_id(db, current_user)
+    user_id = current_user.user_id
     p = Provider(user_id=user_id, name=body.name, type=body.type)
     db.add(p)
     db.flush()
@@ -115,14 +102,14 @@ def create_provider(body: ProviderCreate, db: DbSession, current_user: CurrentUs
 
 @router.get("/{provider_id}", dependencies=[require_permission("providers:read")])
 def get_provider(provider_id: str, db: DbSession, current_user: CurrentUserDep) -> dict:
-    user_id = _resolve_user_id(db, current_user)
+    user_id = current_user.user_id
     p = _get_provider_or_404(db, provider_id, user_id)
     return _provider_response(p)
 
 
 @router.patch("/{provider_id}", dependencies=[require_permission("providers:write")])
 def update_provider(provider_id: str, body: ProviderUpdate, db: DbSession, current_user: CurrentUserDep) -> dict:
-    user_id = _resolve_user_id(db, current_user)
+    user_id = current_user.user_id
     p = _get_provider_or_404(db, provider_id, user_id)
     if body.name is not None:
         p.name = body.name
@@ -135,7 +122,7 @@ def update_provider(provider_id: str, body: ProviderUpdate, db: DbSession, curre
 
 @router.delete("/{provider_id}", status_code=204, dependencies=[require_permission("providers:write")])
 def delete_provider(provider_id: str, db: DbSession, current_user: CurrentUserDep) -> None:
-    user_id = _resolve_user_id(db, current_user)
+    user_id = current_user.user_id
     p = _get_provider_or_404(db, provider_id, user_id)
     db.delete(p)
     db.commit()
@@ -145,7 +132,7 @@ def delete_provider(provider_id: str, db: DbSession, current_user: CurrentUserDe
 
 @router.get("/{provider_id}/tokens", dependencies=[require_permission("providers:read")])
 def list_tokens(provider_id: str, db: DbSession, current_user: CurrentUserDep) -> list[dict]:
-    user_id = _resolve_user_id(db, current_user)
+    user_id = current_user.user_id
     _get_provider_or_404(db, provider_id, user_id)
     tokens = db.scalars(
         select(ProviderToken).where(ProviderToken.provider_id == provider_id)
@@ -155,7 +142,7 @@ def list_tokens(provider_id: str, db: DbSession, current_user: CurrentUserDep) -
 
 @router.post("/{provider_id}/tokens", status_code=201, dependencies=[require_permission("providers:write")])
 def add_token(provider_id: str, body: TokenCreate, db: DbSession, current_user: CurrentUserDep) -> dict:
-    user_id = _resolve_user_id(db, current_user)
+    user_id = current_user.user_id
     _get_provider_or_404(db, provider_id, user_id)
     t = ProviderToken(provider_id=provider_id, label=body.label, token=body.token)
     db.add(t)
@@ -166,7 +153,7 @@ def add_token(provider_id: str, body: TokenCreate, db: DbSession, current_user: 
 
 @router.delete("/{provider_id}/tokens/{token_id}", status_code=204, dependencies=[require_permission("providers:write")])
 def delete_token(provider_id: str, token_id: str, db: DbSession, current_user: CurrentUserDep) -> None:
-    user_id = _resolve_user_id(db, current_user)
+    user_id = current_user.user_id
     _get_provider_or_404(db, provider_id, user_id)
     t = db.scalar(
         select(ProviderToken)

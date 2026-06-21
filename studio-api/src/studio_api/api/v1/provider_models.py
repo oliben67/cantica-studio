@@ -40,7 +40,7 @@ def _models_for(provider_key: str, refresh: bool = False) -> list[str]:
         return []
 
 
-_PROVIDERS = ["claude", "gpt", "gemini", "copilot", "mistral"]
+PROVIDER_TYPES = ["claude", "gpt", "gemini", "copilot", "mistral"]
 
 
 @router.get("")
@@ -52,6 +52,6 @@ async def provider_models(
 
     loop = asyncio.get_event_loop()
     results = await asyncio.gather(
-        *[loop.run_in_executor(None, _models_for, key, refresh) for key in _PROVIDERS]
+        *[loop.run_in_executor(None, _models_for, key, refresh) for key in PROVIDER_TYPES]
     )
-    return {key: models for key, models in zip(_PROVIDERS, results)}
+    return {key: models for key, models in zip(PROVIDER_TYPES, results)}

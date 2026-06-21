@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from studio_api.auth.jwt import decode_access_token
 from studio_api.config import get_settings
 from studio_api.orm.models import ApiToken, User
+from studio_api.orm.seed import LOCAL_USER_EMAIL
 
 _bearer = HTTPBearer(auto_error=False)
 _ALL = "*"
@@ -32,28 +33,25 @@ class CurrentUser:
         return _ALL in self.permissions or permission in self.permissions
 
 
-# The pseudo-user for local_mode: skips all permission checks.
-LOCAL_USER = CurrentUser(
-    user_id="local",
-    email="local@studio.local",
-    roles=["admin"],
-    permissions=[_ALL],
-)
-
-
 async def get_current_user(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> CurrentUser:
     """Resolve the current user from a JWT or API token Bearer credential.
 
-    Returns LOCAL_USER in local_mode (no token required).
+    In local_mode returns an admin CurrentUser with the real DB user_id (set in
+    app.state.local_user_id at startup), skipping all credential checks.
     Raises 401 for missing / invalid credentials in non-local mode.
     """
     settings = get_settings()
 
     if settings.local_mode:
-        return LOCAL_USER
+        return CurrentUser(
+            user_id=getattr(request.app.state, "local_user_id", "local"),
+            email=LOCAL_USER_EMAIL,
+            roles=["admin"],
+            permissions=[_ALL],
+        )
 
     if credentials is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -115,7 +113,7 @@ def require_permission(*permissions: str):
     """Return a FastAPI Depends that raises 403 if the user lacks ALL listed permissions.
 
     Accepts any one of the listed permissions (OR semantics).
-    A no-op in local_mode (LOCAL_USER has the wildcard '*').
+    A no-op in local_mode (current user has the wildcard '*').
     """
     async def _check(user: CurrentUserDep) -> None:
         if any(user.has(p) for p in permissions):

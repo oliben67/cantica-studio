@@ -110,34 +110,42 @@ export class StudioClient {
     geminiApiKey?: string;
     githubToken?: string;
   }): Promise<void> {
+    const TIMEOUT = 5_000;
     const entries: { type: string; name: string; token: string }[] = [
-      { type: 'claude',  name: 'Anthropic',      token: keys.anthropicApiKey ?? '' },
-      { type: 'gpt',    name: 'OpenAI',          token: keys.openaiApiKey    ?? '' },
-      { type: 'gemini', name: 'Google Gemini',   token: keys.geminiApiKey    ?? '' },
-      { type: 'copilot',name: 'GitHub Copilot',  token: keys.githubToken     ?? '' },
+      { type: 'claude',  name: 'Anthropic',     token: keys.anthropicApiKey ?? '' },
+      { type: 'gpt',    name: 'OpenAI',         token: keys.openaiApiKey    ?? '' },
+      { type: 'gemini', name: 'Google Gemini',  token: keys.geminiApiKey    ?? '' },
+      { type: 'copilot',name: 'GitHub Copilot', token: keys.githubToken     ?? '' },
     ];
+
+    // Fetch provider list once; mutate locally when new providers are created.
+    let providers: { id: string; type: string }[];
+    try {
+      const lr = await this._fetch('/v1/providers', { signal: AbortSignal.timeout(TIMEOUT) });
+      if (!lr.ok) return;
+      providers = await lr.json() as { id: string; type: string }[];
+    } catch {
+      return;
+    }
 
     for (const { type, name, token } of entries) {
       if (!token.trim()) continue;
       try {
-        // List providers to find or create the one for this type.
-        const lr = await this._fetch('/v1/providers', { signal: AbortSignal.timeout(5000) });
-        if (!lr.ok) continue;
-        const providers = await lr.json() as { id: string; type: string }[];
         let provider = providers.find(p => p.type === type);
 
         if (!provider) {
           const cr = await this._fetch('/v1/providers', {
             method: 'POST',
             body: JSON.stringify({ name, type }),
-            signal: AbortSignal.timeout(5000),
+            signal: AbortSignal.timeout(TIMEOUT),
           });
           if (!cr.ok) continue;
           provider = await cr.json() as { id: string; type: string };
+          providers.push(provider);
         }
 
         // List existing tokens; upsert the "setup" labelled one.
-        const tr = await this._fetch(`/v1/providers/${provider.id}/tokens`, { signal: AbortSignal.timeout(5000) });
+        const tr = await this._fetch(`/v1/providers/${provider.id}/tokens`, { signal: AbortSignal.timeout(TIMEOUT) });
         if (!tr.ok) continue;
         const tokens = await tr.json() as { id: string; label: string }[];
         const existing = tokens.find(t => t.label === 'setup');
@@ -145,14 +153,14 @@ export class StudioClient {
         if (existing) {
           // Delete and recreate to update the value (no PATCH on tokens).
           await this._fetch(`/v1/providers/${provider.id}/tokens/${existing.id}`, {
-            method: 'DELETE', signal: AbortSignal.timeout(5000),
+            method: 'DELETE', signal: AbortSignal.timeout(TIMEOUT),
           });
         }
 
         await this._fetch(`/v1/providers/${provider.id}/tokens`, {
           method: 'POST',
           body: JSON.stringify({ label: 'setup', token }),
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(TIMEOUT),
         });
       } catch {
         // Non-fatal — server may still be starting

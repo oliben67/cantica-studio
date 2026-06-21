@@ -30,9 +30,7 @@ function _detail(label: string, value: string, icon: string): vscode.TreeItem {
 function _separator(id: string): vscode.TreeItem {
   const item = new vscode.TreeItem('');
   item.id = id;
-  // TreeItemKind.Separator was added in VS Code 1.75; guard against older runtimes.
-  const separatorKind = (vscode as unknown as Record<string, Record<string, number>>)['TreeItemKind']?.['Separator'];
-  if (separatorKind !== undefined) (item as unknown as Record<string, number>)['kind'] = separatorKind;
+  item.kind = vscode.TreeItemKind.Separator;
   return item;
 }
 
@@ -42,18 +40,11 @@ export class StudioProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
 
   private _status: StudioHealth = 'down';
   private _info: StudioInfo | undefined;
-  private _setupDone = false;
   private _items: vscode.TreeItem[] = [];
 
   setStatus(status: StudioHealth, info?: StudioInfo): void {
     this._status = status;
     this._info = info;
-    this._items = this._build();
-    this._onChange.fire();
-  }
-
-  setSetupDone(done: boolean): void {
-    this._setupDone = done;
     this._items = this._build();
     this._onChange.fire();
   }

@@ -40,6 +40,7 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         if settings.local_mode:
             local_user = ensure_local_user(_db)
             seed_providers(_db, local_user)
+            _app.state.local_user_id = local_user.id
         elif settings.admin_password:
             ensure_admin(_db, settings.admin_email, hash_password(settings.admin_password))
 

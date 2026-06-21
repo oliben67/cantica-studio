@@ -78,6 +78,17 @@ def resume_actor(name: str, rt: RuntimeDep) -> dict:
     return {"name": name, "status": "running", "queued_flushed": flushed}
 
 
+@router.delete("/actors", dependencies=[require_permission("runtime:stop")])
+async def stop_all_actors(rt: RuntimeDep) -> dict:
+    running = rt.list_running()
+    for name in list(running):
+        try:
+            await asyncio.to_thread(rt.stop, name)
+        except Exception:
+            pass
+    return {"stopped": running}
+
+
 @router.delete("/actors/{name}", status_code=204, dependencies=[require_permission("runtime:stop")])
 async def stop_actor(name: str, rt: RuntimeDep) -> None:
     try:

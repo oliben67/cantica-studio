@@ -27,11 +27,10 @@ function _detail(label: string, value: string, icon: string): vscode.TreeItem {
   return item;
 }
 
-function _separator(id: string): vscode.TreeItem {
-  const item = new vscode.TreeItem('');
-  item.id = id;
-  item.kind = vscode.TreeItemKind.Separator;
-  return item;
+class PanelItem extends vscode.TreeItem {
+  constructor(label: string, readonly children: vscode.TreeItem[]) {
+    super(label, vscode.TreeItemCollapsibleState.Expanded);
+  }
 }
 
 export class StudioProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -40,79 +39,107 @@ export class StudioProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
 
   private _status: StudioHealth = 'down';
   private _info: StudioInfo | undefined;
-  private _items: vscode.TreeItem[] = [];
+  private _roots: vscode.TreeItem[] = [];
+
+  constructor(private readonly extensionUri: vscode.Uri) {}
 
   setStatus(status: StudioHealth, info?: StudioInfo): void {
     this._status = status;
     this._info = info;
-    this._items = this._build();
+    this._roots = this._build();
     this._onChange.fire();
   }
 
   getTreeItem(el: vscode.TreeItem): vscode.TreeItem { return el; }
 
-  getChildren(): vscode.TreeItem[] { return this._items; }
+  getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
+    if (element instanceof PanelItem) return element.children;
+    return this._roots;
+  }
+
+  private _icon(name: string): vscode.Uri {
+    return vscode.Uri.joinPath(this.extensionUri, 'icons', name);
+  }
 
   private _build(): vscode.TreeItem[] {
     const studioMode = vscode.workspace.getConfiguration('canticaScores').get<string>('studioMode', 'local');
     const isLocal = studioMode === 'local';
+    const roots: vscode.TreeItem[] = [];
 
-    const status = new vscode.TreeItem('Studio Server');
-    status.description = this._status === 'healthy' ? 'healthy'
+    // ── Status panel ──────────────────────────────────────────────────────────
+    const statusChildren: vscode.TreeItem[] = [];
+
+    const statusItem = new vscode.TreeItem('Studio Server');
+    statusItem.description = this._status === 'healthy' ? 'healthy'
       : this._status === 'starting' ? 'starting…'
       : 'not running';
-    status.iconPath = this._status === 'healthy'
+    statusItem.iconPath = this._status === 'healthy'
       ? new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('terminal.ansiGreen'))
       : this._status === 'starting'
       ? new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('terminal.ansiYellow'))
       : new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('testing.iconFailed'));
-    status.contextValue = `studioStatus.${this._status}`;
-    status.collapsibleState = vscode.TreeItemCollapsibleState.None;
+    statusItem.contextValue = `studioStatus.${this._status}`;
+    statusItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
     if (this._status === 'down') {
-      status.command = { command: 'canticaScores.startLocalStudio', title: 'Start Studio API', arguments: [] };
+      statusItem.command = { command: 'canticaScores.startLocalStudio', title: 'Start Studio API', arguments: [] };
     }
-
-    const items: vscode.TreeItem[] = [status];
+    statusChildren.push(statusItem);
 
     if (this._status === 'healthy' && this._info) {
       const info = this._info;
       if (info.mode === 'remote') {
-        items.push(_detail('Location', 'remote', 'remote'));
+        statusChildren.push(_detail('Location', 'remote', 'remote'));
       } else if (info.containerized) {
-        items.push(_detail('Location', 'local', 'server'));
-        items.push(_detail('Runtime', 'container', 'package'));
+        statusChildren.push(_detail('Location', 'local', 'server'));
+        statusChildren.push(_detail('Runtime', 'container', 'package'));
       } else {
-        items.push(_detail('Location', 'local', 'server'));
-        items.push(_detail('Runtime', 'native', 'terminal'));
+        statusChildren.push(_detail('Location', 'local', 'server'));
+        statusChildren.push(_detail('Runtime', 'native', 'terminal'));
       }
-      items.push(_detail('URL', info.url, 'link'));
+      statusChildren.push(_detail('URL', info.url, 'link'));
       if (info.version !== undefined) {
-        items.push(_detail('Version', info.version, 'tag'));
+        statusChildren.push(_detail('Version', info.version, 'tag'));
       }
       if (info.uptimeSeconds !== undefined) {
-        items.push(_detail('Uptime', _formatUptime(info.uptimeSeconds), 'clock'));
+        statusChildren.push(_detail('Uptime', _formatUptime(info.uptimeSeconds), 'clock'));
       }
       if (info.workspace) {
-        items.push(_detail('Workspace', info.workspace, 'folder'));
+        statusChildren.push(_detail('Workspace', info.workspace, 'folder'));
       }
     }
 
+    roots.push(new PanelItem('Status', statusChildren));
+
+    // Spacer between panels
+    const spacer = new vscode.TreeItem('');
+    spacer.collapsibleState = vscode.TreeItemCollapsibleState.None;
+    roots.push(spacer);
+
+    // ── Configuration panel ───────────────────────────────────────────────────
     if (isLocal) {
-      items.push(_separator('studio-actions-sep'));
+      const configChildren: vscode.TreeItem[] = [];
 
-      const configure = new vscode.TreeItem('Configure Providers');
-      configure.iconPath = new vscode.ThemeIcon('wrench');
-      configure.command = { command: 'canticaScores.configureProviderKeys', title: 'Configure Providers', arguments: [] };
+      const configure = new vscode.TreeItem('Configure Cantica Studio');
+      configure.iconPath = this._icon('service.svg');
+      configure.command = { command: 'canticaScores.configureServer', title: 'Configure Cantica Studio', arguments: [] };
       configure.collapsibleState = vscode.TreeItemCollapsibleState.None;
-      items.push(configure);
+      configChildren.push(configure);
 
-      const setup = new vscode.TreeItem('Setup Studio');
-      setup.iconPath = new vscode.ThemeIcon('gear');
-      setup.command = { command: 'canticaScores.setupStudio', title: 'Setup Studio', arguments: [] };
+      const setup = new vscode.TreeItem('Run Setup');
+      setup.iconPath = this._icon('automation.svg');
+      setup.command = { command: 'canticaScores.setupStudio', title: 'Run Setup', arguments: [] };
       setup.collapsibleState = vscode.TreeItemCollapsibleState.None;
-      items.push(setup);
+      configChildren.push(setup);
+
+      const providers = new vscode.TreeItem('Configure Providers');
+      providers.iconPath = new vscode.ThemeIcon('wrench');
+      providers.command = { command: 'canticaScores.configureProviderKeys', title: 'Configure Providers', arguments: [] };
+      providers.collapsibleState = vscode.TreeItemCollapsibleState.None;
+      configChildren.push(providers);
+
+      roots.push(new PanelItem('Configuration', configChildren));
     }
 
-    return items;
+    return roots;
   }
 }

@@ -86,6 +86,10 @@ export class StudioManager implements vscode.Disposable {
     return this._shared.isDockerAvailable();
   }
 
+  isNativeRunning(): boolean {
+    return this._shared.isNativeRunning();
+  }
+
   async isRunning(): Promise<boolean> {
     return this._shared.isRunning();
   }

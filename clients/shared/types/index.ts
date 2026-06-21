@@ -162,14 +162,15 @@ export type ToWebview =
   | { type: 'deleteSelected' }
   | { type: 'resetGraph' }
   | { type: 'triggerSave' }
-  | { type: 'updateSongbooks'; entries: SongbookEntry[]; activeFile: string | null }
+  | { type: 'updateSongbooks'; entries: SongbookEntry[]; activeFile: string | null; openFiles: string[] }
+  | { type: 'activeSongbookChanged'; path: string | null }
   | { type: 'studioStatus'; health: 'healthy' | 'starting' | 'down'; url: string; version?: string; uptimeSeconds?: number; workspace?: string; containerized?: boolean }
   | { type: 'studioMode'; mode: 'native' | 'container' };
 
 /** Messages sent FROM the webview TO the extension host. */
 export type FromWebview =
   | { type: 'ready' }
-  | { type: 'saveGraph'; graph: ActorGraph }
+  | { type: 'saveGraph'; graph: ActorGraph; path?: string }
   | { type: 'addActor' }
   | { type: 'runActor'; name: string; instruction: string }
   | { type: 'fireEvent'; name: string; eventName: string; context: string }
@@ -184,6 +185,8 @@ export type FromWebview =
   | { type: 'playSongbook' }
   | { type: 'stopSongbook' }
   | { type: 'openSongbook'; path: string }
+  | { type: 'switchSongbook'; path: string }
+  | { type: 'closeSongbook'; path: string }
   | { type: 'refreshSongbooks' }
   | { type: 'setStudioMode'; mode: 'native' | 'container' };
 

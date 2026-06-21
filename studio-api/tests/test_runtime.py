@@ -838,3 +838,272 @@ def test_instruct_actor_log_survives_multiple_forwards():
     assert notes[0] == {"name": "actor-b", "prompt": "first", "output": "reply-1"}
     assert notes[1] == {"name": "actor-b", "prompt": "second", "output": "reply-2"}
     rt.stop_all()
+
+
+# ── Cron events ───────────────────────────────────────────────────────────────
+
+
+def _start_actor(rt: ActorRuntime, connector, defn: ActorDef, ref=None):
+    """Helper: start an actor with a mocked provider and pykka ref."""
+    if ref is None:
+        ref = MagicMock()
+        ref.proxy.return_value = MagicMock()
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, connector)
+    return ref
+
+
+def _fire_registered_cron(rt: ActorRuntime, actor_name: str) -> None:
+    """Directly invoke the APScheduler job function for the given actor's first cron."""
+    jobs = [j for j in rt._scheduler.get_jobs() if j.id.startswith(f"cron-{actor_name}-")]
+    assert jobs, f"No cron jobs registered for actor {actor_name!r}"
+    jobs[0].func()
+
+
+def test_cron_unnamed_starts_without_key_error():
+    """Regression: cron job with no name (optional UI field) must not raise KeyError on start."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+    # name key is intentionally absent — mirrors what the UI sends when name is blank
+    defn = _actor_def(cron_jobs=[{"schedule": "* * * * *", "prompt": "tick"}])
+
+    ref = MagicMock()
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, connector)  # must not raise KeyError
+
+    assert "test-actor" in rt.list_running()
+    rt.stop_all()
+
+
+def test_cron_named_starts_successfully():
+    """Named cron (the common case) starts and registers a scheduler job."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+    defn = _actor_def(cron_jobs=[{"schedule": "0 * * * *", "prompt": "hourly", "name": "hourly"}])
+
+    ref = MagicMock()
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, connector)
+
+    jobs = rt._scheduler.get_jobs()
+    assert any("hourly" in j.id for j in jobs)
+    rt.stop_all()
+
+
+def test_cron_fires_and_instructs_source_actor():
+    """When a cron has no target, it instructs the source actor and logs the result."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy = MagicMock()
+    proxy.instruct.return_value.get.return_value = "cron-output"
+    ref = MagicMock()
+    ref.proxy.return_value = proxy
+
+    defn = _actor_def(cron_jobs=[{"schedule": "* * * * *", "prompt": "do something", "name": "tick"}])
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, connector)
+
+    _fire_registered_cron(rt, "test-actor")
+
+    proxy.instruct.assert_called_once_with("do something")
+    notes = rt.drain_notifications()
+    assert notes == [{"name": "test-actor", "prompt": "do something", "output": "cron-output"}]
+    rt.stop_all()
+
+
+def test_cron_with_target_send_response_false_bypasses_source():
+    """sendResponse=False (default) with a target: prompt goes directly to target, source is not instructed."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_src = MagicMock()
+    proxy_src.instruct.return_value.get.return_value = "src-out"
+    ref_src = MagicMock()
+    ref_src.proxy.return_value = proxy_src
+
+    proxy_tgt = MagicMock()
+    proxy_tgt.instruct.return_value.get.return_value = "tgt-out"
+    ref_tgt = MagicMock()
+    ref_tgt.proxy.return_value = proxy_tgt
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", side_effect=[ref_src, ref_tgt]):
+        rt.start(_actor_def("source", cron_jobs=[{
+            "schedule": "* * * * *", "prompt": "do it", "name": "tick",
+            "targetActor": "target",
+        }]), connector)
+        rt.start(_actor_def("target"), connector)
+
+    _fire_registered_cron(rt, "source")
+
+    # Source must NOT be instructed (sendResponse=False default)
+    proxy_src.instruct.assert_not_called()
+    # Target receives the raw cron prompt directly
+    proxy_tgt.instruct.assert_called_once_with("do it")
+
+    notes = rt.drain_notifications()
+    # First note: summary entry for source showing it bypassed to target
+    assert notes[0]["name"] == "source"
+    assert "→ sending to" in notes[0]["output"]
+    # Second note: the actual target call
+    assert notes[1] == {"name": "target", "prompt": "do it", "output": "tgt-out"}
+    rt.stop_all()
+
+
+def test_cron_with_target_send_response_true_instructs_source_first():
+    """sendResponse=True with a target: source is instructed first, then output forwarded to target."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_src = MagicMock()
+    proxy_src.instruct.return_value.get.return_value = "src-reply"
+    ref_src = MagicMock()
+    ref_src.proxy.return_value = proxy_src
+
+    proxy_tgt = MagicMock()
+    proxy_tgt.instruct.return_value.get.return_value = "tgt-reply"
+    ref_tgt = MagicMock()
+    ref_tgt.proxy.return_value = proxy_tgt
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", side_effect=[ref_src, ref_tgt]):
+        rt.start(_actor_def("source", cron_jobs=[{
+            "schedule": "* * * * *", "prompt": "analyse", "name": "tick",
+            "targetActor": "target", "sendResponse": True,
+        }]), connector)
+        rt.start(_actor_def("target"), connector)
+
+    _fire_registered_cron(rt, "source")
+
+    # Source IS instructed first
+    proxy_src.instruct.assert_called_once_with("analyse")
+    # Target receives source's reply
+    proxy_tgt.instruct.assert_called_once_with("src-reply")
+
+    notes = rt.drain_notifications()
+    assert notes[0] == {"name": "source", "prompt": "analyse", "output": "src-reply"}
+    assert notes[1] == {"name": "target", "prompt": "src-reply", "output": "tgt-reply"}
+    rt.stop_all()
+
+
+def test_cron_with_target_event_fires_event_on_target():
+    """Cron with targetEvent fires the named event on the target actor."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy_src = MagicMock()
+    ref_src = MagicMock()
+    ref_src.proxy.return_value = proxy_src
+
+    proxy_tgt = MagicMock()
+    proxy_tgt.instruct.return_value.get.return_value = "event-out"
+    ref_tgt = MagicMock()
+    ref_tgt.proxy.return_value = proxy_tgt
+
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", side_effect=[ref_src, ref_tgt]):
+        rt.start(_actor_def("source", cron_jobs=[{
+            "schedule": "* * * * *", "prompt": "trigger", "name": "tick",
+            "targetActor": "target", "targetEvent": "on-tick",
+        }]), connector)
+        rt.start(_actor_def("target", prompt_events=[{"name": "on-tick", "prompt": "tick prompt"}]), connector)
+
+    _fire_registered_cron(rt, "source")
+
+    # Source bypassed (sendResponse=False default)
+    proxy_src.instruct.assert_not_called()
+    # fire_event appends the cron prompt as context to the event's own prompt
+    proxy_tgt.instruct.assert_called_once_with("tick prompt\n\ntrigger")
+    rt.stop_all()
+
+
+def test_cron_skipped_when_actor_paused():
+    """A cron job that fires while the actor is paused is silently skipped."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy = MagicMock()
+    ref = MagicMock()
+    ref.proxy.return_value = proxy
+
+    defn = _actor_def(cron_jobs=[{"schedule": "* * * * *", "prompt": "p", "name": "tick"}])
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, connector)
+
+    rt.pause("test-actor")
+    _fire_registered_cron(rt, "test-actor")
+
+    proxy.instruct.assert_not_called()
+    rt.stop_all()
+
+
+def test_cron_stop_removes_scheduler_jobs():
+    """Stopping an actor removes its cron jobs from the scheduler."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+    defn = _actor_def(cron_jobs=[{"schedule": "* * * * *", "prompt": "p", "name": "tick"}])
+
+    ref = MagicMock()
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, connector)
+
+    assert rt._scheduler.get_jobs()
+    rt.stop("test-actor")
+    assert not rt._scheduler.get_jobs()
+    rt.stop_all()
+
+
+# ── fire_event send_response flag ─────────────────────────────────────────────
+
+
+def test_fire_event_ai_actor_instructs_self():
+    """AI actor fire_event calls instruct() on itself (send_response=False default for events)."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy = MagicMock()
+    proxy.instruct.return_value.get.return_value = "self-out"
+    ref = MagicMock()
+    ref.proxy.return_value = proxy
+
+    defn = _actor_def(prompt_events=[{"name": "ping", "prompt": "pong", "targetActors": []}])
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, connector)
+
+    result = rt.fire_event("test-actor", "ping")
+    assert result["output"] == "self-out"
+    assert result["forwarded"] == []
+    proxy.instruct.assert_called_once_with("pong")
+    rt.stop_all()
+
+
+def test_cron_send_response_false_no_target_instructs_source():
+    """sendResponse=False with no target still instructs the source actor (no target to skip to)."""
+    rt = ActorRuntime()
+    connector = _mock_connector()
+
+    proxy = MagicMock()
+    proxy.instruct.return_value.get.return_value = "out"
+    ref = MagicMock()
+    ref.proxy.return_value = proxy
+
+    defn = _actor_def(cron_jobs=[{
+        "schedule": "* * * * *", "prompt": "go", "name": "tick",
+        # sendResponse=False (default), no targetActor → source must still be instructed
+    }])
+    with patch("studio_api.runtime._make_provider", return_value=None), \
+         patch("pykka.ThreadingActor.start", return_value=ref):
+        rt.start(defn, connector)
+
+    _fire_registered_cron(rt, "test-actor")
+
+    proxy.instruct.assert_called_once_with("go")
+    rt.stop_all()

@@ -19,12 +19,15 @@ export interface ProviderApiKeys {
 
 export class StudioManager {
   private _nativeProc: child_process.ChildProcess | null = null;
+  private _stopPromise: Promise<void> | null = null;
 
   constructor(private readonly platform: Platform) {}
 
   dispose(): void {
-    if (this._nativeProc) {
-      try { this._nativeProc.kill(); } catch { /* ignore */ }
+    if (this._nativeProc?.pid) {
+      try { process.kill(-this._nativeProc.pid, 'SIGTERM'); } catch {
+        try { this._nativeProc.kill(); } catch { /* ignore */ }
+      }
       this._nativeProc = null;
     }
   }
@@ -150,25 +153,45 @@ export class StudioManager {
 
   /** Stop the studio API — native process or Docker container, with port-kill fallback. */
   async stop(mode: StudioMode = 'container'): Promise<void> {
+    // Expose the in-progress promise so ensureRunning can wait for it to finish
+    // before checking health, preventing a race where Start sees a healthy server
+    // that is about to be removed by an in-flight Stop.
+    this._stopPromise = this._doStop(mode);
+    try {
+      await this._stopPromise;
+    } finally {
+      this._stopPromise = null;
+    }
+  }
+
+  private async _doStop(mode: StudioMode): Promise<void> {
     if (mode === 'native') {
       await this.stopNative();
     } else {
       // Kill tracked native process first (may coexist with container attempt).
       if (this.isNativeRunning()) await this.stopNative();
+      const port = StudioManager.studioPort(this.platform);
       this.platform.log('[studio] Stopping container');
+      // Try the expected container name, then stop any container publishing the studio port.
+      // The second clause handles dev setups where the container was started with a different
+      // name (e.g. `studio-api` instead of `cantica-studio-api`).
       await new Promise<void>((resolve) => {
-        child_process.exec(`docker rm -f ${CONTAINER}`, { timeout: 10_000 }, () => resolve());
+        const cmd = `docker rm -f ${CONTAINER} 2>/dev/null; docker ps --filter "publish=${port}" --format "{{.Names}}" 2>/dev/null | xargs -r docker rm -f 2>/dev/null; true`;
+        child_process.exec(cmd, { timeout: 10_000 }, () => resolve());
       });
     }
-    // Fallback: if the server is still reachable (e.g. started externally), kill it by port.
+    // Fallback: if the server is still reachable (e.g. started externally via `task serve`
+    // which runs uvicorn --reload), kill by port.  We must kill the parent process (the
+    // uvicorn reloader) BEFORE killing the child (the worker that owns the port), otherwise
+    // the reloader detects the worker's death and immediately respawns it.
     if (await this.isHealthy()) {
       const port = StudioManager.studioPort(this.platform);
-      this.platform.log(`[studio] Server still up after stop — killing port ${port}`);
+      this.platform.log(`[studio] Server still up after stop — killing port ${port} and parent`);
       await new Promise<void>((resolve) => {
         const cmd = process.platform === 'darwin'
-          ? `lsof -ti :${port} | xargs kill -9 2>/dev/null; true`
-          : `fuser -k ${port}/tcp 2>/dev/null; true`;
-        child_process.exec(cmd, { timeout: 5_000 }, () => resolve());
+          ? `for PID in $(lsof -ti :${port} 2>/dev/null); do PPID=$(ps -o ppid= -p "$PID" 2>/dev/null | tr -d ' '); kill -9 "$PPID" 2>/dev/null; kill -9 "$PID" 2>/dev/null; done; true`
+          : `docker ps --filter "publish=${port}" --format "{{.Names}}" 2>/dev/null | xargs -r docker rm -f 2>/dev/null; for PID in $(fuser ${port}/tcp 2>/dev/null); do PPID=$(awk '/^PPid:/{print $2}' /proc/$PID/status 2>/dev/null); kill -9 "$PPID" 2>/dev/null; kill -9 "$PID" 2>/dev/null; done; true`;
+        child_process.exec(cmd, { timeout: 8_000 }, () => resolve());
       });
     }
   }
@@ -237,7 +260,9 @@ export class StudioManager {
     this.platform.log(`[studio] Native start — port=${port} workspace=${home}`);
 
     await new Promise<void>((resolve, reject) => {
-      const proc = child_process.spawn('studio', [], { env, stdio: 'pipe', detached: false });
+      // detached: true gives the child its own process group so we can kill the
+      // whole group (reloader + worker) with process.kill(-pid) in stopNative().
+      const proc = child_process.spawn('studio', [], { env, stdio: 'pipe', detached: true });
       proc.stdout?.on('data', (d: Buffer) => this.platform.log(d.toString().trimEnd()));
       proc.stderr?.on('data', (d: Buffer) => this.platform.log(d.toString().trimEnd()));
       proc.on('error', (err) => reject(new Error(`Failed to start studio: ${err.message}`)));
@@ -250,13 +275,19 @@ export class StudioManager {
   }
 
   async stopNative(): Promise<void> {
-    if (!this._nativeProc) return;
-    this.platform.log('[studio] Stopping native process');
-    this._nativeProc.kill('SIGTERM');
+    if (!this._nativeProc?.pid) return;
+    this.platform.log('[studio] Stopping native process group');
+    try {
+      // Kill the entire process group (reloader + worker) to prevent auto-restart.
+      process.kill(-this._nativeProc.pid, 'SIGTERM');
+    } catch {
+      this._nativeProc.kill('SIGTERM');
+    }
     this._nativeProc = null;
   }
 
   async ensureRunningNative(keys?: ProviderApiKeys): Promise<string | undefined> {
+    if (this._stopPromise) await this._stopPromise;
     if (this.isNativeRunning()) return StudioManager.studioUrl(this.platform);
     if (await this.isHealthy()) return StudioManager.studioUrl(this.platform);
 
@@ -286,6 +317,9 @@ export class StudioManager {
    */
   async ensureRunning(mode: StudioMode = 'container', keys?: ProviderApiKeys): Promise<string | undefined> {
     if (mode === 'native') return this.ensureRunningNative(keys);
+    // Wait for any in-progress stop to finish before checking health, otherwise
+    // isHealthy() may return true for a server that is about to be removed.
+    if (this._stopPromise) await this._stopPromise;
     if (!(await this.isDockerAvailable())) {
       void this.platform.showError(
         'Docker is required for the local Cantica Studio. Install Docker Desktop and try again.',

@@ -98,6 +98,7 @@ function SongbookFolder({ entry, activeFile, depth }: { entry: SongbookFolderEnt
 export function Sidebar() {
   const [songbooks, setSongbooks] = useState<SongbookEntry[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [studio, setStudio] = useState<StudioStatus | null>(null);
   const [studioMode, setStudioMode] = useState<'native' | 'container'>('container');
 
@@ -107,6 +108,7 @@ export function Sidebar() {
       if (msg['type'] === 'updateSongbooks') {
         setSongbooks(msg['entries'] as SongbookEntry[]);
         setActiveFile(msg['activeFile'] as string | null);
+        setOpenFiles((msg['openFiles'] as string[] | undefined) ?? []);
       } else if (msg['type'] === 'studioStatus') {
         setStudio({
           health: msg['health'] as StudioStatus['health'],
@@ -129,6 +131,39 @@ export function Sidebar() {
 
   return (
     <aside className="cs-explorer">
+
+      {/* ── Open files tab bar ── */}
+      {openFiles.length > 0 && (
+        <div className="cs-sb-open-section">
+          <div className="cs-sb-header">
+            <span className="cs-sb-title">Open</span>
+          </div>
+          <div className="cs-sb-open-list">
+            {openFiles.map(filePath => {
+              const isActive = filePath === activeFile;
+              const name = filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? filePath;
+              return (
+                <div key={filePath} className={`cs-sb-tab${isActive ? ' cs-sb-tab--active' : ''}`}>
+                  <button
+                    className="cs-sb-tab-name"
+                    onClick={() => vscode.postMessage({ type: 'switchSongbook', path: filePath })}
+                    title={filePath}
+                  >
+                    <span className="cs-sb-dot">{isActive ? '●' : '○'}</span>
+                    <span>{name}</span>
+                  </button>
+                  <button
+                    className="cs-sb-tab-close"
+                    onClick={() => vscode.postMessage({ type: 'closeSongbook', path: filePath })}
+                    title="Close"
+                    aria-label={`Close ${name}`}
+                  >×</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Songbooks ── */}
       <div className="cs-sb-section">

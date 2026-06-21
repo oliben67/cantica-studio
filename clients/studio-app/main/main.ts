@@ -5,7 +5,7 @@ import { readdirSync, statSync, readFileSync, writeFileSync, existsSync } from '
 import { extname, join } from 'node:path';
 import { StudioManager } from '../shared/studioManager.js';
 import type { StudioMode } from '../shared/studioManager.js';
-import { StudioClient } from '../shared/studio-client.js';
+import { StudioClient, parseGraph, serializeGraph } from '../shared/studio-client.js';
 import { generateKeyPair, makeCachedAssertion, publicKeyFromPrivate } from '../shared/auth-core.js';
 import type { ToWebview, SongbookEntry, ActorGraph } from '../shared/types/index.js';
 import { ElectronPlatform } from './platform.js';
@@ -85,7 +85,10 @@ let _studioMode: StudioMode = loadStudioMode();
 
 const SONGBOOK_EXTS = new Set(['.json', '.jsonld', '.yaml', '.yml']);
 
+const _openSongbooks: Map<string, ActorGraph> = new Map();
 let _activeSongbookPath: string | null = null;
+
+const APP_LABEL = 'Cantica Studio';
 
 function scanDir(dir: string, depth = 0): SongbookEntry[] {
   const MAX_DEPTH = 3;
@@ -123,7 +126,7 @@ function scanDir(dir: string, depth = 0): SongbookEntry[] {
 function sendSongbooks(): void {
   const songbooksDir = join(StudioManager.canticaHome(platform), 'songbooks');
   const entries = scanDir(songbooksDir);
-  send({ type: 'updateSongbooks', entries, activeFile: _activeSongbookPath });
+  send({ type: 'updateSongbooks', entries, activeFile: _activeSongbookPath, openFiles: [..._openSongbooks.keys()] });
 }
 
 // ── Credential sync ───────────────────────────────────────────────────────────
@@ -264,9 +267,11 @@ async function handleMessage(msg: unknown): Promise<void> {
 
     case 'saveGraph': {
       const graph = raw['graph'] as ActorGraph;
+      const savePath = (raw['path'] as string | undefined) ?? _activeSongbookPath;
       try {
-        if (_activeSongbookPath) {
-          writeFileSync(_activeSongbookPath, JSON.stringify(graph, null, 2), 'utf-8');
+        if (savePath) {
+          writeFileSync(savePath, JSON.stringify(serializeGraph(graph), null, 2), 'utf-8');
+          _openSongbooks.set(savePath, graph);
         } else {
           await client.saveGraph(graph);
         }
@@ -278,14 +283,70 @@ async function handleMessage(msg: unknown): Promise<void> {
 
     case 'openSongbook': {
       const filePath = raw['path'] as string;
+      if (_openSongbooks.has(filePath)) {
+        // Already open — just switch to it.
+        _activeSongbookPath = filePath;
+        send({ type: 'loadGraph', graph: _openSongbooks.get(filePath)! });
+        send({ type: 'activeSongbookChanged', path: filePath });
+        sendSongbooks();
+        break;
+      }
+      // Claim the file lock on the server before opening.
       try {
-        const graph = JSON.parse(readFileSync(filePath, 'utf-8')) as ActorGraph;
+        const creds = loadCredentials(app);
+        const clientId = creds?.clientId ?? 'electron-unknown';
+        await client.claimFileLock(filePath, clientId, APP_LABEL);
+      } catch (err: unknown) {
+        const lockErr = err as { lock?: { client_label?: string; client_host?: string } };
+        const who = lockErr?.lock?.client_label || 'another client';
+        const from = lockErr?.lock?.client_host ? ` (${lockErr.lock.client_host})` : '';
+        send({ type: 'error', message: `File is already open by ${who}${from}` });
+        break;
+      }
+      try {
+        const rawJson = JSON.parse(readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
+        const graph = parseGraph(rawJson, filePath);
+        _openSongbooks.set(filePath, graph);
         _activeSongbookPath = filePath;
         send({ type: 'loadGraph', graph });
+        send({ type: 'activeSongbookChanged', path: filePath });
         sendSongbooks();
       } catch (err) {
+        // Failed to parse — release the lock we just claimed.
+        const creds = loadCredentials(app);
+        const clientId = creds?.clientId ?? 'electron-unknown';
+        void client.releaseFileLock(filePath, clientId);
         send({ type: 'error', message: `Failed to open songbook: ${String(err)}` });
       }
+      break;
+    }
+
+    case 'switchSongbook': {
+      const filePath = raw['path'] as string;
+      if (!_openSongbooks.has(filePath)) break;
+      _activeSongbookPath = filePath;
+      send({ type: 'loadGraph', graph: _openSongbooks.get(filePath)! });
+      send({ type: 'activeSongbookChanged', path: filePath });
+      sendSongbooks();
+      break;
+    }
+
+    case 'closeSongbook': {
+      const filePath = raw['path'] as string;
+      if (!_openSongbooks.has(filePath)) break;
+      _openSongbooks.delete(filePath);
+      const creds = loadCredentials(app);
+      const clientId = creds?.clientId ?? 'electron-unknown';
+      void client.releaseFileLock(filePath, clientId);
+      if (_activeSongbookPath === filePath) {
+        const nextPath = _openSongbooks.size > 0 ? [..._openSongbooks.keys()][0] : null;
+        _activeSongbookPath = nextPath;
+        if (nextPath) {
+          send({ type: 'loadGraph', graph: _openSongbooks.get(nextPath)! });
+        }
+        send({ type: 'activeSongbookChanged', path: nextPath });
+      }
+      sendSongbooks();
       break;
     }
 
@@ -309,7 +370,7 @@ async function handleMessage(msg: unknown): Promise<void> {
       }
 
       if (!alreadyRunning) {
-        const graph = await client.loadGraph();
+        const graph = (_activeSongbookPath ? _openSongbooks.get(_activeSongbookPath) : null) ?? await client.loadGraph();
         const def = graph?.actors.find((a) => a.name === name);
         if (!def) {
           send({ type: 'actorOutput', name, output: `Warning: Actor "${name}" not found in the graph — open the songbook first.` });
@@ -453,7 +514,7 @@ async function handleMessage(msg: unknown): Promise<void> {
     }
 
     case 'playSongbook': {
-      const graph = await client.loadGraph();
+      const graph = (_activeSongbookPath ? _openSongbooks.get(_activeSongbookPath) : null) ?? await client.loadGraph();
       if (!graph) break;
       let runningNames: string[] = [];
       try { runningNames = await client.listRunning(); } catch { /* ignore */ }
@@ -540,5 +601,13 @@ app.on('window-all-closed', () => {
   stopHealthPoll();
   stopNotifPoll();
   studio.dispose();
+  // Best-effort lock release for all open songbooks — don't block shutdown.
+  if (_openSongbooks.size > 0) {
+    const creds = loadCredentials(app);
+    const clientId = creds?.clientId ?? 'electron-unknown';
+    for (const filePath of _openSongbooks.keys()) {
+      void client.releaseFileLock(filePath, clientId);
+    }
+  }
   if (process.platform !== 'darwin') app.quit();
 });

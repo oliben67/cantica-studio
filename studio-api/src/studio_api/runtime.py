@@ -8,7 +8,10 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -53,27 +56,27 @@ class _ActorState:
     queued: list[str] = field(default_factory=list)
 
 
-def _make_provider(provider: str, model: str) -> Any:
+def _make_provider(provider: str, model: str, api_key: str | None = None) -> Any:
     from actor_ai import GPT, Claude, Copilot, Gemini, Mistral  # noqa: PLC0415
 
     p = provider.lower()
     if p == "claude":
-        return Claude(model)
+        return Claude(model, api_key=api_key) if api_key else Claude(model)
     if p in ("gpt", "openai"):
-        return GPT(model)
+        return GPT(model, api_key=api_key) if api_key else GPT(model)
     if p == "gemini":
-        return Gemini(model)
+        return Gemini(model, api_key=api_key) if api_key else Gemini(model)
     if p == "copilot":
-        return Copilot(model, use_sdk=True, timeout=300.0)
+        return Copilot(model, use_sdk=True, timeout=300.0, api_key=api_key)
     if p == "mistral":
-        return Mistral(model)
+        return Mistral(model, api_key=api_key) if api_key else Mistral(model)
     raise ValueError(
         f"Unknown provider {provider!r}. "
         "Expected one of: claude, gpt, openai, gemini, copilot, mistral."
     )
 
 
-def _make_event_provider(provider: str, model: str) -> Any:
+def _make_event_provider(provider: str, model: str, api_key: str | None = None) -> Any:
     """Return a stateless provider for fire_event's nested LLM call.
 
     The SDK-mode Copilot provider uses a subprocess-based session; calling it
@@ -87,15 +90,15 @@ def _make_event_provider(provider: str, model: str) -> Any:
 
     p = provider.lower()
     if p == "copilot":
-        return Copilot(model, use_sdk=False, timeout=300.0)
+        return Copilot(model, use_sdk=False, timeout=300.0, api_key=api_key)
     if p == "claude":
-        return Claude(model)
+        return Claude(model, api_key=api_key) if api_key else Claude(model)
     if p in ("gpt", "openai"):
-        return GPT(model)
+        return GPT(model, api_key=api_key) if api_key else GPT(model)
     if p == "gemini":
-        return Gemini(model)
+        return Gemini(model, api_key=api_key) if api_key else Gemini(model)
     if p == "mistral":
-        return Mistral(model)
+        return Mistral(model, api_key=api_key) if api_key else Mistral(model)
     raise ValueError(f"Unknown provider {provider!r}")
 
 
@@ -112,15 +115,43 @@ def _resolve(prompt: str, connector: CanticaConnector) -> str:
 class ActorRuntime:
     """Manages running actor instances (AI and code), cron schedules, and agent resources."""
 
-    def __init__(self, sessions_dir: Path | None = None) -> None:
+    def __init__(self, sessions_dir: Path | None = None, db_engine: Engine | None = None) -> None:
         self._actors: dict[str, _ActorState] = {}
         self._sessions_dir = sessions_dir
+        self._db_engine = db_engine
         self._scheduler = BackgroundScheduler()
         self._scheduler.start()
         # Thread-safe log of actor-to-actor forwarded calls (populated by _instruct_actor
         # wrappers, drained by the extension after each API call).
         self._forwarded_log: list[dict] = []
         self._forwarded_log_lock = threading.Lock()
+
+    def _token_for_provider(self, provider_type: str) -> str | None:
+        """Look up the first active token for a provider type from the DB."""
+        if self._db_engine is None:
+            return None
+        try:
+            # Third party imports:
+            from sqlalchemy import select  # noqa: PLC0415
+            from sqlalchemy.orm import Session  # noqa: PLC0415
+
+            # Local imports:
+            from studio_api.orm.models import Provider, ProviderToken  # noqa: PLC0415
+
+            with Session(self._db_engine) as session:
+                return session.scalar(
+                    select(ProviderToken.token)
+                    .join(Provider, ProviderToken.provider_id == Provider.id)
+                    .where(
+                        Provider.type == provider_type,
+                        Provider.is_active.is_(True),
+                        ProviderToken.is_active.is_(True),
+                    )
+                    .limit(1)
+                )
+        except Exception as exc:
+            _log.debug("Could not look up token for %r: %s", provider_type, exc)
+            return None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -136,6 +167,19 @@ class ActorRuntime:
 
     def _start_ai_actor(self, defn: ActorDef, connector: CanticaConnector) -> str | None:
         system_prompt = _resolve(defn.define_prompt, connector)
+        # Inject routing instructions for events that forward to other actors.
+        # Without this, the LLM has no reason to call the fire_event tool.
+        routing_lines = []
+        for e in defn.prompt_events:
+            targets = e.get("targetActors") or ([e["targetActor"]] if e.get("targetActor") else [])
+            if targets:
+                event_name = e["name"]
+                target_list = ", ".join(targets)
+                routing_lines.append(
+                    f'- After your response, call fire_event(event_name="{event_name}", context="<your response>") → forwards to: {target_list}'
+                )
+        if routing_lines:
+            system_prompt = system_prompt + "\n\n## Output routing\nThis actor is connected to other actors. You MUST call fire_event after every response:\n" + "\n".join(routing_lines)
 
         resolved_events = [
             PromptEventDef(
@@ -146,6 +190,7 @@ class ActorRuntime:
                 target_actors=e.get("targetActors") or (
                     [e["targetActor"]] if e.get("targetActor") else []
                 ),
+                send_response=bool(e.get("sendResponse", False)),
             )
             for e in defn.prompt_events
         ]
@@ -154,19 +199,24 @@ class ActorRuntime:
             CronJobDef(
                 schedule=c["schedule"],
                 prompt=_resolve(c.get("prompt", ""), connector),
-                name=c["name"],
+                name=c.get("name", ""),
                 target_actor=c.get("targetActor") or None,
                 target_event=c.get("targetEvent") or None,
+                send_response=bool(c.get("sendResponse", False)),
             )
             for c in defn.cron_jobs
         ]
+
+        # Look up the provider token from the DB (populated by syncProviderKeys from VS Code).
+        # This lets the actor use the stored token even if the env var wasn't set at startup.
+        api_key = self._token_for_provider(defn.provider.lower())
 
         # For sendResponse=True events: create a stateless HTTP clone of the provider
         # so that fire_event's nested LLM call doesn't run concurrently with the outer
         # SDK session (which would produce duplicate function-call IDs).  Non-fatal —
         # the actor's main provider is used as fallback if this fails (e.g. missing token).
         try:
-            event_provider: Any | None = _make_event_provider(defn.provider, defn.model)
+            event_provider: Any | None = _make_event_provider(defn.provider, defn.model, api_key)
         except Exception as exc:
             _log.warning("Could not create event provider for %r — falling back: %s", defn.name, exc)
             event_provider = None
@@ -177,7 +227,7 @@ class ActorRuntime:
             {
                 "system_prompt": system_prompt,
                 "actor_name": defn.name,
-                "provider": _make_provider(defn.provider, defn.model),
+                "provider": _make_provider(defn.provider, defn.model, api_key),
                 "_event_provider": event_provider,
                 "max_tokens": defn.max_tokens,
                 "max_history": defn.max_history,
@@ -446,9 +496,31 @@ class ActorRuntime:
         return items
 
     def _make_instruct_actor(self):
-        """Return an _instruct_actor callback that records each call in the log."""
+        """Return an _instruct_actor callback that records each call in the log.
+
+        On KeyError (target actor not running), logs a visible warning to the
+        notification log so the receiver's chat panel shows the failure rather
+        than silently swallowing it.
+        """
         def _instruct_actor(actor_name: str, instruction: str) -> str:
-            result = self.instruct(actor_name, instruction)
+            try:
+                result = self.instruct(actor_name, instruction)
+            except KeyError:
+                error = f"⚠ Actor '{actor_name}' is not running — forward failed. Start all actors with Play (▶) first."
+                _log.warning("_instruct_actor: target %r not running", actor_name)
+                with self._forwarded_log_lock:
+                    self._forwarded_log.append(
+                        {"name": actor_name, "prompt": instruction, "output": error}
+                    )
+                return error
+            except Exception as exc:
+                error = f"⚠ Forward to '{actor_name}' failed: {exc}"
+                _log.error("_instruct_actor: instruct(%r) raised: %s", actor_name, exc, exc_info=True)
+                with self._forwarded_log_lock:
+                    self._forwarded_log.append(
+                        {"name": actor_name, "prompt": instruction, "output": error}
+                    )
+                return error
             with self._forwarded_log_lock:
                 self._forwarded_log.append(
                     {"name": actor_name, "prompt": instruction, "output": result}
@@ -505,6 +577,10 @@ class ActorRuntime:
             return []
 
     def _register_crons(self, name: str, crons: list[CronJobDef]) -> None:
+        if not crons:
+            return
+        if not self._scheduler.running:
+            self._scheduler.start()
         for i, cron in enumerate(crons):
             label = cron.name
             job_id = f"cron-{name}-{i}-{label}"
@@ -513,30 +589,51 @@ class ActorRuntime:
                 target_actor = cron.target_actor
                 target_event = cron.target_event
                 prompt = cron.prompt
+                send_response = cron.send_response
 
                 def _run(
                     actor_name: str = name,
                     p: str = prompt,
+                    lbl: str = label,
                     ta: str | None = target_actor,
                     te: str | None = target_event,
+                    sr: bool = send_response,
                 ) -> None:
                     state = self._actors.get(actor_name)
                     if state is None or state.paused:
                         _log.debug("Skipping cron for paused/stopped actor %r", actor_name)
                         return
                     try:
-                        output = state.ref.proxy().instruct(p).get(timeout=360)
-                        with self._forwarded_log_lock:
-                            self._forwarded_log.append({"name": actor_name, "prompt": p, "output": output})
-                        if ta and ta in self._actors:
+                        if ta and ta in self._actors and not sr:
+                            # sendResponse=False with target: bypass source, send directly.
+                            with self._forwarded_log_lock:
+                                self._forwarded_log.append({
+                                    "name": actor_name,
+                                    "prompt": f"⏰ {lbl}" if lbl else "⏰",
+                                    "output": f"→ sending to '{ta}'",
+                                })
                             if te:
-                                result = self.fire_event(ta, te, output)
+                                result = self.fire_event(ta, te, p)
                                 with self._forwarded_log_lock:
                                     self._forwarded_log.extend(result.get("forwarded", []))
                             else:
-                                target_output = self.instruct(ta, output)
+                                target_output = self.instruct(ta, p)
                                 with self._forwarded_log_lock:
-                                    self._forwarded_log.append({"name": ta, "prompt": output, "output": target_output})
+                                    self._forwarded_log.append({"name": ta, "prompt": p, "output": target_output})
+                        else:
+                            # sendResponse=True, or no target: instruct source actor first.
+                            output = state.ref.proxy().instruct(p).get(timeout=360)
+                            with self._forwarded_log_lock:
+                                self._forwarded_log.append({"name": actor_name, "prompt": p, "output": output})
+                            if ta and ta in self._actors:
+                                if te:
+                                    result = self.fire_event(ta, te, output)
+                                    with self._forwarded_log_lock:
+                                        self._forwarded_log.extend(result.get("forwarded", []))
+                                else:
+                                    target_output = self.instruct(ta, output)
+                                    with self._forwarded_log_lock:
+                                        self._forwarded_log.append({"name": ta, "prompt": output, "output": target_output})
                     except Exception as exc:
                         _log.error("Cron job for %r failed: %s", actor_name, exc)
 
@@ -545,6 +642,10 @@ class ActorRuntime:
                 _log.warning("Could not register cron %r for actor %r: %s", cron.schedule, name, exc)
 
     def _register_code_crons(self, name: str, crons: list[dict]) -> None:
+        if not crons:
+            return
+        if not self._scheduler.running:
+            self._scheduler.start()
         for crn in crons:
             cron_name = crn.get("name", "")
             schedule = crn.get("schedule", "")

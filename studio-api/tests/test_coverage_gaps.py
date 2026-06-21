@@ -386,12 +386,11 @@ def test_share_resource_raises_key_error_for_missing_resource() -> None:
 
 
 def test_cron_routes_to_target_via_fire_event_when_target_event_set() -> None:
-    """Cron with targetActor + targetEvent calls fire_event on the target (lines 354-355)."""
+    """Cron with targetActor + targetEvent fires event on target; source bypassed (sendResponse=False)."""
     rt = ActorRuntime()
     conn = _conn()
 
     proxy_src = MagicMock()
-    proxy_src.instruct.return_value.get.return_value = "cron-out"
     proxy_tgt = MagicMock()
     proxy_tgt.instruct.return_value.get.return_value = "event-reply"
     ref_src, ref_tgt = _ref(proxy_src), _ref(proxy_tgt)
@@ -415,18 +414,18 @@ def test_cron_routes_to_target_via_fire_event_when_target_event_set() -> None:
 
     rt._scheduler.get_jobs()[0].func()
 
-    proxy_src.instruct.assert_called_once_with("What time is it?")
-    proxy_tgt.instruct.assert_called_once()   # forwarded via fire_event
+    # sendResponse=False (default): source is NOT instructed; cron prompt goes as context to target's event
+    proxy_src.instruct.assert_not_called()
+    proxy_tgt.instruct.assert_called_once()   # forwarded via fire_event (event prompt + cron prompt as context)
     rt.stop_all()
 
 
 def test_cron_routes_to_target_via_instruct_when_no_target_event() -> None:
-    """Cron with targetActor but no targetEvent calls instruct on target (lines 356-357)."""
+    """Cron with targetActor but no targetEvent sends prompt directly to target (sendResponse=False)."""
     rt = ActorRuntime()
     conn = _conn()
 
     proxy_src = MagicMock()
-    proxy_src.instruct.return_value.get.return_value = "cron-out"
     proxy_tgt = MagicMock()
     proxy_tgt.instruct.return_value.get.return_value = "ok"
     ref_src, ref_tgt = _ref(proxy_src), _ref(proxy_tgt)
@@ -446,8 +445,9 @@ def test_cron_routes_to_target_via_instruct_when_no_target_event() -> None:
 
     rt._scheduler.get_jobs()[0].func()
 
-    proxy_src.instruct.assert_called_once_with("What time is it?")
-    proxy_tgt.instruct.assert_called_once_with("cron-out")
+    # sendResponse=False (default): source is NOT instructed; raw cron prompt goes to target
+    proxy_src.instruct.assert_not_called()
+    proxy_tgt.instruct.assert_called_once_with("What time is it?")
     rt.stop_all()
 
 

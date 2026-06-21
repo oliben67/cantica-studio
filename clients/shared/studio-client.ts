@@ -306,6 +306,51 @@ export class StudioClient {
     }
   }
 
+  // ── Graph file locking ───────────────────────────────────────────────────────
+
+  /** Claim exclusive access to a local graph file.
+   * Returns the lock info on success, or throws with a `lock` field if another client holds it. */
+  async claimFileLock(path: string, clientId: string, clientLabel = ''): Promise<{ locked: true; path: string; clientId: string; clientHost: string; clientLabel: string; openedAt: string }> {
+    const r = await this._fetch('/v1/graph/lock', {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ path, client_id: clientId, client_label: clientLabel }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({})) as Record<string, unknown>;
+      const detail = body['detail'] as Record<string, unknown> | undefined;
+      const err = Object.assign(new Error(`Failed to claim file lock [${r.status}]`), { lock: detail?.['lock'] });
+      throw err;
+    }
+    const d = (await r.json()) as Record<string, string>;
+    return { locked: true, path: d['path'], clientId: d['client_id'], clientHost: d['client_host'], clientLabel: d['client_label'], openedAt: d['opened_at'] };
+  }
+
+  /** Release a previously claimed graph file lock. No-op if not locked. */
+  async releaseFileLock(path: string, clientId: string): Promise<void> {
+    try {
+      await this._fetch('/v1/graph/lock', {
+        method: 'DELETE',
+        headers: headers(),
+        body: JSON.stringify({ path, client_id: clientId }),
+      });
+    } catch {
+      // non-fatal — server may be down or lock already gone
+    }
+  }
+
+  /** List all currently locked graph files. */
+  async listFileLocks(): Promise<Array<{ path: string; clientId: string; clientHost: string; clientLabel: string; openedAt: string }>> {
+    try {
+      const r = await this._fetch('/v1/graph/lock');
+      if (!r.ok) return [];
+      const items = (await r.json()) as Array<Record<string, string>>;
+      return items.map(d => ({ path: d['path'], clientId: d['client_id'], clientHost: d['client_host'], clientLabel: d['client_label'], openedAt: d['opened_at'] }));
+    } catch {
+      return [];
+    }
+  }
+
   async fireEvent(name: string, eventName: string, context = ''): Promise<{ output: string; forwarded: Array<{ name: string; prompt: string; output: string }> }> {
     const r = await this._fetch(
       `/v1/runtime/actors/${encodeURIComponent(name)}/event/${encodeURIComponent(eventName)}`,

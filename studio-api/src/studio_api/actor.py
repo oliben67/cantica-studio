@@ -18,15 +18,17 @@ class PromptEventDef:
     prompt: str                          # resolved content (not a URI at runtime)
     file_pattern: str | None = None
     target_actors: list[str] = field(default_factory=list)  # actors to route output to (empty = self)
+    send_response: bool = False          # True = run LLM on event prompt before forwarding
 
 
 @dataclass
 class CronJobDef:
     schedule: str
     prompt: str                     # resolved content
-    name: str                        # human-readable label, required
+    name: str = ""                   # human-readable label, optional
     target_actor: str | None = None
     target_event: str | None = None
+    send_response: bool = False      # True = instruct source actor before forwarding to target
 
 
 @dataclass
@@ -127,12 +129,22 @@ class StudioActor(AIActor):
             # that occurs when provider.run() is called from inside a tool dispatch.
             output = instruction
 
+        forwarded_to: list[str] = []
         if self._instruct_actor and evt.target_actors:
             for target in evt.target_actors:
                 try:
                     self._instruct_actor(target, output)
+                    forwarded_to.append(target)
                 except Exception as exc:
                     _log.error("fire_event %r _instruct_actor(%r) failed: %s", event_name, target, exc)
+
+        if evt.send_response:
+            # Return the LLM's own response content so the caller can see it.
+            return output
+        if forwarded_to:
+            return f"Event '{event_name}' fired successfully. Forwarded to: {', '.join(forwarded_to)}."
+        if evt.target_actors:
+            return f"Event '{event_name}' fired but no target actors were available to receive it."
         return output
 
     def restore_session(self, messages: list[dict]) -> None:

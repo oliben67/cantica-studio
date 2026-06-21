@@ -46,7 +46,8 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
 
     _app.state.connector = CanticaConnector(settings.cantica_servers)
     sessions_dir = studio_dir / "sessions"
-    _app.state.runtime = ActorRuntime(sessions_dir=sessions_dir)
+    _app.state.runtime = ActorRuntime(sessions_dir=sessions_dir, db_engine=db_engine)
+    _app.state.graph_locks = {}   # path → GraphLock (see api/v1/graph.py)
     fs = WorkspaceFS(settings.workspace)
 
     mcp_server.init(fs, _app.state.runtime)

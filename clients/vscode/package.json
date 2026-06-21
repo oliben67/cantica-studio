@@ -85,7 +85,7 @@
       },
       {
         "command": "canticaScores.configureServer",
-        "title": "Configure Servers",
+        "title": "Configure Cantica Studio",
         "category": "Cantica Studio",
         "icon": "$(settings-gear)"
       },
@@ -313,7 +313,7 @@
         },
         {
           "command": "canticaScores.unregister",
-          "when": "view == canticaScores.studioView && canticaScores.isRegistered",
+          "when": "view == canticaScores.studioView && canticaScores.isRegistered && config.canticaScores.studioMode == remote",
           "group": "navigation@1"
         },
         {
@@ -330,11 +330,6 @@
           "command": "canticaScores.restartLocalStudio",
           "when": "view == canticaScores.studioView && config.canticaScores.studioMode == local",
           "group": "navigation@3"
-        },
-        {
-          "command": "canticaScores.configureServer",
-          "when": "view == canticaScores.studioView",
-          "group": "navigation@4"
         },
         {
           "command": "canticaScores.newSongbookFolder",

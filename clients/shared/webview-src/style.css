@@ -1168,6 +1168,67 @@ body {
    ───────────────────────────────────────────────────────────── */
 
 /* Section layout */
+/* Open-files tab bar */
+.cs-sb-open-section {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--cs-border);
+}
+
+.cs-sb-open-list {
+  padding: 2px 0 4px;
+}
+
+.cs-sb-tab {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.cs-sb-tab-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px 3px 10px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--cs-text);
+  overflow: hidden;
+}
+.cs-sb-tab-name:hover { background: var(--cs-bg-hover); }
+.cs-sb-tab-name span:last-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cs-sb-tab--active .cs-sb-tab-name { color: var(--cs-accent); }
+
+.cs-sb-tab-close {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--cs-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 3px;
+  padding: 0;
+  margin-right: 4px;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s, background 0.1s;
+}
+.cs-sb-tab:hover .cs-sb-tab-close { opacity: 1; }
+.cs-sb-tab-close:hover { color: var(--cs-text); background: var(--cs-bg-hover); }
+
 .cs-sb-section {
   display: flex;
   flex-direction: column;
@@ -1358,3 +1419,43 @@ body {
   box-shadow: 0 0 4px currentColor;
   transition: background .4s ease;
 }
+
+/* ── Open-files tab bar (VS Code webview mode) ── */
+.cs-open-bar {
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--cs-border);
+  background: var(--cs-bg);
+}
+.cs-open-tab {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-right: 1px solid var(--cs-border);
+}
+.cs-open-tab-name {
+  padding: 4px 8px 4px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--cs-text-muted);
+  white-space: nowrap;
+}
+.cs-open-tab-name:hover { background: var(--cs-bg-hover); }
+.cs-open-tab--active .cs-open-tab-name { color: var(--cs-accent); border-bottom: 2px solid var(--cs-accent); }
+.cs-open-tab-close {
+  padding: 2px 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--cs-text-muted);
+  opacity: 0;
+  transition: opacity 0.1s;
+  line-height: 1;
+}
+.cs-open-tab:hover .cs-open-tab-close { opacity: 1; }
+.cs-open-tab-close:hover { color: var(--cs-text); }

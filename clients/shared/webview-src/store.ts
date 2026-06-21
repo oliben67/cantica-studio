@@ -156,6 +156,9 @@ interface GraphState {
   studioHealth: 'healthy' | 'starting' | 'down' | null;
   setStudioHealth: (health: 'healthy' | 'starting' | 'down') => void;
 
+  activeSongbookPath: string | null;
+  setActiveSongbookPath: (path: string | null) => void;
+
 }
 
 export const useStore = create<GraphState>((set) => ({
@@ -399,5 +402,8 @@ export const useStore = create<GraphState>((set) => ({
 
   studioHealth: null,
   setStudioHealth: (health) => set({ studioHealth: health }),
+
+  activeSongbookPath: null,
+  setActiveSongbookPath: (path) => set({ activeSongbookPath: path }),
 
 }));

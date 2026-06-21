@@ -133,13 +133,14 @@ export type IncomingMessage =
   | { type: 'resetGraph' }
   | { type: 'triggerSave' }
   | { type: 'studioStatus'; health: 'healthy' | 'starting' | 'down'; url: string; version?: string; uptimeSeconds?: number; workspace?: string; containerized?: boolean }
-  | { type: 'updateSongbooks'; entries: unknown[]; activeFile: string | null }
+  | { type: 'updateSongbooks'; entries: unknown[]; activeFile: string | null; openFiles?: string[] }
+  | { type: 'activeSongbookChanged'; path: string | null }
   | { type: 'studioMode'; mode: 'native' | 'container' };
 
 /** Messages sent FROM the webview TO the extension host. */
 export type OutgoingMessage =
   | { type: 'ready' }
-  | { type: 'saveGraph'; graph: ActorGraph }
+  | { type: 'saveGraph'; graph: ActorGraph; path?: string }
   | { type: 'addActor' }
   | { type: 'runActor'; name: string; instruction: string }
   | { type: 'fireEvent'; name: string; eventName: string; context: string }
@@ -154,7 +155,9 @@ export type OutgoingMessage =
   | { type: 'stopLocalStudio' }
   | { type: 'playSongbook' }
   | { type: 'stopSongbook' }
-  | { type: 'openSongbook'; uri?: string; content?: unknown };
+  | { type: 'openSongbook'; uri?: string; content?: unknown }
+  | { type: 'switchSongbook'; path: string }
+  | { type: 'closeSongbook'; path: string };
 
 export interface VscodeApi {
   postMessage: (message: OutgoingMessage) => void;

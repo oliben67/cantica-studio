@@ -54,6 +54,8 @@ class _ActorState:
     code_crons: list[dict] = field(default_factory=list)
     paused: bool = False
     queued: list[str] = field(default_factory=list)
+    # AI-only: reference to the provider object so we can read resolved_model after inference.
+    provider: Any | None = None
 
 
 def _make_provider(provider: str, model: str, api_key: str | None = None) -> Any:
@@ -221,13 +223,14 @@ class ActorRuntime:
             _log.warning("Could not create event provider for %r — falling back: %s", defn.name, exc)
             event_provider = None
 
+        main_provider = _make_provider(defn.provider, defn.model, api_key)
         actor_cls = type(
             defn.name,
             (StudioActor,),
             {
                 "system_prompt": system_prompt,
                 "actor_name": defn.name,
-                "provider": _make_provider(defn.provider, defn.model, api_key),
+                "provider": main_provider,
                 "_event_provider": event_provider,
                 "max_tokens": defn.max_tokens,
                 "max_history": defn.max_history,
@@ -250,6 +253,7 @@ class ActorRuntime:
             defn=defn,
             resources=self._build_resources(defn),
             ai_events=resolved_events,
+            provider=main_provider,
         )
         self._register_crons(defn.name, resolved_crons)
 
@@ -420,6 +424,13 @@ class ActorRuntime:
             return proxy.get_logs().get(timeout=10)
         except Exception:
             return ""
+
+    def get_resolved_model(self, name: str) -> str | None:
+        """Return the model that Copilot resolved 'auto' to, or None if not yet resolved."""
+        state = self._actors.get(name)
+        if state is None:
+            raise KeyError(name)
+        return getattr(state.provider, "resolved_model", None)
 
     # ── Agent resources ───────────────────────────────────────────────────────
 

@@ -159,6 +159,11 @@ export type OutgoingMessage =
   | { type: 'switchSongbook'; path: string }
   | { type: 'closeSongbook'; path: string };
 
+/** A single entry drained from the server's runtime notification log. */
+export type Notification =
+  | { type?: undefined; name: string; prompt: string; output: string }
+  | { type: 'actorModelResolved'; name: string; model: string };
+
 export interface VscodeApi {
   postMessage: (message: OutgoingMessage) => void;
   getState: <T>() => T | undefined;

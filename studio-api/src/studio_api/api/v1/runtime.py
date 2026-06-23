@@ -111,24 +111,7 @@ async def instruct_actor(name: str, body: InstructRequest, rt: RuntimeDep) -> di
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    result: dict = {"name": name, "output": output}
-    try:
-        resolved = rt.get_resolved_model(name)
-        if resolved:
-            result["resolved_model"] = resolved
-    except Exception:
-        pass  # Non-fatal — model badge updates via polling endpoint
-    return result
-
-
-@router.get("/actors/{name}/model", dependencies=[require_permission("runtime:read")])
-def get_actor_model(name: str, rt: RuntimeDep) -> dict:
-    """Return the model Copilot resolved 'auto' to. Null until the first inference completes."""
-    try:
-        resolved = rt.get_resolved_model(name)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"name": name, "resolved_model": resolved}
+    return {"name": name, "output": output}
 
 
 @router.post("/actors/{name}/event/{event_name}", dependencies=[require_permission("runtime:instruct")])

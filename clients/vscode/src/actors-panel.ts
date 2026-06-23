@@ -230,7 +230,7 @@ export class ActorsPanel {
             : def.actorType;
           await this.post({ type: 'actorOutput', name, output: `⏳ Initialising ${tag}…` });
           try {
-            const { initialOutput, resolvedModel } = await this.client.startActor(def);
+            const { initialOutput } = await this.client.startActor(def, this._activeSongbookUri?.fsPath);
             if (initialOutput) {
               await this.post({ type: 'actorOutput', name, output: initialOutput });
             }
@@ -239,11 +239,6 @@ export class ActorsPanel {
             await this.post({ type: 'loadGraph', graph });
             await this._writeCompoundIds(graph);
             await this.post({ type: 'actorStatus', name, running: true });
-            if (resolvedModel) {
-              await this.post({ type: 'actorModelResolved', name, model: resolvedModel });
-            } else if (def.actorType === 'ai' && def.model === 'auto') {
-              this.pollResolvedModel(name);
-            }
           } catch (err) {
             await this.post({ type: 'actorOutput', name, output: `⚠ Start failed: ${String(err)}` });
             break;
@@ -257,11 +252,8 @@ export class ActorsPanel {
 
         // ── 3. Send the instruction ───────────────────────────────────────────
         try {
-          const { output, resolvedModel } = await this.client.instructActor(name, instruction);
+          const { output } = await this.client.instructActor(name, instruction);
           await this.post({ type: 'actorOutput', name, output });
-          if (resolvedModel) {
-            await this.post({ type: 'actorModelResolved', name, model: resolvedModel });
-          }
           // Push any actor-to-actor forwarded prompts that occurred during this
           // call (e.g. the LLM using the fire_event tool to route output to B).
           await this.pushNotifications();
@@ -313,7 +305,7 @@ export class ActorsPanel {
 
         await this.post({ type: 'actorOutput', name, output: `♻ Refreshing ${name}…` });
         try {
-          const { initialOutput, resolvedModel } = await this.client.startActor(def);
+          const { initialOutput } = await this.client.startActor(def, this._activeSongbookUri?.fsPath);
           if (initialOutput) {
             await this.post({ type: 'actorOutput', name, output: initialOutput });
           }
@@ -321,11 +313,6 @@ export class ActorsPanel {
           await this.post({ type: 'loadGraph', graph });
           await this._writeCompoundIds(graph);
           await this.post({ type: 'actorStatus', name, running: true });
-          if (resolvedModel) {
-            await this.post({ type: 'actorModelResolved', name, model: resolvedModel });
-          } else if (def.actorType === 'ai' && def.model === 'auto') {
-            this.pollResolvedModel(name);
-          }
         } catch (err) {
           await this.post({ type: 'error', message: `Restart failed: ${String(err)}` });
         }
@@ -414,17 +401,12 @@ export class ActorsPanel {
             : actor.actorType;
           await this.post({ type: 'actorOutput', name: actor.name, output: `⏳ Initialising ${tag}…` });
           try {
-            const { initialOutput, resolvedModel } = await this.client.startActor(actor);
+            const { initialOutput } = await this.client.startActor(actor, this._activeSongbookUri?.fsPath);
             if (initialOutput) {
               await this.post({ type: 'actorOutput', name: actor.name, output: initialOutput });
             }
             await this.post({ type: 'actorOutput', name: actor.name, output: `✓ Ready · ${tag}` });
             await this.post({ type: 'actorStatus', name: actor.name, running: true });
-            if (resolvedModel) {
-              await this.post({ type: 'actorModelResolved', name: actor.name, model: resolvedModel });
-            } else if (actor.actorType === 'ai' && actor.model === 'auto') {
-              this.pollResolvedModel(actor.name);
-            }
           } catch (err) {
             await this.post({ type: 'actorOutput', name: actor.name, output: `⚠ Start failed: ${String(err)}` });
           }
@@ -577,22 +559,6 @@ export class ActorsPanel {
     await this.panel.webview.postMessage(msg);
   }
 
-  /** Poll until the Copilot 'auto' model is resolved, then push actorModelResolved. */
-  private pollResolvedModel(name: string): void {
-    const maxAttempts = 30;
-    let attempt = 0;
-    const tick = async (): Promise<void> => {
-      if (attempt++ >= maxAttempts) return;
-      const model = await this.client.fetchResolvedModel(name);
-      if (model) {
-        void this.post({ type: 'actorModelResolved', name, model });
-      } else {
-        setTimeout(() => void tick(), 2000);
-      }
-    };
-    setTimeout(() => void tick(), 2000);
-  }
-
   /** Push forwarded prompt+response pairs to the receiver's chat panel. */
   private async pushForwarded(forwarded: Array<{ name: string; prompt: string; output: string }>): Promise<void> {
     for (const fwd of forwarded) {
@@ -602,10 +568,18 @@ export class ActorsPanel {
     }
   }
 
-  /** Drain the runtime's actor-to-actor notification log and push to the webview. */
+  /** Drain the runtime's notification log and push to the webview. */
   private async pushNotifications(): Promise<void> {
     const notes = await this.client.drainNotifications();
-    await this.pushForwarded(notes);
+    const forwarded: Array<{ name: string; prompt: string; output: string }> = [];
+    for (const note of notes) {
+      if (note.type === 'actorModelResolved') {
+        void this.post({ type: 'actorModelResolved', name: note.name, model: note.model });
+      } else {
+        forwarded.push(note);
+      }
+    }
+    await this.pushForwarded(forwarded);
     // Also drain MCP tool call log and forward as mcpLog messages.
     const mcpEntries = await this.client.drainMcpLog();
     for (const entry of mcpEntries) {

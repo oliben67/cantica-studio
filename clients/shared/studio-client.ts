@@ -1,4 +1,4 @@
-import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, CanticaServer, LogEntry, McpLogEntry, PromptEventDef, PromptRef } from './types/index.js';
+import type { AIActorDef, ActorEdgeDef, ActorGraph, ActorSummary, CanticaPrompt, CanticaServer, LogEntry, McpLogEntry, Notification, PromptEventDef, PromptRef } from './types/index.js';
 
 function headers(token?: string): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
@@ -32,17 +32,6 @@ export class StudioClient {
     const r = await fetch(this.url(path), requestInit);
     this.onLog?.({ ts: t0, method, url: path, status: r.status, durationMs: Date.now() - t0 });
     return r;
-  }
-
-  async fetchResolvedModel(actorName: string): Promise<string | null> {
-    try {
-      const r = await this._fetch(`/v1/runtime/actors/${encodeURIComponent(actorName)}/model`);
-      if (!r.ok) return null;
-      const data = (await r.json()) as { resolved_model: string | null };
-      return data.resolved_model ?? null;
-    } catch {
-      return null;
-    }
   }
 
   async registerClientKey(clientId: string, publicKeyPem: string): Promise<void> {
@@ -198,7 +187,17 @@ export class StudioClient {
     return r.json() as Promise<string[]>;
   }
 
-  async startActor(def: AIActorDef): Promise<{ initialOutput: string | null; resolvedModel?: string }> {
+  async fetchActorsSummary(): Promise<ActorSummary[]> {
+    try {
+      const r = await this._fetch('/v1/runtime/actors/summary');
+      if (!r.ok) return [];
+      return r.json() as Promise<ActorSummary[]>;
+    } catch {
+      return [];
+    }
+  }
+
+  async startActor(def: AIActorDef, songbookFile?: string): Promise<{ initialOutput: string | null }> {
     const isCode = def.actorType === 'python' || def.actorType === 'typescript';
     const body = isCode
       ? {
@@ -207,6 +206,7 @@ export class StudioClient {
           script_path: def.scriptPath ?? '',
           script_command: def.scriptCommand ?? '',
           ...(def.directory ? { directory: def.directory } : {}),
+          ...(songbookFile ? { songbook_file: songbookFile } : {}),
         }
       : {
           name: def.name,
@@ -232,6 +232,7 @@ export class StudioClient {
           })),
           outbox: {},
           ...(def.directory ? { directory: def.directory } : {}),
+          ...(songbookFile ? { songbook_file: songbookFile } : {}),
         };
     const r = await this._fetch('/v1/runtime/actors', {
       method: 'POST',
@@ -243,8 +244,8 @@ export class StudioClient {
       try { detail = await r.text(); } catch { /* ignore */ }
       throw new Error(`Failed to start actor [${r.status}]${detail ? `: ${detail}` : ''}`);
     }
-    const data = (await r.json()) as { initial_output?: string; resolved_model?: string };
-    return { initialOutput: data.initial_output ?? null, ...(data.resolved_model ? { resolvedModel: data.resolved_model } : {}) };
+    const data = (await r.json()) as { initial_output?: string };
+    return { initialOutput: data.initial_output ?? null };
   }
 
   async stopAllActors(): Promise<{ stopped: string[] }> {
@@ -271,7 +272,7 @@ export class StudioClient {
     if (!r.ok) throw new Error(`Resume failed [${r.status}]`);
   }
 
-  async instructActor(name: string, instruction: string): Promise<{ output: string; resolvedModel?: string }> {
+  async instructActor(name: string, instruction: string): Promise<{ output: string }> {
     const r = await this._fetch(`/v1/runtime/actors/${encodeURIComponent(name)}/instruct`, {
       method: 'POST',
       headers: headers(),
@@ -282,15 +283,15 @@ export class StudioClient {
       try { detail = await r.text(); } catch { /* ignore */ }
       throw new Error(`Instruct failed [${r.status}]${detail ? `: ${detail}` : ''}`);
     }
-    const data = (await r.json()) as { output: string; resolved_model?: string };
-    return { output: data.output, ...(data.resolved_model ? { resolvedModel: data.resolved_model } : {}) };
+    const data = (await r.json()) as { output: string };
+    return { output: data.output };
   }
 
-  async drainNotifications(): Promise<Array<{ name: string; prompt: string; output: string }>> {
+  async drainNotifications(): Promise<Notification[]> {
     try {
       const r = await this._fetch('/v1/runtime/notifications', { signal: AbortSignal.timeout(5000) });
       if (!r.ok) return [];
-      return r.json() as Promise<Array<{ name: string; prompt: string; output: string }>>;
+      return r.json() as Promise<Notification[]>;
     } catch {
       return [];
     }

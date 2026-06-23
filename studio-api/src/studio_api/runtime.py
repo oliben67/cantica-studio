@@ -40,6 +40,7 @@ class ActorDef:
     outbox: dict[str, str] = field(default_factory=dict)
     resources: list[dict] = field(default_factory=list)
     directory: str = ""                  # optional working directory exposed via MCP filesystem
+    songbook_file: str = ""              # path to the .jsonld file this actor was started from
 
 
 @dataclass
@@ -263,6 +264,29 @@ class ActorRuntime:
             proxy.restore_session(saved_session).get(timeout=5)
             _log.info("Restored %d message(s) for actor %r", len(saved_session), defn.name)
 
+        # Proactively resolve Copilot 'auto' model in a daemon thread.
+        # When done, push an actorModelResolved notification so the frontend
+        # updates without needing a separate client-side poll.
+        if defn.provider.lower() == "copilot" and defn.model == "auto":
+            actor_name = defn.name
+            provider_ref = main_provider
+
+            def _probe_and_notify() -> None:
+                try:
+                    resolved = provider_ref.probe_resolved_model()
+                    if resolved and actor_name in self._actors:
+                        with self._forwarded_log_lock:
+                            self._forwarded_log.append({
+                                "type": "actorModelResolved",
+                                "name": actor_name,
+                                "model": resolved,
+                            })
+                        _log.info("Actor %r: probed resolved model %r", actor_name, resolved)
+                except Exception as exc:
+                    _log.debug("Actor %r: model probe failed: %s", actor_name, exc)
+
+            threading.Thread(target=_probe_and_notify, daemon=True).start()
+
         _log.info("Started AI actor %r", defn.name)
         return None
 
@@ -397,6 +421,53 @@ class ActorRuntime:
 
     def list_running(self) -> list[str]:
         return list(self._actors)
+
+    def get_actors_summary(self) -> list[dict]:
+        """Return a summary of all running actors, merging runtime state with monitor snapshots."""
+        from actor_ai.monitor import ActorMonitor  # noqa: PLC0415
+
+        snapshots = ActorMonitor.list_all()
+        snap_by_name: dict[str, Any] = {}
+        for s in snapshots:
+            if s.actor_name and s.actor_name not in snap_by_name:
+                snap_by_name[s.actor_name] = s
+
+        result: list[dict] = []
+        seen_names: set[str] = set()
+
+        for name, state in self._actors.items():
+            seen_names.add(name)
+            snap = snap_by_name.get(name)
+            defn = state.defn
+            model = None
+            if defn.actor_type == "ai":
+                model = getattr(state.provider, "resolved_model", None) or defn.model
+            result.append({
+                "name": name,
+                "urn": snap.urn if snap else None,
+                "actor_type": defn.actor_type,
+                "provider": defn.provider if defn.actor_type == "ai" else None,
+                "model": model,
+                "songbook_file": defn.songbook_file,
+                "started_at": snap.started_at.isoformat() if snap else None,
+                "state": snap.state.value if snap else "idle",
+            })
+
+        for snap in snapshots:
+            if snap.actor_name is not None and snap.actor_name in seen_names:
+                continue
+            result.append({
+                "name": snap.actor_name or snap.actor_class,
+                "urn": snap.urn,
+                "actor_type": "unknown",
+                "provider": None,
+                "model": None,
+                "songbook_file": "",
+                "started_at": snap.started_at.isoformat(),
+                "state": snap.state.value,
+            })
+
+        return result
 
     # ── Code actor introspection ───────────────────────────────────────────────
 

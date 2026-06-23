@@ -393,7 +393,17 @@ class ActorRuntime:
             state.queued.append(text)
             _log.info("Actor %r is paused — queued instruction (%d total)", name, len(state.queued))
             return f"⏸ Queued (actor is paused — {len(state.queued)} instruction(s) pending)"
-        return state.ref.proxy().instruct(text).get(timeout=360)
+        was_resolved = getattr(state.provider, "resolved_model", None)
+        result = state.ref.proxy().instruct(text).get(timeout=360)
+        now_resolved = getattr(state.provider, "resolved_model", None)
+        if now_resolved and now_resolved != was_resolved:
+            with self._forwarded_log_lock:
+                self._forwarded_log.append({
+                    "type": "actorModelResolved",
+                    "name": name,
+                    "model": now_resolved,
+                })
+        return result
 
     def fire_event(self, name: str, event_name: str, context: str = "") -> dict:
         """Fire a named event on an actor, routing output to all configured target actors.

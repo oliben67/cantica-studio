@@ -30,6 +30,7 @@ class StartActorRequest(BaseModel):
     outbox: dict[str, str] = {}
     resources: list[dict] = []
     directory: str = ""
+    songbook_file: str = ""
 
 
 class InstructRequest(BaseModel):
@@ -38,6 +39,11 @@ class InstructRequest(BaseModel):
 
 class EventRequest(BaseModel):
     context: str = ""
+
+
+@router.get("/actors/summary", dependencies=[require_permission("runtime:read")])
+def get_actors_summary(rt: RuntimeDep) -> list[dict]:
+    return rt.get_actors_summary()
 
 
 @router.get("/actors", dependencies=[require_permission("runtime:read")])
@@ -106,9 +112,12 @@ async def instruct_actor(name: str, body: InstructRequest, rt: RuntimeDep) -> di
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     result: dict = {"name": name, "output": output}
-    resolved = rt.get_resolved_model(name)
-    if resolved:
-        result["resolved_model"] = resolved
+    try:
+        resolved = rt.get_resolved_model(name)
+        if resolved:
+            result["resolved_model"] = resolved
+    except Exception:
+        pass  # Non-fatal — model badge updates via polling endpoint
     return result
 
 

@@ -20,13 +20,27 @@ tasks:
     cmd: uvicorn cantica_studio_api.main:app --reload --host 127.0.0.1 --port 8043
 
   build:image:
-    desc: Build the cantica-studio-api Docker image
+    desc: Build the studio-api Docker image
     dir: ../..
     cmd: |
       docker build \
         -f cantica-studio/studio-api/Dockerfile \
-        -t cantica-studio-api:latest \
+        -t studio-api:latest \
         .
+
+  update:
+    desc: Rebuild image (no cache) and restart — use after any wheel or Dockerfile change
+    cmds:
+      - task: down
+      - docker build --no-cache -f cantica-studio/studio-api/Dockerfile -t studio-api:latest ../..
+      - task: up
+
+  clean:
+    desc: Remove the studio-api image and prune dangling images
+    cmds:
+      - docker compose down --rmi local 2>/dev/null || true
+      - docker image rm cantica-studio-api:latest 2>/dev/null || true
+      - docker image prune -f
 
   up:
     desc: Start studio-api via docker-compose

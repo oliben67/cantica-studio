@@ -214,8 +214,9 @@ def test_stop_all_swallows_scheduler_shutdown_exception() -> None:
 # ── runtime.py — fire_event target not running (225->224 branch) ─────────────
 
 
-def test_fire_event_target_not_running_is_silently_skipped() -> None:
-    """Target in targetActors that is not running is skipped; source not consulted (send_response=False)."""
+def test_fire_event_target_not_running_reports_warning() -> None:
+    """Target in targetActors that is not running yields a visible warning entry;
+    source not consulted (send_response=False)."""
     rt = ActorRuntime()
     proxy = MagicMock()
     ref = _ref(proxy)
@@ -230,8 +231,12 @@ def test_fire_event_target_not_running_is_silently_skipped() -> None:
 
     result = rt.fire_event("test-actor", "check")
     assert result["output"] == "p"          # instruction returned, source not consulted
-    assert result["forwarded"] == []
-    proxy.instruct.assert_not_called()      # source skipped too; ghost not running
+    assert result["forwarded"] == [{
+        "name": "test-actor",
+        "prompt": "⚡ check",
+        "output": "⚠ 'ghost-actor' is not running — event not forwarded",
+    }]
+    proxy.instruct.assert_not_called()      # source skipped; ghost not running
     rt.stop_all()
 
 

@@ -151,31 +151,33 @@ def _admin_jwt(client: TestClient) -> str:
     return r.json()["access_token"]
 
 
-class TestAccessEndpointsLocalMode:
-    def test_list_returns_local_record(self, local_client: TestClient) -> None:
-        r = local_client.get("/v1/access")
+class TestProvidersEndpointsLocalMode:
+    def test_list_providers(self, local_client: TestClient) -> None:
+        r = local_client.get("/v1/providers")
         assert r.status_code == 200
-        records = r.json()
-        assert len(records) == 1
-        assert records[0]["id"] == LOCAL_ACCESS_ID
-        assert records[0]["readonly"] is True
+        assert isinstance(r.json(), list)
 
-    def test_get_local_record(self, local_client: TestClient) -> None:
-        r = local_client.get(f"/v1/access/{LOCAL_ACCESS_ID}")
-        assert r.status_code == 200
-        assert r.json()["id"] == LOCAL_ACCESS_ID
-
-    def test_get_missing_record_404(self, local_client: TestClient) -> None:
-        r = local_client.get("/v1/access/nonexistent")
+    def test_get_missing_provider_404(self, local_client: TestClient) -> None:
+        r = local_client.get("/v1/providers/nonexistent")
         assert r.status_code == 404
 
-    def test_put_forbidden_in_local_mode(self, local_client: TestClient) -> None:
-        r = local_client.put("/v1/access/new", json={"name": "New"})
-        assert r.status_code == 403
+    def test_create_get_delete_round_trip(self, local_client: TestClient) -> None:
+        r = local_client.post("/v1/providers", json={"name": "Test Claude", "type": "claude"})
+        assert r.status_code == 201
+        pid = r.json()["id"]
+        assert r.json()["type"] == "claude"
 
-    def test_delete_forbidden_in_local_mode(self, local_client: TestClient) -> None:
-        r = local_client.delete(f"/v1/access/{LOCAL_ACCESS_ID}")
-        assert r.status_code == 403
+        r = local_client.get(f"/v1/providers/{pid}")
+        assert r.status_code == 200
+        assert r.json()["name"] == "Test Claude"
+
+        r = local_client.delete(f"/v1/providers/{pid}")
+        assert r.status_code == 204
+        assert local_client.get(f"/v1/providers/{pid}").status_code == 404
+
+    def test_invalid_provider_type_rejected(self, local_client: TestClient) -> None:
+        r = local_client.post("/v1/providers", json={"name": "Bad", "type": "not-a-provider"})
+        assert r.status_code == 422
 
     def test_no_auth_header_needed(self, local_client: TestClient) -> None:
         r = local_client.get("/v1/runtime/actors")
@@ -184,16 +186,16 @@ class TestAccessEndpointsLocalMode:
 
 class TestAuthEnforcement:
     def test_no_token_rejected(self, remote_client: TestClient) -> None:
-        r = remote_client.get("/v1/access")
+        r = remote_client.get("/v1/providers")
         assert r.status_code == 401
 
     def test_wrong_token_rejected(self, remote_client: TestClient) -> None:
-        r = remote_client.get("/v1/access", headers={"Authorization": "Bearer not.a.valid.jwt"})
+        r = remote_client.get("/v1/providers", headers={"Authorization": "Bearer not.a.valid.jwt"})
         assert r.status_code == 401
 
     def test_correct_token_accepted(self, remote_client: TestClient) -> None:
         token = _admin_jwt(remote_client)
-        r = remote_client.get("/v1/access", headers={"Authorization": f"Bearer {token}"})
+        r = remote_client.get("/v1/providers", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 200
 
     def test_health_exempt_from_auth(self, remote_client: TestClient) -> None:
@@ -201,16 +203,16 @@ class TestAuthEnforcement:
         assert r.status_code == 200
         assert r.json()["auth_enabled"] is True
 
-    def test_put_and_delete_in_remote_mode(self, remote_client: TestClient) -> None:
+    def test_create_and_delete_in_remote_mode(self, remote_client: TestClient) -> None:
         headers = {"Authorization": f"Bearer {_admin_jwt(remote_client)}"}
-        r = remote_client.put(
-            "/v1/access/team-a",
-            json={"name": "Team A", "credentials": {"anthropic_api_key": "sk-ant-xxx"}},
+        r = remote_client.post(
+            "/v1/providers",
+            json={"name": "Team A Claude", "type": "claude"},
             headers=headers,
         )
-        assert r.status_code == 200
-        assert r.json()["id"] == "team-a"
-        assert r.json()["credentials"]["anthropic_api_key"] is True
+        assert r.status_code == 201
+        pid = r.json()["id"]
+        assert r.json()["name"] == "Team A Claude"
 
-        r = remote_client.delete("/v1/access/team-a", headers=headers)
+        r = remote_client.delete(f"/v1/providers/{pid}", headers=headers)
         assert r.status_code == 204

@@ -5,7 +5,7 @@ requires-python = ">=3.14"
 [[package]]
 name = "actor-ai"
 version = "0.3.9"
-source = { editable = "../../../actor-ai" }
+source = { editable = "../../actor-ai" }
 dependencies = [
     { name = "anthropic" },
     { name = "asyncache" },
@@ -1939,7 +1939,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "actor-ai", editable = "../../../actor-ai" },
+    { name = "actor-ai", editable = "../../actor-ai" },
     { name = "apscheduler", specifier = ">=3.10" },
     { name = "argon2-cffi", specifier = ">=23.1" },
     { name = "fastapi", specifier = ">=0.115" },

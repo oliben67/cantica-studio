@@ -41,8 +41,8 @@ dev = [
 ]
 
 [tool.uv.sources]
-# actor-ai lives three levels up from studio-api/
-actor-ai = { path = "../../../actor-ai", editable = true }
+# actor-ai lives at the cantica repo root, two levels up from studio-api/
+actor-ai = { path = "../../actor-ai", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

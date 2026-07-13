@@ -541,6 +541,19 @@
           "markdownDescription": "_(local mode only)_ Auto-start the Studio API container when the extension activates.",
           "scope": "machine-overridable",
           "order": 9
+        },
+        "canticaScores.providerModels": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "array", "items": { "type": "string" } },
+              { "type": "null" }
+            ]
+          },
+          "default": {},
+          "markdownDescription": "Per-provider model allowlists for the actor provider menu. Keys are provider ids (`claude`, `gpt`, `gemini`, `mistral`, `copilot`).\n\n- key missing — show the provider's default model list\n- `null` — show the default list (open)\n- `[]` — hide the provider entirely\n- `[\"model-a\", …]` — show only these models (custom names allowed)",
+          "scope": "machine-overridable",
+          "order": 10
         }
       }
     },

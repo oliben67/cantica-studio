@@ -18,5 +18,5 @@
     "resolveJsonModule": true
   },
   "include": ["src/**/*.ts", "../shared/**/*.ts"],
-  "exclude": ["node_modules", "dist", "webview-src"]
+  "exclude": ["node_modules", "dist", "webview-src", "../shared/webview-src"]
 }

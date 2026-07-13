@@ -3,13 +3,16 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "dist",
-    "rootDir": ".",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "paths": {
-      "@shared/*": ["../shared/*"]
+      "@shared/*": ["../shared/*"],
+      "*": ["../vscode/node_modules/@types/*", "../vscode/node_modules/*"]
     }
   },
   "include": ["main/**/*", "preload/**/*", "renderer/**/*", "../shared/**/*"]

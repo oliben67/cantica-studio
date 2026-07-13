@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ActorsPanel } from './actors-panel.js';
 import { clearCredentials, generateKeyPair, loadCredentials, makeCachedAssertion, publicKeyFromPrivate, saveCredentials } from './auth.js';
 import { loadProviderKeys } from './provider-keys.js';
-import { configureProviderKeys, isSetupDone, publishSetupContext, runSetupWizard } from './setup-wizard.js';
+import { isSetupDone, publishSetupContext } from './setup-wizard.js';
 import type { SongbookFolderItem, SongbookItem, SongbookNode } from './songbooks-provider.js';
 import { SongbooksProvider } from './songbooks-provider.js';
 import { SONGBOOKS_SCHEME, SongbooksFileSystemProvider } from './songbooks-fs-provider.js';
@@ -47,6 +47,7 @@ function readSettings(): ExtensionSettings {
     studioBaseUrl,
     studioPort,
     autoStartStudio: cfg.get<boolean>('autoStartStudio') ?? true,
+    providerModels: cfg.get<Record<string, string[] | null>>('providerModels') ?? {},
   };
 }
 
@@ -296,24 +297,20 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'canticaScores');
     }),
 
-    vscode.commands.registerCommand('canticaScores.configureProviderKeys', async () => {
-      const keys = await configureProviderKeys(context);
-      if (keys) void client.syncProviderKeys(keys);
+    vscode.commands.registerCommand('canticaScores.configureProviderKeys', () => {
+      const panel = ActorsPanel.show(context, client, settings);
+      panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
+      void panel.pushGraph();
+      panel.requestOpenModal('openProviderKeys');
     }),
 
-    vscode.commands.registerCommand('canticaScores.setupStudio', async () => {
-      const result = await runSetupWizard(context);
-      if (!result) return;
-      if (result.mode === 'remote') return; // coming soon — no server to start
-      settings = readSettings();
-      client = new StudioClient(settings.studioBaseUrl, () => getAuth?.() ?? null);
-      setStatusStarting();
-      const url = await studio.ensureRunning(result.runMode, result.keys);
-      if (url) {
-        _registeredWithCurrent = false;
-        void vscode.window.showInformationMessage(`Studio API running at ${url}`);
-        void ActorsPanel.refreshProviderModels(client);
-      }
+    vscode.commands.registerCommand('canticaScores.setupStudio', () => {
+      // Setup runs as a modal form inside the panel webview; saving posts
+      // `saveSetup`, which persists settings and (re)starts the local server.
+      const panel = ActorsPanel.show(context, client, settings);
+      panel.setStudioStatus(_buildStudioStatusMsg(_lastStudioStatus.health, _lastStudioStatus.info));
+      void panel.pushGraph();
+      panel.requestOpenModal('openSetup');
     }),
 
     vscode.commands.registerCommand('canticaScores.startLocalStudio', async () => {
@@ -896,18 +893,10 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshProviders();
 
     if (settings.studioMode === 'local' && settings.autoStartStudio) {
-      // First-time run: show the setup wizard instead of starting blindly.
+      // First-time run: open the setup form instead of starting blindly.
+      // Saving the form posts `saveSetup`, which starts the server.
       if (!isSetupDone(context)) {
-        const result = await runSetupWizard(context);
-        if (!result || result.mode === 'remote') return;
-        settings = readSettings();
-        client = new StudioClient(settings.studioBaseUrl, () => getAuth?.() ?? null);
-        setStatusStarting();
-        const url = await studio.ensureRunning(result.runMode, result.keys);
-        if (url) {
-          _registeredWithCurrent = false;
-          void ActorsPanel.refreshProviderModels(client);
-        }
+        void vscode.commands.executeCommand('canticaScores.setupStudio');
         return;
       }
 

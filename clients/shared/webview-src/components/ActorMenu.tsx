@@ -1,23 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store';
 import { ConfirmModal } from './ConfirmModal';
 
-export function ActorMenu() {
+function Inner({ actorId, x, y }: { actorId: string; x: number; y: number }) {
   const {
-    graph, actorMenuState, closeActorMenu,
+    graph, closeActorMenu,
     openEventsModal, openCronsModal, openPropertiesModal,
     toggleChat, actorChatVisible, openChatModal,
     openResourcesModal, removeActor, runningActors,
   } = useStore();
 
+  // Keyed per actor by the wrapper below, and unmounted when the menu closes —
+  // so confirm state never leaks across menu sessions.
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
-  // Reset confirm state whenever the menu is opened for a different actor or reopened.
-  useEffect(() => { setDeleteConfirm(false); }, [actorMenuState]);
-
-  if (!actorMenuState) return null;
-
-  const { actorId, x, y } = actorMenuState;
   const chatOn = actorChatVisible[actorId] ?? false;
   const actor = graph.actors.find(a => a.id === actorId);
   const isCode = actor?.actorType === 'python' || actor?.actorType === 'typescript';
@@ -89,4 +85,11 @@ export function ActorMenu() {
       </div>
     </>
   );
+}
+
+export function ActorMenu() {
+  const { actorMenuState } = useStore();
+  if (!actorMenuState) return null;
+  const { actorId, x, y } = actorMenuState;
+  return <Inner key={actorId} actorId={actorId} x={x} y={y} />;
 }

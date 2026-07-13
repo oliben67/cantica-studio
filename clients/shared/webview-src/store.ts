@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings, LogEntry, McpLogEntry } from './types';
+import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings, LogEntry, McpLogEntry, SetupState } from './types';
 
 let _idSeq = 0;
 
@@ -96,6 +96,10 @@ interface GraphState {
   appendOutput: (name: string, text: string) => void;
   resolvedModels: Record<string, string>;
   setResolvedModel: (name: string, model: string) => void;
+  /** Actors whose resolve window expired — prompts unlocked despite no resolution. */
+  resolveTimedOut: Record<string, boolean>;
+  /** Flag a resolve timeout and post a one-shot warning to the actor's chat. */
+  markResolveTimedOut: (name: string) => void;
 
   // Metadata
   setPrompts: (prompts: CanticaPrompt[]) => void;
@@ -159,9 +163,18 @@ interface GraphState {
   activeSongbookPath: string | null;
   setActiveSongbookPath: (path: string | null) => void;
 
+  // Setup & provider keys (state pushed by the host; keys never enter the webview)
+  setupState: SetupState | null;
+  setSetupState: (state: SetupState) => void;
+  setupModalOpen: boolean;
+  openSetupModal: () => void;
+  closeSetupModal: () => void;
+  providerKeysModalOpen: boolean;
+  openProviderKeysModal: () => void;
+  closeProviderKeysModal: () => void;
 }
 
-export const useStore = create<GraphState>((set) => ({
+export const useStore = create<GraphState>((set, get) => ({
   graph: { id: 'urn:cantica:studio:graph:default', name: 'New Workflow', actors: [], edges: [] },
   remoteLoad: false,
   selectedActorId: null,
@@ -308,7 +321,9 @@ export const useStore = create<GraphState>((set) => ({
       const nextPaused = running ? s.pausedActors : (() => { const p = new Set(s.pausedActors); p.delete(name); return p; })();
       // Clear resolved model when actor stops (so it re-resolves on next start)
       const nextResolved = running ? s.resolvedModels : (() => { const r = { ...s.resolvedModels }; delete r[name]; return r; })();
-      return { runningActors: next, pausedActors: nextPaused, resolvedModels: nextResolved };
+      // Clear the resolve-timeout flag when actor stops (next start warns again)
+      const nextTimedOut = running ? s.resolveTimedOut : (() => { const t = { ...s.resolveTimedOut }; delete t[name]; return t; })();
+      return { runningActors: next, pausedActors: nextPaused, resolvedModels: nextResolved, resolveTimedOut: nextTimedOut };
     }),
 
   setPaused: (name, paused) =>
@@ -319,7 +334,20 @@ export const useStore = create<GraphState>((set) => ({
     }),
 
   setResolvedModel: (name, model) =>
-    set((s) => ({ resolvedModels: { ...s.resolvedModels, [name]: model } })),
+    set((s) => {
+      const nextTimedOut = (() => { const t = { ...s.resolveTimedOut }; delete t[name]; return t; })();
+      return { resolvedModels: { ...s.resolvedModels, [name]: model }, resolveTimedOut: nextTimedOut };
+    }),
+
+  resolveTimedOut: {},
+  markResolveTimedOut: (name) => {
+    const s = get();
+    // One warning per pending session — the node and the chat modal may both observe the timeout.
+    if (s.resolveTimedOut[name] || s.resolvedModels[name]) return;
+    set({ resolveTimedOut: { ...s.resolveTimedOut, [name]: true } });
+    s.appendOutput(name, '⚠ Model resolution timed out — prompts unlocked; your first prompt will resolve the model.');
+    s.openChatIfHidden(name);
+  },
 
   setOutput: (name, output) =>
     set((s) => {
@@ -405,5 +433,14 @@ export const useStore = create<GraphState>((set) => ({
 
   activeSongbookPath: null,
   setActiveSongbookPath: (path) => set({ activeSongbookPath: path }),
+
+  setupState: null,
+  setSetupState: (state) => set({ setupState: state }),
+  setupModalOpen: false,
+  openSetupModal: () => set({ setupModalOpen: true }),
+  closeSetupModal: () => set({ setupModalOpen: false }),
+  providerKeysModalOpen: false,
+  openProviderKeysModal: () => set({ providerKeysModalOpen: true }),
+  closeProviderKeysModal: () => set({ providerKeysModalOpen: false }),
 
 }));

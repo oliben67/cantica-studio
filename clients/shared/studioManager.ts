@@ -3,8 +3,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Platform } from './platform.js';
 
-const IMAGE = 'cantica-studio-api:latest';
-const CONTAINER = 'cantica-studio-api';
+const IMAGE = 'studio-api:latest';
+const CONTAINER = 'studio-api';
 const INTERNAL_PORT = 8043;
 
 export type StudioMode = 'native' | 'container';
@@ -174,7 +174,7 @@ export class StudioManager {
       this.platform.log('[studio] Stopping container');
       // Try the expected container name, then stop any container publishing the studio port.
       // The second clause handles dev setups where the container was started with a different
-      // name (e.g. `studio-api` instead of `cantica-studio-api`).
+      // name (e.g. via `docker compose` with a project-prefixed name).
       await new Promise<void>((resolve) => {
         const cmd = `docker rm -f ${CONTAINER} 2>/dev/null; docker ps --filter "publish=${port}" --format "{{.Names}}" 2>/dev/null | xargs -r docker rm -f 2>/dev/null; true`;
         child_process.exec(cmd, { timeout: 10_000 }, () => resolve());

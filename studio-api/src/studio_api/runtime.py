@@ -283,7 +283,7 @@ class ActorRuntime:
                             })
                         _log.info("Actor %r: probed resolved model %r", actor_name, resolved)
                 except Exception as exc:
-                    _log.debug("Actor %r: model probe failed: %s", actor_name, exc)
+                    _log.warning("Actor %r: model probe failed: %s", actor_name, exc)
 
             threading.Thread(target=_probe_and_notify, daemon=True).start()
 
@@ -434,9 +434,15 @@ class ActorRuntime:
 
     def get_actors_summary(self) -> list[dict]:
         """Return a summary of all running actors, merging runtime state with monitor snapshots."""
-        from actor_ai.monitor import ActorMonitor  # noqa: PLC0415
+        # actor_ai.monitor is not present in every actor_ai release — degrade to
+        # runtime-only summaries rather than failing the whole endpoint.
+        snapshots: list[Any] = []
+        try:
+            from actor_ai.monitor import ActorMonitor  # noqa: PLC0415
 
-        snapshots = ActorMonitor.list_all()
+            snapshots = ActorMonitor.list_all()
+        except Exception as exc:
+            _log.debug("Actor monitor unavailable — summary without snapshots: %s", exc)
         snap_by_name: dict[str, Any] = {}
         for s in snapshots:
             if s.actor_name and s.actor_name not in snap_by_name:

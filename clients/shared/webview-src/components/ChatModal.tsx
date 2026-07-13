@@ -9,7 +9,7 @@ type MsgKind = 'user' | 'ai' | 'system';
 interface ChatMsg {
   kind: MsgKind;
   text: string;
-  ts?: string;
+  ts?: string | undefined;
 }
 
 const TS_RE = /^\[(\d{2}:\d{2}:\d{2})\] ([\s\S]*)$/;
@@ -28,7 +28,7 @@ function parseLine(line: string): ChatMsg {
 export function ChatModal() {
   const {
     graph, chatModalActorId, closeChatModal,
-    actorOutputs, runningActors, appendOutput,
+    actorOutputs, runningActors, appendOutput, resolvedModels, resolveTimedOut,
   } = useStore();
 
   const [promptText, setPromptText] = useState('');
@@ -40,6 +40,12 @@ export function ChatModal() {
     : null;
 
   const running = actor ? runningActors.has(actor.name) : false;
+  // Copilot 'auto' actors accept no prompts until the model probe finishes.
+  const isPending = !!actor && actor.provider === 'copilot' && actor.model === 'auto'
+    && running && !resolvedModels[actor.name];
+  // The lock lifts when the model resolves OR when the actor node's resolve
+  // timer expires (store.resolveTimedOut) — a failed probe can't block forever.
+  const promptLocked = isPending && !!actor && !resolveTimedOut[actor.name];
   const output = actor ? (actorOutputs.get(actor.name) ?? '') : '';
   const messages: ChatMsg[] = output
     ? output.split('\n').filter(l => l.trim()).map(parseLine)
@@ -63,7 +69,7 @@ export function ChatModal() {
 
   function sendPrompt() {
     const text = promptText.trim();
-    if (!text || !running || !actor) return;
+    if (!text || !running || promptLocked || !actor) return;
     appendOutput(actor.name, `> ${text}`);
     vscode.postMessage({ type: 'runActor', name: actor.name, instruction: text });
     setPromptText('');
@@ -120,9 +126,9 @@ export function ChatModal() {
           <input
             ref={inputRef}
             className="cs-chat-input"
-            placeholder={running ? 'Send a prompt… (Enter to send)' : 'Start the actor first'}
+            placeholder={!running ? 'Start the actor first' : promptLocked ? 'Resolving model…' : 'Send a prompt… (Enter to send)'}
             value={promptText}
-            disabled={!running}
+            disabled={!running || promptLocked}
             onChange={e => setPromptText(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') { e.preventDefault(); sendPrompt(); }
@@ -133,8 +139,8 @@ export function ChatModal() {
             className="cs-actor-btn cs-actor-btn--prompt"
             style={{ whiteSpace: 'nowrap' }}
             onClick={sendPrompt}
-            disabled={!running}
-            title="Send prompt"
+            disabled={!running || promptLocked}
+            title={promptLocked ? 'Model is resolving — prompts are disabled until it is ready' : 'Send prompt'}
           >Send</button>
         </div>
       </div>

@@ -1,6 +1,15 @@
 import * as vscode from 'vscode';
-import type { ActorGraph, ExtensionSettings, ToWebview } from './types/index.js';
+import type { ActorGraph, ExtensionSettings, ProviderKeyId, ProviderKeyStatus, SetupState, ToWebview } from './types/index.js';
 import { serializeGraph, parseGraph, type StudioClient } from './studio-client.js';
+import { loadProviderKeys, saveProviderKeys } from './provider-keys.js';
+import { SETUP_DONE_KEY, isSetupDone, publishSetupContext } from './setup-wizard.js';
+
+const PROVIDER_ENV_KEYS: Record<ProviderKeyId, string> = {
+  anthropicApiKey: 'ANTHROPIC_API_KEY',
+  openaiApiKey: 'OPENAI_API_KEY',
+  geminiApiKey: 'GEMINI_API_KEY',
+  githubToken: 'GITHUB_TOKEN',
+};
 
 export class ActorsPanel {
   static readonly viewType = 'canticaScores.panel';
@@ -28,9 +37,12 @@ export class ActorsPanel {
   }
 
   private readonly panel: vscode.WebviewPanel;
+  private readonly context: vscode.ExtensionContext;
   private readonly disposables: vscode.Disposable[] = [];
   private settings: ExtensionSettings;
   private client: StudioClient;
+  /** Modal to open once the webview reports ready (queued by commands). */
+  private _pendingOpenModal: 'openSetup' | 'openProviderKeys' | null = null;
   private fileSaveWatcher: vscode.Disposable | undefined;
   private _notifPollTimer: ReturnType<typeof setInterval> | undefined;
   private _activeSongbookUri: vscode.Uri | undefined;
@@ -63,12 +75,14 @@ export class ActorsPanel {
         existing.settings = settings;
         return existing;
       }
-    } else if (ActorsPanel._panels.size > 0) {
-      const last = [...ActorsPanel._panels.values()].at(-1)!;
-      last.panel.reveal(vscode.ViewColumn.Two, true);
-      last.client = client;
-      last.settings = settings;
-      return last;
+    } else {
+      const last = [...ActorsPanel._panels.values()].at(-1);
+      if (last) {
+        last.panel.reveal(vscode.ViewColumn.Two, true);
+        last.client = client;
+        last.settings = settings;
+        return last;
+      }
     }
 
     const title = uri ? _displayName(uri) : 'Songbook';
@@ -93,6 +107,7 @@ export class ActorsPanel {
     uri?: vscode.Uri,
   ) {
     this.panel = panel;
+    this.context = context;
     this.client = client;
     this.settings = settings;
     this._activeSongbookUri = uri;
@@ -130,6 +145,14 @@ export class ActorsPanel {
         void this.pushProviderModels(true);
         if (this._pendingStudioStatus) void this.post(this._pendingStudioStatus);
         await this.post({ type: 'activeSongbookChanged', path: this._activeSongbookUri?.fsPath ?? null });
+        // The backend outlives the webview — restore running state and resolved
+        // models for actors that were started before this webview loaded.
+        void this.pushRunningState();
+        void this.pushSetupState();
+        if (this._pendingOpenModal) {
+          void this.post({ type: this._pendingOpenModal });
+          this._pendingOpenModal = null;
+        }
         break;
 
       case 'saveGraph': {
@@ -218,7 +241,7 @@ export class ActorsPanel {
         if (!alreadyRunning) {
           const graph = await this.client.loadGraph(this._activeSongbookUri?.fsPath);
           const def = graph?.actors.find(a => a.name === name);
-          if (!def) {
+          if (!graph || !def) {
             await this.post({
               type: 'actorOutput', name,
               output: `⚠ Actor "${name}" not found in the graph — open the songbook first.`,
@@ -234,7 +257,10 @@ export class ActorsPanel {
             if (initialOutput) {
               await this.post({ type: 'actorOutput', name, output: initialOutput });
             }
-            await this.post({ type: 'actorOutput', name, output: `✓ Ready · ${tag}` });
+            // Copilot 'auto' actors are not ready until the model probe finishes —
+            // the Ready line is posted when the actorModelResolved notification arrives.
+            const resolving = def.actorType === 'ai' && def.provider === 'copilot' && def.model === 'auto';
+            await this.post({ type: 'actorOutput', name, output: resolving ? '⏳ Resolving model…' : `✓ Ready · ${tag}` });
             // Push the graph with compound IDs so actor nodes reflect the updated IDs.
             await this.post({ type: 'loadGraph', graph });
             await this._writeCompoundIds(graph);
@@ -246,6 +272,7 @@ export class ActorsPanel {
         } else if (isStartOnly) {
           await this.post({ type: 'actorOutput', name, output: `· ${name} is already running` });
           await this.post({ type: 'actorStatus', name, running: true });
+          await this.pushResolvedModels([name]);
         }
 
         if (isStartOnly) break;
@@ -298,7 +325,7 @@ export class ActorsPanel {
 
         const graph = await this.client.loadGraph(this._activeSongbookUri?.fsPath);
         const def = graph?.actors.find(a => a.name === name);
-        if (!def) {
+        if (!graph || !def) {
           await this.post({ type: 'actorOutput', name, output: '⚠ Actor not found in graph — could not restart' });
           break;
         }
@@ -309,7 +336,8 @@ export class ActorsPanel {
           if (initialOutput) {
             await this.post({ type: 'actorOutput', name, output: initialOutput });
           }
-          await this.post({ type: 'actorOutput', name, output: '✓ Ready' });
+          const resolving = def.actorType === 'ai' && def.provider === 'copilot' && def.model === 'auto';
+          await this.post({ type: 'actorOutput', name, output: resolving ? '⏳ Resolving model…' : '✓ Ready' });
           await this.post({ type: 'loadGraph', graph });
           await this._writeCompoundIds(graph);
           await this.post({ type: 'actorStatus', name, running: true });
@@ -390,10 +418,12 @@ export class ActorsPanel {
         await this._writeCompoundIds(graph);
         let runningNames: string[] = [];
         try { runningNames = await this.client.listRunning(); } catch { /* ignore */ }
+        const alreadyRunning: string[] = [];
         for (const actor of graph.actors) {
           if (runningNames.includes(actor.name)) {
             await this.post({ type: 'actorOutput', name: actor.name, output: `· ${actor.name} already running` });
             await this.post({ type: 'actorStatus', name: actor.name, running: true });
+            alreadyRunning.push(actor.name);
             continue;
           }
           const tag = actor.actorType === 'ai'
@@ -405,12 +435,14 @@ export class ActorsPanel {
             if (initialOutput) {
               await this.post({ type: 'actorOutput', name: actor.name, output: initialOutput });
             }
-            await this.post({ type: 'actorOutput', name: actor.name, output: `✓ Ready · ${tag}` });
+            const resolving = actor.actorType === 'ai' && actor.provider === 'copilot' && actor.model === 'auto';
+            await this.post({ type: 'actorOutput', name: actor.name, output: resolving ? '⏳ Resolving model…' : `✓ Ready · ${tag}` });
             await this.post({ type: 'actorStatus', name: actor.name, running: true });
           } catch (err) {
             await this.post({ type: 'actorOutput', name: actor.name, output: `⚠ Start failed: ${String(err)}` });
           }
         }
+        if (alreadyRunning.length) await this.pushResolvedModels(alreadyRunning);
         break;
       }
 
@@ -426,7 +458,92 @@ export class ActorsPanel {
         }
         break;
       }
+
+      case 'requestSetupState':
+        await this.pushSetupState();
+        break;
+
+      case 'saveSetup': {
+        const mode = raw['mode'] as 'local' | 'remote';
+        const runMode = raw['runMode'] as 'native' | 'container';
+        const remoteUrl = ((raw['remoteUrl'] as string | undefined) ?? '').trim();
+        if (mode !== 'local' && mode !== 'remote') break;
+        if (runMode !== 'native' && runMode !== 'container') break;
+
+        const cfg = vscode.workspace.getConfiguration('canticaScores');
+        const prevMode = cfg.get<string>('studioMode') ?? 'local';
+        const prevRunMode = cfg.get<string>('studioRunMode') ?? 'container';
+        const wasDone = isSetupDone(this.context);
+
+        await cfg.update('studioMode', mode, vscode.ConfigurationTarget.Global);
+        await cfg.update('studioRunMode', runMode, vscode.ConfigurationTarget.Global);
+        if (mode === 'remote' && remoteUrl) {
+          await cfg.update('studioUrl', remoteUrl, vscode.ConfigurationTarget.Global);
+        }
+        await this.context.globalState.update(SETUP_DONE_KEY, true);
+        publishSetupContext(this.context);
+        await this.pushSetupState();
+
+        // (Re)start the local server on first-time setup or when the mode changed.
+        if (mode === 'local' && (!wasDone || prevMode !== 'local' || prevRunMode !== runMode)) {
+          void vscode.commands.executeCommand('canticaScores.restartLocalStudio');
+        }
+        break;
+      }
+
+      case 'saveProviderKey': {
+        const provider = raw['provider'] as ProviderKeyId;
+        const key = ((raw['key'] as string | undefined) ?? '').trim();
+        if (!(provider in PROVIDER_ENV_KEYS) || !key) break;
+        const keys = await loadProviderKeys(this.context.secrets);
+        keys[provider] = key;
+        await saveProviderKeys(this.context.secrets, keys);
+        void this.client.syncProviderKeys(keys);
+        await this.pushSetupState();
+        break;
+      }
+
+      case 'clearProviderKey': {
+        const provider = raw['provider'] as ProviderKeyId;
+        if (!(provider in PROVIDER_ENV_KEYS)) break;
+        const keys = await loadProviderKeys(this.context.secrets);
+        keys[provider] = '';
+        await saveProviderKeys(this.context.secrets, keys);
+        void this.client.syncProviderKeys(keys);
+        await this.pushSetupState();
+        break;
+      }
     }
+  }
+
+  /** Queue a modal to open — posts immediately when the webview is ready. */
+  requestOpenModal(kind: 'openSetup' | 'openProviderKeys'): void {
+    if (this._webviewReady) {
+      void this.post({ type: kind });
+    } else {
+      this._pendingOpenModal = kind;
+    }
+  }
+
+  /** Push current setup/provider-key state (presence only, never key material). */
+  async pushSetupState(): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration('canticaScores');
+    const keys = await loadProviderKeys(this.context.secrets);
+    const status = (id: ProviderKeyId): ProviderKeyStatus =>
+      process.env[PROVIDER_ENV_KEYS[id]]?.trim() ? 'env' : keys[id]?.trim() ? 'stored' : 'none';
+    const state: SetupState = {
+      mode: (cfg.get<string>('studioMode') ?? 'local') as 'local' | 'remote',
+      runMode: (cfg.get<string>('studioRunMode') ?? 'container') as 'native' | 'container',
+      remoteUrl: (cfg.get<string>('studioUrl') ?? '').trim(),
+      setupDone: isSetupDone(this.context),
+      keys: {
+        anthropicApiKey: status('anthropicApiKey'),
+        openaiApiKey: status('openaiApiKey'),
+        geminiApiKey: status('geminiApiKey'),
+        githubToken: status('githubToken'),
+      },
+    };
+    await this.post({ type: 'setupState', state });
   }
 
   async pushGraph(): Promise<void> {
@@ -440,6 +557,27 @@ export class ActorsPanel {
   async pushPrompts(): Promise<void> {
     const prompts = await this.client.fetchPrompts(this.settings.servers);
     await this.post({ type: 'updatePrompts', prompts });
+  }
+
+  /** Push resolved models for running Copilot actors (the backend outlives the webview). */
+  private async pushResolvedModels(names?: string[]): Promise<void> {
+    const summaries = await this.client.fetchActorsSummary();
+    for (const s of summaries) {
+      if (names && !names.includes(s.name)) continue;
+      if (s.provider === 'copilot' && s.model && s.model !== 'auto') {
+        await this.post({ type: 'actorModelResolved', name: s.name, model: s.model });
+      }
+    }
+  }
+
+  /** Restore running/resolved state after a webview (re)load. */
+  private async pushRunningState(): Promise<void> {
+    let runningNames: string[] = [];
+    try { runningNames = await this.client.listRunning(); } catch { return; }
+    for (const name of runningNames) {
+      await this.post({ type: 'actorStatus', name, running: true });
+    }
+    if (runningNames.length) await this.pushResolvedModels(runningNames);
   }
 
   async pushSettings(): Promise<void> {
@@ -568,22 +706,36 @@ export class ActorsPanel {
     }
   }
 
-  /** Drain the runtime's notification log and push to the webview. */
+  /** Drain the runtime's notification log and push to every open panel.
+
+      Drains are destructive on the backend and each panel polls on its own
+      timer — whichever panel drains first must re-broadcast to all panels,
+      otherwise notifications for actors shown in another songbook are lost. */
   private async pushNotifications(): Promise<void> {
     const notes = await this.client.drainNotifications();
+    const targets = new Set<ActorsPanel>(ActorsPanel._panels.values());
+    targets.add(this);
     const forwarded: Array<{ name: string; prompt: string; output: string }> = [];
     for (const note of notes) {
       if (note.type === 'actorModelResolved') {
-        void this.post({ type: 'actorModelResolved', name: note.name, model: note.model });
+        for (const p of targets) {
+          void p.post({ type: 'actorModelResolved', name: note.name, model: note.model });
+          // Fresh resolution — the start path deferred its Ready line for this.
+          void p.post({ type: 'actorOutput', name: note.name, output: `✓ Ready · copilot / ${note.model} (auto)` });
+        }
       } else {
         forwarded.push(note);
       }
     }
-    await this.pushForwarded(forwarded);
+    for (const p of targets) {
+      await p.pushForwarded(forwarded);
+    }
     // Also drain MCP tool call log and forward as mcpLog messages.
     const mcpEntries = await this.client.drainMcpLog();
     for (const entry of mcpEntries) {
-      void this.post({ type: 'mcpLog', entry });
+      for (const p of targets) {
+        void p.post({ type: 'mcpLog', entry });
+      }
     }
   }
 

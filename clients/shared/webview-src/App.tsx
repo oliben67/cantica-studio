@@ -27,6 +27,8 @@ import { EdgeMenu } from './components/EdgeMenu';
 import { PropertiesModal } from './components/PropertiesModal';
 import { ResourcesModal } from './components/ResourcesModal';
 import { ChatModal } from './components/ChatModal';
+import { SetupModal } from './components/SetupModal';
+import { ProviderKeysModal } from './components/ProviderKeysModal';
 import { LogPanel } from './components/LogPanel';
 import { useStore } from './store';
 import type { ActorEdgeDef, EdgeHandleInfo, HandleSide, IncomingMessage } from './types';
@@ -353,6 +355,15 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
           break;
         case 'studioMode':
           break; // handled by the Electron sidebar
+        case 'setupState':
+          store.setSetupState(msg.state);
+          break;
+        case 'openSetup':
+          store.openSetupModal();
+          break;
+        case 'openProviderKeys':
+          store.openProviderKeysModal();
+          break;
         default: {
           const _x: never = msg;
           void _x;
@@ -382,6 +393,8 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
       {store.propertiesModalActorId && <PropertiesModal />}
       {store.resourcesModalActorId && <ResourcesModal />}
       {store.chatModalActorId && <ChatModal />}
+      {store.setupModalOpen && <SetupModal />}
+      {store.providerKeysModalOpen && <ProviderKeysModal />}
       <ProviderMenu />
       <ActorMenu />
       <EdgeMenu />

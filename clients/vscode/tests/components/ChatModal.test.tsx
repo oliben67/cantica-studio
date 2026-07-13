@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ChatModal } from '../../webview-src/components/ChatModal';
 import { useStore } from '../../webview-src/store';
 import type { AIActorDef, ActorGraph } from '../../webview-src/types';
@@ -192,5 +192,55 @@ describe('ActivityModal send prompt', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(useStore.getState().actorOutputs.get('test-actor')).toContain('> Hello!');
+  });
+});
+
+// ── copilot auto: prompts locked while resolving ──────────────────────────────
+
+describe('ActivityModal resolving lockout', () => {
+  it('disables input and Send while a copilot auto model is unresolved', () => {
+    useStore.setState({
+      graph: graph([actor({ provider: 'copilot', model: 'auto' })]),
+      chatModalActorId: 'urn:x:a1',
+      runningActors: new Set(['test-actor']),
+      resolvedModels: {},
+    });
+    render(<ChatModal />);
+    expect(screen.getByPlaceholderText('Resolving model…')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  });
+
+  it('re-enables input and Send once the model resolves', () => {
+    useStore.setState({
+      graph: graph([actor({ provider: 'copilot', model: 'auto' })]),
+      chatModalActorId: 'urn:x:a1',
+      runningActors: new Set(['test-actor']),
+      resolvedModels: { 'test-actor': 'claude-sonnet-4.6' },
+    });
+    render(<ChatModal />);
+    const input = screen.getByRole('textbox');
+    expect(input).not.toBeDisabled();
+    fireEvent.change(input, { target: { value: 'Hi' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(useStore.getState().actorOutputs.get('test-actor')).toContain('> Hi');
+  });
+
+  it('unlocks the prompt and shows a warning when the resolve timeout fires', () => {
+    useStore.setState({
+      graph: graph([actor({ provider: 'copilot', model: 'auto' })]),
+      chatModalActorId: 'urn:x:a1',
+      runningActors: new Set(['test-actor']),
+      resolvedModels: {},
+      resolveTimedOut: {},
+    });
+    render(<ChatModal />);
+    expect(screen.getByRole('textbox')).toBeDisabled();
+
+    // The actor node's timer fires markResolveTimedOut on expiry.
+    act(() => { useStore.getState().markResolveTimedOut('test-actor'); });
+
+    expect(screen.getByRole('textbox')).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).not.toBeDisabled();
+    expect(screen.getByText(/Model resolution timed out/)).toBeInTheDocument();
   });
 });

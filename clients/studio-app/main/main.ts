@@ -7,9 +7,17 @@ import { StudioManager } from '../shared/studioManager.js';
 import type { StudioMode } from '../shared/studioManager.js';
 import { StudioClient, parseGraph, serializeGraph } from '../shared/studio-client.js';
 import { generateKeyPair, makeCachedAssertion, publicKeyFromPrivate } from '../shared/auth-core.js';
-import type { ToWebview, SongbookEntry, ActorGraph } from '../shared/types/index.js';
+import type { ToWebview, SongbookEntry, ActorGraph, ProviderKeyId, ProviderKeyStatus, SetupState } from '../shared/types/index.js';
 import { ElectronPlatform } from './platform.js';
 import { loadCredentials, saveCredentials } from './auth-store.js';
+import { loadProviderKeys, saveProviderKeys } from './key-store.js';
+
+const PROVIDER_ENV_KEYS: Record<ProviderKeyId, string> = {
+  anthropicApiKey: 'ANTHROPIC_API_KEY',
+  openaiApiKey: 'OPENAI_API_KEY',
+  geminiApiKey: 'GEMINI_API_KEY',
+  githubToken: 'GITHUB_TOKEN',
+};
 
 // ── Window management ─────────────────────────────────────────────────────────
 
@@ -81,6 +89,44 @@ function saveStudioMode(mode: StudioMode): void {
 
 let _studioMode: StudioMode = loadStudioMode();
 
+// ── Setup state (mode/remote-url/setup-done share studio-settings.json) ───────
+
+interface AppSettings {
+  studioMode?: string;
+  mode?: 'local' | 'remote';
+  remoteUrl?: string;
+  setupDone?: boolean;
+}
+
+function loadAppSettings(): AppSettings {
+  try { return JSON.parse(readFileSync(_settingsPath(), 'utf-8')) as AppSettings; } catch { return {}; }
+}
+
+function saveAppSettings(patch: Partial<AppSettings>): void {
+  writeFileSync(_settingsPath(), JSON.stringify({ ...loadAppSettings(), ...patch }, null, 2), 'utf-8');
+}
+
+/** Push setup/provider-key state (presence only — key material never leaves the main process). */
+function pushSetupState(): void {
+  const s = loadAppSettings();
+  const keys = loadProviderKeys(app);
+  const status = (id: ProviderKeyId): ProviderKeyStatus =>
+    process.env[PROVIDER_ENV_KEYS[id]]?.trim() ? 'env' : keys[id]?.trim() ? 'stored' : 'none';
+  const state: SetupState = {
+    mode: s.mode === 'remote' ? 'remote' : 'local',
+    runMode: _studioMode,
+    remoteUrl: s.remoteUrl ?? '',
+    setupDone: !!s.setupDone,
+    keys: {
+      anthropicApiKey: status('anthropicApiKey'),
+      openaiApiKey: status('openaiApiKey'),
+      geminiApiKey: status('geminiApiKey'),
+      githubToken: status('githubToken'),
+    },
+  };
+  send({ type: 'setupState', state });
+}
+
 // ── Songbook scanning ─────────────────────────────────────────────────────────
 
 const SONGBOOK_EXTS = new Set(['.json', '.jsonld', '.yaml', '.yml']);
@@ -147,6 +193,11 @@ async function _syncCredentials(): Promise<void> {
     await client.registerClientKey(creds.clientId, publicKeyFromPrivate(creds.privateKeyPem));
     getAuth = makeCachedAssertion(creds, studioBaseUrl);
     _registeredWithCurrent = true;
+    // Local mode: seed the server DB with stored provider keys so actors can
+    // authenticate even when the host env lacks the vars.
+    if (loadAppSettings().mode !== 'remote') {
+      void client.syncProviderKeys(loadProviderKeys(app));
+    }
   } catch {
     // API not ready yet; will retry on next healthy tick.
   }
@@ -208,10 +259,16 @@ function stopNotifPoll(): void {
 
 async function pushNotifications(): Promise<void> {
   const notes = await client.drainNotifications();
-  for (const fwd of notes) {
-    const promptLine = fwd.prompt.replace(/[\r\n]+/g, ' ').trim();
-    send({ type: 'actorOutput', name: fwd.name, output: `> ${promptLine}` });
-    send({ type: 'actorOutput', name: fwd.name, output: fwd.output });
+  for (const note of notes) {
+    if (note.type === 'actorModelResolved') {
+      send({ type: 'actorModelResolved', name: note.name, model: note.model });
+      // Fresh resolution — the start path deferred its Ready line for this.
+      send({ type: 'actorOutput', name: note.name, output: `Ready · copilot / ${note.model} (auto)` });
+      continue;
+    }
+    const promptLine = note.prompt.replace(/[\r\n]+/g, ' ').trim();
+    send({ type: 'actorOutput', name: note.name, output: `> ${promptLine}` });
+    send({ type: 'actorOutput', name: note.name, output: note.output });
   }
   const mcpEntries = await client.drainMcpLog();
   for (const entry of mcpEntries) {
@@ -219,19 +276,25 @@ async function pushNotifications(): Promise<void> {
   }
 }
 
-function pollResolvedModel(name: string): void {
-  const maxAttempts = 30;
-  let attempt = 0;
-  const tick = async (): Promise<void> => {
-    if (attempt++ >= maxAttempts) return;
-    const model = await client.fetchResolvedModel(name);
-    if (model) {
-      send({ type: 'actorModelResolved', name, model });
-    } else {
-      setTimeout(() => void tick(), 2000);
+/** Push resolved models for running Copilot actors (the backend outlives the renderer). */
+async function pushResolvedModels(names?: string[]): Promise<void> {
+  const summaries = await client.fetchActorsSummary();
+  for (const s of summaries) {
+    if (names && !names.includes(s.name)) continue;
+    if (s.provider === 'copilot' && s.model && s.model !== 'auto') {
+      send({ type: 'actorModelResolved', name: s.name, model: s.model });
     }
-  };
-  setTimeout(() => void tick(), 2000);
+  }
+}
+
+/** Restore running/resolved state after a renderer (re)load. */
+async function pushRunningState(): Promise<void> {
+  let runningNames: string[] = [];
+  try { runningNames = await client.listRunning(); } catch { return; }
+  for (const name of runningNames) {
+    send({ type: 'actorStatus', name, running: true });
+  }
+  if (runningNames.length) await pushResolvedModels(runningNames);
 }
 
 // ── Message handler ───────────────────────────────────────────────────────────
@@ -251,6 +314,12 @@ async function handleMessage(msg: unknown): Promise<void> {
       if (graph) send({ type: 'loadGraph', graph });
       const prompts = await client.fetchPrompts([]);
       send({ type: 'updatePrompts', prompts });
+      // The backend outlives the renderer — restore running state and resolved
+      // models for actors that were started before this renderer loaded.
+      void pushRunningState();
+      pushSetupState();
+      // First run: open the setup form instead of assuming defaults.
+      if (!loadAppSettings().setupDone) send({ type: 'openSetup' });
       // Kick off provider models fetch (may take a moment)
       void (async () => {
         let models = await client.fetchProviderModels(true);
@@ -379,15 +448,13 @@ async function handleMessage(msg: unknown): Promise<void> {
         const tag = def.actorType === 'ai' ? `${def.provider} / ${def.model}` : def.actorType;
         send({ type: 'actorOutput', name, output: `Initialising ${tag}…` });
         try {
-          const { initialOutput, resolvedModel } = await client.startActor(def);
+          const { initialOutput } = await client.startActor(def);
           if (initialOutput) send({ type: 'actorOutput', name, output: initialOutput });
-          send({ type: 'actorOutput', name, output: `Ready · ${tag}` });
+          // Copilot 'auto' actors are not ready until the model probe finishes —
+          // the Ready line is sent when the actorModelResolved notification arrives.
+          const resolving = def.actorType === 'ai' && def.provider === 'copilot' && def.model === 'auto';
+          send({ type: 'actorOutput', name, output: resolving ? 'Resolving model…' : `Ready · ${tag}` });
           send({ type: 'actorStatus', name, running: true });
-          if (resolvedModel) {
-            send({ type: 'actorModelResolved', name, model: resolvedModel });
-          } else if (def.actorType === 'ai' && def.model === 'auto') {
-            pollResolvedModel(name);
-          }
         } catch (err) {
           send({ type: 'actorOutput', name, output: `Warning: Start failed: ${String(err)}` });
           break;
@@ -395,20 +462,15 @@ async function handleMessage(msg: unknown): Promise<void> {
       } else if (isStartOnly) {
         send({ type: 'actorOutput', name, output: `· ${name} is already running` });
         send({ type: 'actorStatus', name, running: true });
-        // For copilot/auto actors, poll for the resolved model (may have been lost on reconnect)
-        const graph2 = await client.loadGraph();
-        const def2 = graph2?.actors.find((a) => a.name === name);
-        if (def2?.actorType === 'ai' && def2?.model === 'auto') {
-          pollResolvedModel(name);
-        }
+        // The resolved-model notification was consumed long ago — re-fetch it.
+        await pushResolvedModels([name]);
       }
 
       if (isStartOnly) break;
 
       try {
-        const { output, resolvedModel } = await client.instructActor(name, instruction);
+        const { output } = await client.instructActor(name, instruction);
         send({ type: 'actorOutput', name, output });
-        if (resolvedModel) send({ type: 'actorModelResolved', name, model: resolvedModel });
         await pushNotifications();
       } catch (err) {
         send({ type: 'actorOutput', name, output: `Warning: Prompt failed: ${String(err)}` });
@@ -518,10 +580,12 @@ async function handleMessage(msg: unknown): Promise<void> {
       if (!graph) break;
       let runningNames: string[] = [];
       try { runningNames = await client.listRunning(); } catch { /* ignore */ }
+      const alreadyRunning: string[] = [];
       for (const actor of graph.actors) {
         if (runningNames.includes(actor.name)) {
           send({ type: 'actorOutput', name: actor.name, output: `· ${actor.name} already running` });
           send({ type: 'actorStatus', name: actor.name, running: true });
+          alreadyRunning.push(actor.name);
           continue;
         }
         const tag = actor.actorType === 'ai'
@@ -529,19 +593,16 @@ async function handleMessage(msg: unknown): Promise<void> {
           : actor.actorType;
         send({ type: 'actorOutput', name: actor.name, output: `Initialising ${tag}…` });
         try {
-          const { initialOutput, resolvedModel } = await client.startActor(actor);
+          const { initialOutput } = await client.startActor(actor);
           if (initialOutput) send({ type: 'actorOutput', name: actor.name, output: initialOutput });
-          send({ type: 'actorOutput', name: actor.name, output: `Ready · ${tag}` });
+          const resolving = actor.actorType === 'ai' && actor.provider === 'copilot' && actor.model === 'auto';
+          send({ type: 'actorOutput', name: actor.name, output: resolving ? 'Resolving model…' : `Ready · ${tag}` });
           send({ type: 'actorStatus', name: actor.name, running: true });
-          if (resolvedModel) {
-            send({ type: 'actorModelResolved', name: actor.name, model: resolvedModel });
-          } else if (actor.actorType === 'ai' && actor.model === 'auto') {
-            pollResolvedModel(actor.name);
-          }
         } catch (err) {
           send({ type: 'actorOutput', name: actor.name, output: `Warning: Start failed: ${String(err)}` });
         }
       }
+      if (alreadyRunning.length) await pushResolvedModels(alreadyRunning);
       break;
     }
 
@@ -563,6 +624,65 @@ async function handleMessage(msg: unknown): Promise<void> {
       break;
     }
 
+    case 'requestSetupState':
+      pushSetupState();
+      break;
+
+    case 'saveSetup': {
+      const mode = raw['mode'] === 'remote' ? 'remote' : 'local';
+      const runMode = raw['runMode'] === 'native' ? 'native' : 'container';
+      const remoteUrl = ((raw['remoteUrl'] as string | undefined) ?? '').trim();
+      const prev = loadAppSettings();
+      const prevMode = prev.mode === 'remote' ? 'remote' : 'local';
+      const prevRunMode = _studioMode;
+
+      saveAppSettings({ mode, remoteUrl, setupDone: true });
+      _studioMode = runMode;
+      saveStudioMode(runMode);
+      send({ type: 'studioMode', mode: runMode });
+      pushSetupState();
+
+      if (mode === 'remote' && remoteUrl) {
+        studioBaseUrl = remoteUrl;
+        client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+        _registeredWithCurrent = false;
+      } else if (mode === 'local' && (prevMode !== 'local' || prevRunMode !== runMode || !prev.setupDone)) {
+        void (async () => {
+          if (prevMode === 'local') await studio.stop(prevRunMode);
+          const url = await studio.ensureRunning(runMode, loadProviderKeys(app));
+          if (url) {
+            studioBaseUrl = url;
+            client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+            _registeredWithCurrent = false;
+          }
+        })();
+      }
+      break;
+    }
+
+    case 'saveProviderKey': {
+      const provider = raw['provider'] as ProviderKeyId;
+      const key = ((raw['key'] as string | undefined) ?? '').trim();
+      if (!(provider in PROVIDER_ENV_KEYS) || !key) break;
+      const keys = loadProviderKeys(app);
+      keys[provider] = key;
+      saveProviderKeys(app, keys);
+      void client.syncProviderKeys(keys);
+      pushSetupState();
+      break;
+    }
+
+    case 'clearProviderKey': {
+      const provider = raw['provider'] as ProviderKeyId;
+      if (!(provider in PROVIDER_ENV_KEYS)) break;
+      const keys = loadProviderKeys(app);
+      keys[provider] = '';
+      saveProviderKeys(app, keys);
+      void client.syncProviderKeys(keys);
+      pushSetupState();
+      break;
+    }
+
     default:
       platform.log(`[studio] Unhandled message type: ${String(raw['type'])}`);
   }
@@ -579,18 +699,25 @@ app.whenReady().then(() => {
   startHealthPoll();
   startNotifPoll();
 
-  // Auto-start local studio if not already running
-  void studio.isRunning().then((running) => {
-    if (!running) {
-      void studio.ensureRunning().then((url) => {
-        if (url) {
-          studioBaseUrl = url;
-          client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
-          _registeredWithCurrent = false;
-        }
-      });
-    }
-  });
+  const appSettings = loadAppSettings();
+  if (appSettings.mode === 'remote' && appSettings.remoteUrl) {
+    // Remote mode: point the client at the configured server, manage nothing.
+    studioBaseUrl = appSettings.remoteUrl;
+    client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+  } else {
+    // Auto-start local studio if not already running
+    void studio.isRunning().then((running) => {
+      if (!running) {
+        void studio.ensureRunning(_studioMode, loadProviderKeys(app)).then((url) => {
+          if (url) {
+            studioBaseUrl = url;
+            client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+            _registeredWithCurrent = false;
+          }
+        });
+      }
+    });
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

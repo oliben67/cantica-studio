@@ -2,6 +2,7 @@ import React, { memo, useEffect, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { AIActorDef, EdgeHandleInfo, HandleSide } from '../types';
 import { useStore } from '../store';
+import { useResolveTimeout } from '../useResolveTimeout';
 import { vscode } from '../vscode';
 import { isModelAvailable, PROVIDERS } from './ProviderMenu';
 
@@ -103,7 +104,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
     graph, runningActors, pausedActors, actorOutputs, selectActor, updateActor,
     openEventsModal, openCronsModal, openActorMenu, openProviderMenu,
     actorChatVisible, toggleChat, openChatModal, dynamicModels, resolvedModels,
-    studioHealth,
+    resolveTimedOut, studioHealth,
   } = useStore();
 
   const serverUp = studioHealth === 'healthy';
@@ -115,6 +116,11 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   const resolvedModel = isCopilotAuto ? resolvedModels[actor.name] : undefined;
   // pending = running + auto + not yet resolved in this session
   const isPending = isCopilotAuto && running && !resolvedModel;
+  // Prompt lockout unlocks after a timeout so a failed probe can't block forever.
+  // The node owns the single timer per actor; the store flag posts the chat
+  // warning once and keeps the node and the chat modal unlocking together.
+  const promptLocked = isPending && !resolveTimedOut[actor.name];
+  useResolveTimeout(isPending, () => useStore.getState().markResolveTimedOut(actor.name));
   const displayModel = isCopilotAuto
     ? (resolvedModel ? `${resolvedModel} (auto)` : (running ? 'resolving' : 'auto'))
     : actor.model;
@@ -124,7 +130,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   const outputLines = output ? output.split('\n').filter(l => l.trim()) : [];
   const providerInfo = PROVIDERS[actor.provider];
   const color = providerInfo?.color ?? (isCode ? '#0ea5e9' : '#6b7280');
-  const typeLabel = isCode ? actor.actorType!.toUpperCase() : (providerInfo?.label ?? actor.provider);
+  const typeLabel = isCode ? actor.actorType.toUpperCase() : (providerInfo?.label ?? actor.provider);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (!editing) setNameVal(actor.name); }, [actor.name, editing]);
@@ -182,7 +188,7 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
   function sendPrompt(e: React.MouseEvent) {
     e.stopPropagation();
     const text = promptText.trim();
-    if (!text || !running) return;
+    if (!text || !running || promptLocked) return;
     useStore.getState().appendOutput(actor.name, `> ${text}`);
     vscode.postMessage({ type: 'runActor', name: actor.name, instruction: text });
     setPromptText('');
@@ -364,9 +370,9 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
                 <input
                   ref={promptRef}
                   className="cs-actor-prompt-input"
-                  placeholder="Send a prompt…"
+                  placeholder={promptLocked ? 'Resolving model…' : 'Send a prompt…'}
                   value={promptText}
-                  disabled={paused}
+                  disabled={paused || promptLocked}
                   onChange={e => setPromptText(e.target.value)}
                   onKeyDown={e => {
                     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); sendPrompt(e as unknown as React.MouseEvent); }
@@ -374,7 +380,12 @@ export const ActorNode = memo(function ActorNode({ data, selected }: NodeProps) 
                   }}
                   onClick={e => e.stopPropagation()}
                 />
-                <button className="cs-actor-btn cs-actor-btn--prompt" onClick={sendPrompt} disabled={paused} title="Send prompt">Prompt</button>
+                <button
+                  className="cs-actor-btn cs-actor-btn--prompt"
+                  onClick={sendPrompt}
+                  disabled={paused || promptLocked}
+                  title={promptLocked ? 'Model is resolving — prompts are disabled until it is ready' : 'Send prompt'}
+                >Prompt</button>
                 {paused
                   ? <button className="cs-actor-btn cs-actor-btn--pause" onClick={handleResume} title="Resume — flush queued prompts">▶</button>
                   : <button className="cs-actor-btn cs-actor-btn--pause" onClick={handlePause} title="Pause — queue incoming prompts">⏸</button>

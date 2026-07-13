@@ -1459,3 +1459,8 @@ body {
 }
 .cs-open-tab:hover .cs-open-tab-close { opacity: 1; }
 .cs-open-tab-close:hover { color: var(--cs-text); }
+
+/* ── Provider key status badges (ProviderKeysModal) ─────────────────────────── */
+.cs-key-status--env    { color: var(--cs-accent, #4ec9b0); font-style: normal; }
+.cs-key-status--stored { color: var(--cs-text); font-style: normal; }
+.cs-key-status--none   { color: var(--cs-text-muted); }

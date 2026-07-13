@@ -130,7 +130,7 @@ export function ProviderMenu() {
   // const currentProvider = actor?.provider ?? '';
   const isRunning = actor ? runningActors.has(actor.name) : false;
 
-  const providers = resolveProviders({}, dynamicModels);
+  const providers = resolveProviders(settings.providerModels ?? {}, dynamicModels);
 
   function select(provider: string, model: string) {
     if (isRunning) return;

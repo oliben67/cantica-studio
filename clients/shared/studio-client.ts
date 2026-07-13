@@ -324,7 +324,7 @@ export class StudioClient {
       throw err;
     }
     const d = (await r.json()) as Record<string, string>;
-    return { locked: true, path: d['path'], clientId: d['client_id'], clientHost: d['client_host'], clientLabel: d['client_label'], openedAt: d['opened_at'] };
+    return { locked: true, path: d['path'] ?? '', clientId: d['client_id'] ?? '', clientHost: d['client_host'] ?? '', clientLabel: d['client_label'] ?? '', openedAt: d['opened_at'] ?? '' };
   }
 
   /** Release a previously claimed graph file lock. No-op if not locked. */
@@ -346,7 +346,7 @@ export class StudioClient {
       const r = await this._fetch('/v1/graph/lock');
       if (!r.ok) return [];
       const items = (await r.json()) as Array<Record<string, string>>;
-      return items.map(d => ({ path: d['path'], clientId: d['client_id'], clientHost: d['client_host'], clientLabel: d['client_label'], openedAt: d['opened_at'] }));
+      return items.map(d => ({ path: d['path'] ?? '', clientId: d['client_id'] ?? '', clientHost: d['client_host'] ?? '', clientLabel: d['client_label'] ?? '', openedAt: d['opened_at'] ?? '' }));
     } catch {
       return [];
     }

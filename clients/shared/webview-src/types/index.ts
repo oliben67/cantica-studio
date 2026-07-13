@@ -96,6 +96,25 @@ export interface ExtensionSettings {
   canticaHome: string;
   studioPort: number;
   autoStartStudio: boolean;
+  /** Per-provider model allowlists: missing/undefined → default list,
+   *  null → open (default list shown), [] → provider hidden, [names] → only these. */
+  providerModels?: Record<string, string[] | null>;
+}
+
+// ── Setup & provider keys ─────────────────────────────────────────────────────
+
+export type ProviderKeyId = 'anthropicApiKey' | 'openaiApiKey' | 'geminiApiKey' | 'githubToken';
+
+/** Where a provider key currently comes from. Key material itself never
+ *  crosses into the webview — only this presence status. */
+export type ProviderKeyStatus = 'env' | 'stored' | 'none';
+
+export interface SetupState {
+  mode: 'local' | 'remote';
+  runMode: 'native' | 'container';
+  remoteUrl: string;
+  setupDone: boolean;
+  keys: Record<ProviderKeyId, ProviderKeyStatus>;
 }
 
 // ── API call log ──────────────────────────────────────────────────────────────
@@ -135,7 +154,10 @@ export type IncomingMessage =
   | { type: 'studioStatus'; health: 'healthy' | 'starting' | 'down'; url: string; version?: string; uptimeSeconds?: number; workspace?: string; containerized?: boolean }
   | { type: 'updateSongbooks'; entries: unknown[]; activeFile: string | null; openFiles?: string[] }
   | { type: 'activeSongbookChanged'; path: string | null }
-  | { type: 'studioMode'; mode: 'native' | 'container' };
+  | { type: 'studioMode'; mode: 'native' | 'container' }
+  | { type: 'setupState'; state: SetupState }
+  | { type: 'openSetup' }
+  | { type: 'openProviderKeys' };
 
 /** Messages sent FROM the webview TO the extension host. */
 export type OutgoingMessage =
@@ -157,7 +179,11 @@ export type OutgoingMessage =
   | { type: 'stopSongbook' }
   | { type: 'openSongbook'; uri?: string; content?: unknown }
   | { type: 'switchSongbook'; path: string }
-  | { type: 'closeSongbook'; path: string };
+  | { type: 'closeSongbook'; path: string }
+  | { type: 'requestSetupState' }
+  | { type: 'saveSetup'; mode: 'local' | 'remote'; runMode: 'native' | 'container'; remoteUrl?: string }
+  | { type: 'saveProviderKey'; provider: ProviderKeyId; key: string }
+  | { type: 'clearProviderKey'; provider: ProviderKeyId };
 
 /** A single entry drained from the server's runtime notification log. */
 export type Notification =

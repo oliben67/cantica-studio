@@ -11,37 +11,39 @@ export function EdgeMenu() {
 
   if (!edgeMenuState) return null;
   const { edgeId, x, y } = edgeMenuState;
-  const edge = graph.edges.find(e => e.id === edgeId);
-  if (!edge) return null;
+  const found = graph.edges.find(e => e.id === edgeId);
+  if (!found) return null;
+  // Non-nullable alias — closures below capture it without assertions.
+  const edge = found;
   const allActors = graph.actors;
 
   function run(fn: () => void) { fn(); closeEdgeMenu(); }
 
   function handleEdit() {
     run(() => {
-      if (edge!.kind === 'event') openEventsModal(edge!.from, edge!.label);
-      else if (edge!.kind === 'cron') openCronsModal(edge!.from, edge!.label);
+      if (edge.kind === 'event') openEventsModal(edge.from, edge.label);
+      else if (edge.kind === 'cron') openCronsModal(edge.from, edge.label);
     });
   }
 
   function handleDelete() {
     run(() => {
-      const actor = allActors.find(a => a.id === edge!.from);
+      const actor = allActors.find(a => a.id === edge.from);
       if (!actor) return;
-      if (edge!.kind === 'event') {
+      if (edge.kind === 'event') {
         // Remove the first event whose name matches the edge label
         let removed = false;
         const newEvents = actor.promptEvents.filter(e => {
-          if (!removed && e.name === edge!.label) { removed = true; return false; }
+          if (!removed && e.name === edge.label) { removed = true; return false; }
           return true;
         });
         const updated = { ...actor, promptEvents: newEvents };
         updateActor(actor.id, { promptEvents: newEvents });
         replaceActorEdges(actor.id, computeActorEdges(updated, allActors));
-      } else if (edge!.kind === 'cron') {
+      } else if (edge.kind === 'cron') {
         let removed = false;
         const newCrons = actor.cronJobs.filter(c => {
-          if (!removed && c.schedule === edge!.label) { removed = true; return false; }
+          if (!removed && c.schedule === edge.label) { removed = true; return false; }
           return true;
         });
         const updated = { ...actor, cronJobs: newCrons };

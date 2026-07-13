@@ -107,6 +107,9 @@ export interface ExtensionSettings {
   studioBaseUrl: string;
   studioPort: number;
   autoStartStudio: boolean;
+  /** Per-provider model allowlists: missing/undefined → default list,
+   *  null → open (default list shown), [] → provider hidden, [names] → only these. */
+  providerModels?: Record<string, string[] | null>;
 }
 
 // ── API call log ──────────────────────────────────────────────────────────────
@@ -127,6 +130,23 @@ export interface McpLogEntry {
   args: Record<string, string>;
 }
 
+/** One row of GET /v1/runtime/actors/summary. */
+export interface ActorSummary {
+  name: string;
+  urn: string | null;
+  actor_type: string;
+  provider: string | null;
+  model: string | null;
+  songbook_file: string;
+  started_at: string | null;
+  state: string;
+}
+
+/** One entry drained from GET /v1/runtime/notifications. */
+export type Notification =
+  | { type: 'actorModelResolved'; name: string; model: string; prompt?: undefined; output?: undefined }
+  | { type?: undefined; name: string; prompt: string; output: string };
+
 // ── Songbook tree (for Electron primary sidebar) ──────────────────────────────
 
 export interface SongbookFileEntry {
@@ -143,6 +163,22 @@ export interface SongbookFolderEntry {
 }
 
 export type SongbookEntry = SongbookFileEntry | SongbookFolderEntry;
+
+// ── Setup & provider keys ─────────────────────────────────────────────────────
+
+export type ProviderKeyId = 'anthropicApiKey' | 'openaiApiKey' | 'geminiApiKey' | 'githubToken';
+
+/** Where a provider key currently comes from. Key material itself never
+ *  crosses into the webview — only this presence status. */
+export type ProviderKeyStatus = 'env' | 'stored' | 'none';
+
+export interface SetupState {
+  mode: 'local' | 'remote';
+  runMode: 'native' | 'container';
+  remoteUrl: string;
+  setupDone: boolean;
+  keys: Record<ProviderKeyId, ProviderKeyStatus>;
+}
 
 // ── Webview message protocol ──────────────────────────────────────────────────
 
@@ -165,7 +201,10 @@ export type ToWebview =
   | { type: 'updateSongbooks'; entries: SongbookEntry[]; activeFile: string | null; openFiles: string[] }
   | { type: 'activeSongbookChanged'; path: string | null }
   | { type: 'studioStatus'; health: 'healthy' | 'starting' | 'down'; url: string; version?: string; uptimeSeconds?: number; workspace?: string; containerized?: boolean }
-  | { type: 'studioMode'; mode: 'native' | 'container' };
+  | { type: 'studioMode'; mode: 'native' | 'container' }
+  | { type: 'setupState'; state: SetupState }
+  | { type: 'openSetup' }
+  | { type: 'openProviderKeys' };
 
 /** Messages sent FROM the webview TO the extension host. */
 export type FromWebview =
@@ -188,7 +227,11 @@ export type FromWebview =
   | { type: 'switchSongbook'; path: string }
   | { type: 'closeSongbook'; path: string }
   | { type: 'refreshSongbooks' }
-  | { type: 'setStudioMode'; mode: 'native' | 'container' };
+  | { type: 'setStudioMode'; mode: 'native' | 'container' }
+  | { type: 'requestSetupState' }
+  | { type: 'saveSetup'; mode: 'local' | 'remote'; runMode: 'native' | 'container'; remoteUrl?: string }
+  | { type: 'saveProviderKey'; provider: ProviderKeyId; key: string }
+  | { type: 'clearProviderKey'; provider: ProviderKeyId };
 
 // Legacy alias so agents-panel.ts type annotation still resolves
 export type WebviewMessage = ToWebview;

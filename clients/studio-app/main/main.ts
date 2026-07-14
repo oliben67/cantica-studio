@@ -60,6 +60,7 @@ const studio = new StudioManager(platform);
 let getAuth: (() => string | null) | undefined;
 let studioBaseUrl = StudioManager.studioUrl(platform);
 let client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+client.onWarning = (text) => send({ type: 'serverWarning', text });
 
 // ── Messaging helpers ─────────────────────────────────────────────────────────
 
@@ -285,6 +286,26 @@ async function pushResolvedModels(names?: string[]): Promise<void> {
       send({ type: 'actorModelResolved', name: s.name, model: s.model });
     }
   }
+}
+
+/** Push the users/roles/mappings snapshot backing the admin screens. */
+async function pushAdminData(): Promise<void> {
+  const [users, roles, mappings] = await Promise.all([
+    client.listUsers(),
+    client.listRoleNames(),
+    client.listDirectoryMappings(),
+  ]);
+  send({ type: 'adminData', data: { users, roles, mappings } });
+}
+
+/** Run an admin mutation, surface failures, refresh the admin snapshot. */
+async function adminAction(fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    send({ type: 'error', message: String(err) });
+  }
+  await pushAdminData();
 }
 
 /** Restore running/resolved state after a renderer (re)load. */
@@ -550,6 +571,7 @@ async function handleMessage(msg: unknown): Promise<void> {
       if (url) {
         studioBaseUrl = url;
         client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+      client.onWarning = (text) => send({ type: 'serverWarning', text });
         _registeredWithCurrent = false;
         // Refresh provider models after studio comes up.
         void client.fetchProviderModels(true).then((models) => {
@@ -645,6 +667,7 @@ async function handleMessage(msg: unknown): Promise<void> {
       if (mode === 'remote' && remoteUrl) {
         studioBaseUrl = remoteUrl;
         client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+      client.onWarning = (text) => send({ type: 'serverWarning', text });
         _registeredWithCurrent = false;
       } else if (mode === 'local' && (prevMode !== 'local' || prevRunMode !== runMode || !prev.setupDone)) {
         void (async () => {
@@ -653,6 +676,7 @@ async function handleMessage(msg: unknown): Promise<void> {
           if (url) {
             studioBaseUrl = url;
             client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+      client.onWarning = (text) => send({ type: 'serverWarning', text });
             _registeredWithCurrent = false;
           }
         })();
@@ -683,6 +707,34 @@ async function handleMessage(msg: unknown): Promise<void> {
       break;
     }
 
+    case 'requestAdminData':
+      await pushAdminData();
+      break;
+
+    case 'activateUser':
+      await adminAction(() => client.activateUser(raw['userId'] as string));
+      break;
+
+    case 'addUserFlag':
+      await adminAction(() => client.addUserFlag(
+        raw['userId'] as string, raw['flag'] as string, (raw['comment'] as string | undefined) ?? '',
+      ));
+      break;
+
+    case 'removeUserFlag':
+      await adminAction(() => client.removeUserFlag(raw['userId'] as string, raw['flagId'] as string));
+      break;
+
+    case 'addDirectoryMapping':
+      await adminAction(() => client.addDirectoryMapping(
+        raw['externalGroup'] as string, raw['roleName'] as string,
+      ));
+      break;
+
+    case 'removeDirectoryMapping':
+      await adminAction(() => client.removeDirectoryMapping(raw['mappingId'] as string));
+      break;
+
     default:
       platform.log(`[studio] Unhandled message type: ${String(raw['type'])}`);
   }
@@ -704,6 +756,7 @@ app.whenReady().then(() => {
     // Remote mode: point the client at the configured server, manage nothing.
     studioBaseUrl = appSettings.remoteUrl;
     client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+      client.onWarning = (text) => send({ type: 'serverWarning', text });
   } else {
     // Auto-start local studio if not already running
     void studio.isRunning().then((running) => {
@@ -712,6 +765,7 @@ app.whenReady().then(() => {
           if (url) {
             studioBaseUrl = url;
             client = new StudioClient(studioBaseUrl, () => getAuth?.() ?? null);
+      client.onWarning = (text) => send({ type: 'serverWarning', text });
             _registeredWithCurrent = false;
           }
         });

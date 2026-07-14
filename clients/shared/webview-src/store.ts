@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings, LogEntry, McpLogEntry, SetupState } from './types';
+import type { AdminData, AIActorDef, ActorEdgeDef, ActorGraph, CanticaPrompt, ExtensionSettings, LogEntry, McpLogEntry, SetupState } from './types';
 
 let _idSeq = 0;
 
@@ -172,6 +172,18 @@ interface GraphState {
   providerKeysModalOpen: boolean;
   openProviderKeysModal: () => void;
   closeProviderKeysModal: () => void;
+
+  // Admin screens (remote mode): user activation/flags, directory mappings
+  adminData: AdminData | null;
+  setAdminData: (data: AdminData) => void;
+  adminUsersModalOpen: boolean;
+  openAdminUsersModal: () => void;
+  closeAdminUsersModal: () => void;
+  directoryMappingsModalOpen: boolean;
+  openDirectoryMappingsModal: () => void;
+  closeDirectoryMappingsModal: () => void;
+  serverWarning: string | null;
+  setServerWarning: (text: string | null) => void;
 }
 
 export const useStore = create<GraphState>((set, get) => ({
@@ -442,5 +454,16 @@ export const useStore = create<GraphState>((set, get) => ({
   providerKeysModalOpen: false,
   openProviderKeysModal: () => set({ providerKeysModalOpen: true }),
   closeProviderKeysModal: () => set({ providerKeysModalOpen: false }),
+
+  adminData: null,
+  setAdminData: (data) => set({ adminData: data }),
+  adminUsersModalOpen: false,
+  openAdminUsersModal: () => set({ adminUsersModalOpen: true }),
+  closeAdminUsersModal: () => set({ adminUsersModalOpen: false }),
+  directoryMappingsModalOpen: false,
+  openDirectoryMappingsModal: () => set({ directoryMappingsModalOpen: true }),
+  closeDirectoryMappingsModal: () => set({ directoryMappingsModalOpen: false }),
+  serverWarning: null,
+  setServerWarning: (text) => set({ serverWarning: text }),
 
 }));

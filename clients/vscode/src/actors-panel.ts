@@ -513,7 +513,58 @@ export class ActorsPanel {
         await this.pushSetupState();
         break;
       }
+
+      case 'requestAdminData':
+        await this.pushAdminData();
+        break;
+
+      case 'activateUser':
+        await this.adminAction(() => this.client.activateUser(raw['userId'] as string));
+        break;
+
+      case 'addUserFlag':
+        await this.adminAction(() => this.client.addUserFlag(
+          raw['userId'] as string, raw['flag'] as string, (raw['comment'] as string | undefined) ?? '',
+        ));
+        break;
+
+      case 'removeUserFlag':
+        await this.adminAction(() => this.client.removeUserFlag(
+          raw['userId'] as string, raw['flagId'] as string,
+        ));
+        break;
+
+      case 'addDirectoryMapping':
+        await this.adminAction(() => this.client.addDirectoryMapping(
+          raw['externalGroup'] as string, raw['roleName'] as string,
+        ));
+        break;
+
+      case 'removeDirectoryMapping':
+        await this.adminAction(() => this.client.removeDirectoryMapping(raw['mappingId'] as string));
+        break;
     }
+  }
+
+  /** Run an admin mutation, surface failures, refresh the admin snapshot. */
+  private async adminAction(fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err) {
+      await this.post({ type: 'error', message: String(err) });
+      void vscode.window.showErrorMessage(`Admin action failed: ${String(err)}`);
+    }
+    await this.pushAdminData();
+  }
+
+  /** Push the users/roles/mappings snapshot backing the admin screens. */
+  private async pushAdminData(): Promise<void> {
+    const [users, roles, mappings] = await Promise.all([
+      this.client.listUsers(),
+      this.client.listRoleNames(),
+      this.client.listDirectoryMappings(),
+    ]);
+    await this.post({ type: 'adminData', data: { users, roles, mappings } });
   }
 
   /** Queue a modal to open — posts immediately when the webview is ready. */
@@ -648,6 +699,7 @@ export class ActorsPanel {
 
   private _attachLogCallback(): void {
     this.client.onLog = (entry) => { void this.post({ type: 'apiLog', entry }); };
+    this.client.onWarning = (text) => { void this.post({ type: 'serverWarning', text }); };
   }
 
   updateSettings(settings: ExtensionSettings, client: StudioClient): void {

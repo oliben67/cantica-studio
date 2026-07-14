@@ -1464,3 +1464,15 @@ body {
 .cs-key-status--env    { color: var(--cs-accent, #4ec9b0); font-style: normal; }
 .cs-key-status--stored { color: var(--cs-text); font-style: normal; }
 .cs-key-status--none   { color: var(--cs-text-muted); }
+
+/* ── Admin screens (AdminUsersModal / DirectoryMappingsModal) ────────────────── */
+.cs-admin-flag {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 10px; padding: 1px 6px; border-radius: 8px;
+  border: 1px solid var(--cs-border, #444);
+}
+.cs-admin-flag--ok      { color: var(--cs-text-muted); }
+.cs-admin-flag--newbie  { color: #2563eb; border-color: #2563eb; }
+.cs-admin-flag--warning { color: #d97706; border-color: #d97706; }
+.cs-admin-flag--blocked { color: #dc2626; border-color: #dc2626; }
+.cs-toolbar-warning { color: #d97706; font-size: 13px; cursor: help; }

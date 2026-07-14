@@ -164,6 +164,43 @@ export interface SongbookFolderEntry {
 
 export type SongbookEntry = SongbookFileEntry | SongbookFolderEntry;
 
+
+// ── Admin (remote mode): users, flags, directory mappings ─────────────────────
+
+export interface AdminUserFlag {
+  id: string;
+  flag: string;
+  comment: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  is_active: boolean;
+  e_user_id: string | null;
+  roles: string[];
+  flags: AdminUserFlag[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminMapping {
+  id: string;
+  external_group: string;
+  role: string;
+  created_at: string;
+}
+
+export interface AdminData {
+  users: AdminUser[];
+  roles: string[];
+  mappings: AdminMapping[];
+}
+
 // ── Setup & provider keys ─────────────────────────────────────────────────────
 
 export type ProviderKeyId = 'anthropicApiKey' | 'openaiApiKey' | 'geminiApiKey' | 'githubToken';
@@ -204,7 +241,9 @@ export type ToWebview =
   | { type: 'studioMode'; mode: 'native' | 'container' }
   | { type: 'setupState'; state: SetupState }
   | { type: 'openSetup' }
-  | { type: 'openProviderKeys' };
+  | { type: 'openProviderKeys' }
+  | { type: 'adminData'; data: AdminData }
+  | { type: 'serverWarning'; text: string };
 
 /** Messages sent FROM the webview TO the extension host. */
 export type FromWebview =
@@ -231,7 +270,13 @@ export type FromWebview =
   | { type: 'requestSetupState' }
   | { type: 'saveSetup'; mode: 'local' | 'remote'; runMode: 'native' | 'container'; remoteUrl?: string }
   | { type: 'saveProviderKey'; provider: ProviderKeyId; key: string }
-  | { type: 'clearProviderKey'; provider: ProviderKeyId };
+  | { type: 'clearProviderKey'; provider: ProviderKeyId }
+  | { type: 'requestAdminData' }
+  | { type: 'activateUser'; userId: string }
+  | { type: 'addUserFlag'; userId: string; flag: string; comment?: string }
+  | { type: 'removeUserFlag'; userId: string; flagId: string }
+  | { type: 'addDirectoryMapping'; externalGroup: string; roleName: string }
+  | { type: 'removeDirectoryMapping'; mappingId: string };
 
 // Legacy alias so agents-panel.ts type annotation still resolves
 export type WebviewMessage = ToWebview;

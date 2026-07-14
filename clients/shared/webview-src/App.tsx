@@ -29,6 +29,8 @@ import { ResourcesModal } from './components/ResourcesModal';
 import { ChatModal } from './components/ChatModal';
 import { SetupModal } from './components/SetupModal';
 import { ProviderKeysModal } from './components/ProviderKeysModal';
+import { AdminUsersModal } from './components/AdminUsersModal';
+import { DirectoryMappingsModal } from './components/DirectoryMappingsModal';
 import { LogPanel } from './components/LogPanel';
 import { useStore } from './store';
 import type { ActorEdgeDef, EdgeHandleInfo, HandleSide, IncomingMessage } from './types';
@@ -364,6 +366,12 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
         case 'openProviderKeys':
           store.openProviderKeysModal();
           break;
+        case 'adminData':
+          store.setAdminData(msg.data);
+          break;
+        case 'serverWarning':
+          store.setServerWarning(msg.text || null);
+          break;
         default: {
           const _x: never = msg;
           void _x;
@@ -395,6 +403,8 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
       {store.chatModalActorId && <ChatModal />}
       {store.setupModalOpen && <SetupModal />}
       {store.providerKeysModalOpen && <ProviderKeysModal />}
+      {store.adminUsersModalOpen && <AdminUsersModal />}
+      {store.directoryMappingsModalOpen && <DirectoryMappingsModal />}
       <ProviderMenu />
       <ActorMenu />
       <EdgeMenu />

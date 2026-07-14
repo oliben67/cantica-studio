@@ -1,4 +1,4 @@
-import type { AIActorDef, ActorEdgeDef, ActorGraph, ActorSummary, CanticaPrompt, CanticaServer, LogEntry, McpLogEntry, Notification, PromptEventDef, PromptRef } from './types/index.js';
+import type { AdminMapping, AdminUser, AIActorDef, ActorEdgeDef, ActorGraph, ActorSummary, CanticaPrompt, CanticaServer, LogEntry, McpLogEntry, Notification, PromptEventDef, PromptRef } from './types/index.js';
 
 function headers(token?: string): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
@@ -31,8 +31,14 @@ export class StudioClient {
     }
     const r = await fetch(this.url(path), requestInit);
     this.onLog?.({ ts: t0, method, url: path, status: r.status, durationMs: Date.now() - t0 });
+    // Surface auth-gate warnings (spec AUTH F "authenticated with warning").
+    const warning = r.headers.get('X-Cantica-Warning');
+    if (warning) this.onWarning?.(warning);
     return r;
   }
+
+  /** Called whenever the server flags this account with an auth-gate warning. */
+  onWarning: ((text: string) => void) | undefined;
 
   async registerClientKey(clientId: string, publicKeyPem: string): Promise<void> {
     const r = await fetch(this.url('/v1/auth/register'), {
@@ -41,6 +47,44 @@ export class StudioClient {
       body: JSON.stringify({ client_id: clientId, public_key_pem: publicKeyPem }),
     });
     if (!r.ok) throw new Error(`Registration failed [${r.status}]: ${await r.text()}`);
+  }
+
+  /** Remote mode: request an invitation (spec REGISTRATION C.1–C.2). */
+  async requestInvitation(firstName: string, lastName: string, email: string): Promise<string | null> {
+    const r = await fetch(this.url('/v1/auth/invitations'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ first_name: firstName, last_name: lastName, email }),
+    });
+    if (!r.ok) throw new Error(`Invitation request failed [${r.status}]: ${await r.text()}`);
+    const data = (await r.json()) as { invitation?: string | null };
+    return data.invitation ?? null;
+  }
+
+  /** Remote mode: enrol the client public key (spec REGISTRATION 3–8).
+   *  `assertion` comes from auth-core createEnrolmentAssertion. */
+  async enrollKey(assertion: string, publicKeyPem: string): Promise<{ canticaUserId: string }> {
+    const r = await fetch(this.url('/v1/auth/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ assertion, public_key_pem: publicKeyPem }),
+    });
+    if (!r.ok) throw new Error(`Enrolment failed [${r.status}]: ${await r.text()}`);
+    const data = (await r.json()) as { cantica_user_id?: string };
+    return { canticaUserId: data.cantica_user_id ?? '' };
+  }
+
+  /** Remote mode: exchange a key-signed assertion for an access token (spec AUTH A–E).
+   *  `assertion` comes from auth-core createAuthAssertion. */
+  async assertAuth(assertion: string): Promise<{ accessToken: string; expiresIn: number; warnings: string[] }> {
+    const r = await fetch(this.url('/v1/auth/assert'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ assertion }),
+    });
+    if (!r.ok) throw new Error(`Authentication failed [${r.status}]: ${await r.text()}`);
+    const data = (await r.json()) as { access_token: string; expires_in: number; warnings?: string[] };
+    return { accessToken: data.access_token, expiresIn: data.expires_in, warnings: data.warnings ?? [] };
   }
 
   async ping(): Promise<{ ok: boolean; serverId?: string; version?: string; uptimeSeconds?: number; workspace?: string; containerized?: boolean }> {
@@ -285,6 +329,65 @@ export class StudioClient {
     }
     const data = (await r.json()) as { output: string };
     return { output: data.output };
+  }
+
+  // ── Admin: users, flags, activation, directory mappings ─────────────────────
+
+  async listUsers(flag?: string): Promise<AdminUser[]> {
+    const qs = flag ? `?flag=${encodeURIComponent(flag)}` : '';
+    const r = await this._fetch(`/v1/users${qs}`);
+    if (!r.ok) return [];
+    return r.json() as Promise<AdminUser[]>;
+  }
+
+  async activateUser(userId: string): Promise<void> {
+    const r = await this._fetch(`/v1/users/${encodeURIComponent(userId)}/activate`, {
+      method: 'POST', headers: headers(),
+    });
+    if (!r.ok) throw new Error(`Activation failed [${r.status}]`);
+  }
+
+  async addUserFlag(userId: string, flag: string, comment = ''): Promise<void> {
+    const r = await this._fetch(`/v1/users/${encodeURIComponent(userId)}/flags`, {
+      method: 'POST', headers: headers(), body: JSON.stringify({ flag, comment }),
+    });
+    if (!r.ok) throw new Error(`Adding flag failed [${r.status}]: ${await r.text()}`);
+  }
+
+  async removeUserFlag(userId: string, flagId: string): Promise<void> {
+    const r = await this._fetch(
+      `/v1/users/${encodeURIComponent(userId)}/flags/${encodeURIComponent(flagId)}`,
+      { method: 'DELETE' },
+    );
+    if (!r.ok) throw new Error(`Removing flag failed [${r.status}]`);
+  }
+
+  async listRoleNames(): Promise<string[]> {
+    const r = await this._fetch('/v1/roles');
+    if (!r.ok) return [];
+    const roles = (await r.json()) as Array<{ name: string }>;
+    return roles.map(x => x.name);
+  }
+
+  async listDirectoryMappings(): Promise<AdminMapping[]> {
+    const r = await this._fetch('/v1/directory/mappings');
+    if (!r.ok) return [];
+    return r.json() as Promise<AdminMapping[]>;
+  }
+
+  async addDirectoryMapping(externalGroup: string, roleName: string): Promise<void> {
+    const r = await this._fetch('/v1/directory/mappings', {
+      method: 'POST', headers: headers(),
+      body: JSON.stringify({ external_group: externalGroup, role_name: roleName }),
+    });
+    if (!r.ok) throw new Error(`Adding mapping failed [${r.status}]: ${await r.text()}`);
+  }
+
+  async removeDirectoryMapping(mappingId: string): Promise<void> {
+    const r = await this._fetch(`/v1/directory/mappings/${encodeURIComponent(mappingId)}`, {
+      method: 'DELETE',
+    });
+    if (!r.ok) throw new Error(`Removing mapping failed [${r.status}]`);
   }
 
   async drainNotifications(): Promise<Notification[]> {

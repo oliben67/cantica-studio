@@ -1,4 +1,5 @@
 const esbuild = require('esbuild');
+const fs = require('fs');
 const path = require('path');
 const production = process.argv.includes('--production');
 
@@ -59,6 +60,12 @@ async function build() {
     nodePaths: [path.resolve(__dirname, '../vscode/node_modules')],
     plugins: [vscodeShimPlugin],
   });
+
+  // The renderer page itself is static — main.ts loads dist/renderer/index.html.
+  fs.copyFileSync(
+    path.join(__dirname, 'renderer', 'index.html'),
+    path.join(__dirname, 'dist', 'renderer', 'index.html'),
+  );
 }
 
 build().catch(() => process.exit(1));

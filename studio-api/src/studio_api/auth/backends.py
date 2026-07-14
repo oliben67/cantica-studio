@@ -17,6 +17,12 @@ class AuthResult:
     email: str
     group_name: str | None = None
     extra_roles: list[str] = field(default_factory=list)
+    # Directory-provided identity (LDAP / OIDC backends).
+    e_user_id: str | None = None
+    first_name: str = ""
+    last_name: str = ""
+    # Raw external directory groups; mapped to roles via directory_group_roles.
+    directory_groups: list[str] = field(default_factory=list)
 
 
 class AuthBackend(Protocol):

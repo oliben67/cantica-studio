@@ -15,6 +15,7 @@ from studio_api.auth.password import hash_password
 from studio_api.cantica_client import CanticaConnector
 from studio_api.config import get_settings
 from studio_api.orm.db import Base, make_engine, new_session
+from studio_api.orm.migrate import migrate
 from studio_api.orm.seed import ensure_admin, ensure_local_user, seed, seed_providers
 from studio_api.runtime import ActorRuntime
 from studio_api.workspace_fs import WorkspaceFS
@@ -34,6 +35,8 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     db_path = studio_dir / "studio.db"
     db_engine = make_engine(db_path)
     Base.metadata.create_all(db_engine)
+    # create_all never adds columns to existing tables — apply additive migrations.
+    migrate(db_engine)
     _app.state.db_engine = db_engine
     with new_session(db_engine) as _db:
         seed(_db)
@@ -83,6 +86,15 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def _warning_header(request, call_next):  # type: ignore[no-untyped-def]
+        """Surface auth-gate warnings (spec AUTH F) set by get_current_user."""
+        response = await call_next(request)
+        warnings = getattr(request.state, "cantica_warnings", None)
+        if warnings:
+            response.headers["X-Cantica-Warning"] = ", ".join(warnings)
+        return response
 
     app.include_router(v1_router, prefix="/v1")
 

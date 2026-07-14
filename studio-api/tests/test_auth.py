@@ -228,7 +228,7 @@ def test_list_roles_returns_builtins(client: TestClient) -> None:
     r = client.get("/v1/roles")
     assert r.status_code == 200
     names = {role["name"] for role in r.json()}
-    assert names == {"admin", "operator", "viewer"}
+    assert names == {"admin", "operator", "viewer", "limbo"}
 
 
 def test_role_has_permissions(client: TestClient) -> None:

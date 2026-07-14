@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from studio_api.auth.flags import GENERIC_AUTH_FAILURE, gate_user
 from studio_api.auth.jwt import decode_access_token
 from studio_api.config import get_settings
 from studio_api.orm.models import ApiToken, User
@@ -29,9 +30,17 @@ class CurrentUser:
     roles: list[str] = field(default_factory=list)
     permissions: list[str] = field(default_factory=list)
     group_id: str | None = None
+    # warning:* flags carried by the account (spec AUTH F "authenticated with warning").
+    warnings: list[str] = field(default_factory=list)
 
     def has(self, permission: str) -> bool:
         return _ALL in self.permissions or permission in self.permissions
+
+
+def _generic_401() -> HTTPException:
+    # One indistinguishable failure for invalid / blocked / inactive / unknown —
+    # the real reason lives in the studio_api.audit log (see auth/flags.py).
+    return HTTPException(status_code=401, detail=GENERIC_AUTH_FAILURE)
 
 
 async def get_current_user(
@@ -42,7 +51,10 @@ async def get_current_user(
 
     In local_mode returns an admin CurrentUser with the real DB user_id (set in
     app.state.local_user_id at startup), skipping all credential checks.
-    Raises 401 for missing / invalid credentials in non-local mode.
+
+    In remote mode the flag gate (spec AUTH F) runs on EVERY request for both
+    credential paths, so a blocked/* flag or deactivation takes effect
+    immediately, not just at the next login.
     """
     settings = get_settings()
 
@@ -58,6 +70,9 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     raw = credentials.credentials
+    from studio_api.orm.db import new_session  # noqa: PLC0415
+
+    engine = request.app.state.db_engine
 
     # ── JWT path (three dot-separated segments) ───────────────────────────────
     if raw.count(".") == 2:
@@ -67,23 +82,37 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Token expired")
         except jwt.InvalidTokenError:
             raise HTTPException(status_code=401, detail="Invalid token")
+
+        with new_session(engine) as session:
+            user = session.scalar(
+                select(User)
+                .options(selectinload(User.flags))
+                .where(User.id == payload["sub"])
+            )
+            result = gate_user(user, context="request:jwt")
+            if not result.allowed:
+                raise _generic_401()
+
+        request.state.cantica_warnings = result.warnings
         return CurrentUser(
             user_id=payload["sub"],
             email=payload.get("email", ""),
             roles=payload.get("roles", []),
             permissions=payload.get("permissions", []),
             group_id=payload.get("group_id"),
+            warnings=result.warnings,
         )
 
     # ── API token path (opaque token looked up by hash) ───────────────────────
     token_hash = hashlib.sha256(raw.encode()).hexdigest()
-    from studio_api.orm.db import new_session  # noqa: PLC0415
 
-    engine = request.app.state.db_engine
     with new_session(engine) as session:
         api_token = session.scalar(
             select(ApiToken)
-            .options(selectinload(ApiToken.user).selectinload(User.roles))
+            .options(
+                selectinload(ApiToken.user).selectinload(User.roles),
+                selectinload(ApiToken.user).selectinload(User.flags),
+            )
             .where(ApiToken.token_hash == token_hash)
         )
         if api_token is None:
@@ -93,18 +122,21 @@ async def get_current_user(
         if api_token.expires_at is not None and api_token.expires_at < now:
             raise HTTPException(status_code=401, detail="Token expired")
 
-        if not api_token.user.is_active:
-            raise HTTPException(status_code=401, detail="Account inactive")
+        result = gate_user(api_token.user, context="request:api-token")
+        if not result.allowed:
+            raise _generic_401()
 
         # Update last_used_at
         api_token.last_used_at = now
         session.commit()
 
+        request.state.cantica_warnings = result.warnings
         return CurrentUser(
             user_id=api_token.user.id,
             email=api_token.user.email,
             roles=[r.name for r in api_token.user.roles],
             permissions=list(api_token.scopes),
+            warnings=result.warnings,
         )
 
 

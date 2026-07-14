@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, JSON, String, Table
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, JSON, String, Table, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from studio_api.orm.db import Base
@@ -69,6 +69,10 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(100), default="")
     last_name: Mapped[str] = mapped_column(String(100), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # User id provided by the enterprise infrastructure (AD/OIDC); null outside
+    # enterprise environments. Uniqueness (when set) enforced by a partial index
+    # created in orm/migrate.py.
+    e_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     # At most one group per user; structural enforcement via single nullable FK.
     group_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True
@@ -86,6 +90,87 @@ class User(Base):
     providers: Mapped[list["Provider"]] = relationship(
         "Provider", back_populates="user", cascade="all"
     )
+    flags: Mapped[list["UserFlag"]] = relationship(
+        "UserFlag", back_populates="user", cascade="all, delete-orphan"
+    )
+    jwt_keys: Mapped[list["JwtKey"]] = relationship(
+        "JwtKey", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserFlag(Base):
+    """A moderation / lifecycle mark on a user. A user can hold several flags.
+
+    Flag codes are an open vocabulary validated in auth/flags.py (the set will
+    evolve, so it is deliberately not a closed DB enum). `newbie` marks a new
+    user awaiting activation; `warning:*` and `blocked:*` drive the auth gate.
+    """
+
+    __tablename__ = "user_flags"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    flag: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    comment: Mapped[str] = mapped_column(String(500), default="")
+    created_by: Mapped[str] = mapped_column(String(36), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    user: Mapped[User] = relationship("User", back_populates="flags")
+
+
+class JwtKey(Base):
+    """A user's enrolled signing key for key-based authentication.
+
+    Stores the PUBLIC key only — assertions are signed client-side with the
+    matching private key and verified here. cantica_user_id is e_user_id for
+    enterprise users, the account email otherwise.
+    """
+
+    __tablename__ = "jwt_keys"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    cantica_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    public_key: Mapped[str] = mapped_column(String(4096), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[User] = relationship("User", back_populates="jwt_keys")
+
+
+class UsedJti(Base):
+    """Replay protection — every client-signed JWT's jti is burned on first use."""
+
+    __tablename__ = "used_jtis"
+
+    jti: Mapped[str] = mapped_column(String(64), primary_key=True)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)  # invite | enrol | auth
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class DirectoryGroupRole(Base):
+    """Maps an external directory group (AD DN, OIDC groups value) to a Role.
+
+    Set by the server admin ahead of time (spec REGISTRATION B.pre); directory
+    provisioning assigns each user the roles their groups map to.
+    """
+
+    __tablename__ = "directory_group_roles"
+    __table_args__ = (UniqueConstraint("external_group", "role_id", name="uq_dir_group_role"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    external_group: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    role_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    role: Mapped["Role"] = relationship("Role")
 
 
 class Role(Base):

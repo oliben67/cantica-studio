@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     jwt_expire_minutes: int = 60
 
+    # ── Registration & key-based auth (remote mode) ────────────────────────────
+    # Roles granted to invited users. JSON list; falls back to ["limbo"].
+    default_roles_raw: str = '["limbo"]'
+    # When False, invited accounts start disabled + flagged "newbie" for admin review.
+    auto_activate_users: bool = False
+    # Lifetime of invitation JWTs (spec REGISTRATION C.2).
+    invite_expire_minutes: int = 1440
+    # Maximum accepted age (iat) of client-signed assertions.
+    assertion_max_age_seconds: int = 300
+
     # ── Initial admin user (seeded on first startup if no admin exists) ────────
     admin_email: str = "admin@studio.local"
     admin_password: str = ""  # STUDIO_ADMIN_PASSWORD — required to seed in non-local mode
@@ -53,6 +63,11 @@ class Settings(BaseSettings):
     ldap_port: int = 389
     ldap_base_dn: str = ""
     ldap_group_attr: str = "memberOf"
+    # Service account for the user search (empty = anonymous bind).
+    ldap_bind_dn: str = ""
+    ldap_bind_password: str = ""
+    # Search filter; {email} is substituted with the login credential.
+    ldap_user_filter: str = "(mail={email})"
     # JSON map: external group DN → Studio group name
     # e.g. '{"cn=studio-admins,dc=corp,dc=com": "admins"}'
     ldap_group_map_raw: str = "{}"
@@ -66,6 +81,15 @@ class Settings(BaseSettings):
     oidc_group_map_raw: str = "{}"
 
     model_config = SettingsConfigDict(env_prefix="STUDIO_")
+
+    @property
+    def default_roles(self) -> list[str]:
+        try:
+            roles = json.loads(self.default_roles_raw)
+        except json.JSONDecodeError:
+            return ["limbo"]
+        cleaned = [r for r in roles if isinstance(r, str) and r.strip()]
+        return cleaned or ["limbo"]
 
     @property
     def ldap_group_map(self) -> dict[str, str]:

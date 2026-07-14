@@ -74,6 +74,12 @@ BUILTIN_ROLES: dict[str, dict] = {
             "resources:read",
         ],
     },
+    # Deny-by-default role for users with no assignment yet. Every endpoint
+    # requires an explicit permission, so zero permissions means zero access.
+    "limbo": {
+        "description": "No access (default for unassigned users)",
+        "permissions": [],
+    },
 }
 
 LOCAL_USER_EMAIL = "local@studio.local"

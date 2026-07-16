@@ -26,7 +26,14 @@ RUN pip install --no-cache-dir "github-copilot-sdk==0.3.0"
 COPY actor_ai-0.3.9-py3-none-any.whl /tmp/
 RUN pip install --no-cache-dir /tmp/actor_ai-0.3.9-py3-none-any.whl
 
-# Install studio-api and its remaining dependencies (actor-ai already satisfied above).
+# Install cantica-secure from the local wheel (shared security package —
+# satisfies the cantica-secure dependency so `pip install -e .` below resolves
+# it without reaching PyPI; the [tool.uv.sources] editable path is dev-only).
+COPY cantica_secure-0.1.0-py3-none-any.whl /tmp/
+RUN pip install --no-cache-dir /tmp/cantica_secure-0.1.0-py3-none-any.whl
+
+# Install studio-api and its remaining dependencies (actor-ai + cantica-secure
+# already satisfied above).
 WORKDIR /app
 COPY cantica-studio/studio-api/pyproject.toml cantica-studio/studio-api/README.md ./
 COPY cantica-studio/studio-api/src ./src

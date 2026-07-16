@@ -20,11 +20,14 @@ dependencies = [
     "PyJWT>=2.9",
     "cryptography>=42",
     "argon2-cffi>=23.1",
-    "cantica-secure>=0.1",
 ]
 
 [project.optional-dependencies]
 ldap = ["ldap3>=2.9"]
+# Cantica Secure is only required when STUDIO_SECURITY_SHIM is on; keep it out
+# of the base install (the flag-off path imports nothing from it). The Docker
+# image pre-installs the wheel so the shim can be enabled in-container.
+shim = ["cantica-secure>=0.1"]
 
 [project.scripts]
 studio = "studio_api.main:main"
@@ -38,6 +41,9 @@ packages = ["src/studio_api"]
 
 [dependency-groups]
 dev = [
+    # Present in dev/CI so both the flag-off and flag-on (shim) suites run;
+    # excluded from the base runtime install (see the "shim" extra).
+    "cantica-secure>=0.1",
     "pytest>=9.0.3",
     "pytest-asyncio>=0.24",
     "pytest-cov>=7.1.0",

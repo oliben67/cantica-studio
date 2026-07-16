@@ -1974,7 +1974,6 @@ dependencies = [
     { name = "actor-ai" },
     { name = "apscheduler" },
     { name = "argon2-cffi" },
-    { name = "cantica-secure" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "fastmcp" },
@@ -1990,9 +1989,13 @@ dependencies = [
 ldap = [
     { name = "ldap3" },
 ]
+shim = [
+    { name = "cantica-secure" },
+]
 
 [package.dev-dependencies]
 dev = [
+    { name = "cantica-secure" },
     { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -2005,7 +2008,7 @@ requires-dist = [
     { name = "actor-ai", editable = "../../actor-ai" },
     { name = "apscheduler", specifier = ">=3.10" },
     { name = "argon2-cffi", specifier = ">=23.1" },
-    { name = "cantica-secure", editable = "../../cantica-secure/python" },
+    { name = "cantica-secure", marker = "extra == 'shim'", editable = "../../cantica-secure/python" },
     { name = "cryptography", specifier = ">=42" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fastmcp", specifier = ">=2.0" },
@@ -2017,10 +2020,11 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
-provides-extras = ["ldap"]
+provides-extras = ["ldap", "shim"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "cantica-secure", editable = "../../cantica-secure/python" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },

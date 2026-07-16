@@ -26,14 +26,24 @@ tasks:
   build:
     desc: Build all UI sub-projects (development mode)
     cmds:
-      - task: vscode:compile
+      - task: vscode:build
       - task: studio:build
 
   build:prod:
     desc: Build all UI sub-projects (production/minified)
     cmds:
-      - task: vscode:compile:prod
+      - task: vscode:build:prod
       - task: studio:build:prod
+
+  test:
+    desc: Run all UI sub-project test suites
+    cmds:
+      - task: vscode:test
+
+  typecheck:
+    desc: Type-check all UI sub-projects
+    cmds:
+      - task: vscode:typecheck
 
   check:
     desc: Run all quality gates across UI sub-projects

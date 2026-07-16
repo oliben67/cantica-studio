@@ -14,12 +14,14 @@ tasks:
     cmd: npm install
 
   # ── Build ─────────────────────────────────────────────────────────────────
-  compile:
+  build:
     desc: Build extension host + webview (development mode)
+    aliases: [compile]
     cmd: node esbuild.js
 
-  compile:prod:
+  build:prod:
     desc: Build extension host + webview (production/minified)
+    aliases: [compile:prod]
     cmd: node esbuild.js --production
 
   watch:
@@ -65,12 +67,12 @@ tasks:
 
   # ── Combined workflows ────────────────────────────────────────────────────
   check:
-    desc: Run all quality gates — typecheck + lint + test + compile
+    desc: Run all quality gates — typecheck + lint + test + build
     cmds:
       - task: typecheck
       - task: lint
       - task: test
-      - task: compile
+      - task: build
 
   ci:
     desc: Full CI pipeline — install → typecheck → lint → test → production build
@@ -79,7 +81,7 @@ tasks:
       - task: typecheck
       - task: lint
       - task: test
-      - task: compile:prod
+      - task: build:prod
 
   # ── Clean ─────────────────────────────────────────────────────────────────
   clean:

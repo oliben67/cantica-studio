@@ -4,9 +4,10 @@
 
 | Sub-project | Description |
 | --- | --- |
-| [`vscode/`](vscode/) | VSCode extension — graph editor for AI Actor workflows |
+| [`clients/vscode/`](clients/vscode/) | VSCode extension — graph editor for AI Actor workflows |
+| [`clients/studio-app/`](clients/studio-app/) | Electron desktop app — the same graph editor as a standalone app |
+| [`clients/shared/`](clients/shared/) | Shared React webview, studio client, and auth/key machinery used by both clients |
 | [`studio-api/`](studio-api/) | Local FastAPI server — actor runtime, Cantica proxy, MCP server |
-| [`react-native/`](react-native/) | Mobile companion app (work in progress) |
 
 ---
 
@@ -69,10 +70,29 @@ Full documentation: [studio-api/README.md](studio-api/README.md)
 
 | Task | Description |
 | --- | --- |
-| `task install` | Install all sub-project dependencies |
-| `task check` | Run all quality gates |
-| `task lint` | ESLint across sub-projects |
-| `task fix` | Auto-fix ESLint issues |
+| `task install` | Install all client dependencies (vscode + studio-app) |
+| `task build` / `task build:prod` | Build all clients (dev / production) |
+| `task test` | Run the client test suites |
+| `task typecheck` | TypeScript typecheck across clients |
+| `task check` | Run all quality gates (typecheck + lint + test + build) |
+| `task lint` / `task fix` | ESLint / auto-fix |
 | `task ci` | Full CI pipeline |
-| `task clean` | Remove build artefacts |
-| `task clean:all` | Remove artefacts and `node_modules/` |
+| `task app` / `task app:dev` | Build + launch (or just launch) the Electron desktop app |
+| `task vscode:install:vsix` | Package + install the VSCode extension |
+| `task clean` / `task clean:all` | Remove artefacts / also remove `node_modules/` |
+
+> Client-level `compile` / `compile:prod` remain as aliases of `build` /
+> `build:prod`.
+
+---
+
+## Remote mode & security
+
+The Studio API runs single-user by default (`STUDIO_LOCAL_MODE`). In remote
+mode it supports invitation-based multi-user auth, and with
+`STUDIO_SECURITY_SHIM=true` that auth is served by the shared
+[`cantica-secure`](../cantica-secure/) package. The clients expose the admin
+screens (users · activation · flags · directory mappings · API tokens) behind
+the toolbar **Security** entry, rendered from `@cantica/secure-ui` over a
+postMessage bridge so the session token stays in the extension host / Electron
+main.

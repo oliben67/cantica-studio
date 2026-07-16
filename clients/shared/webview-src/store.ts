@@ -184,6 +184,9 @@ interface GraphState {
   closeDirectoryMappingsModal: () => void;
   serverWarning: string | null;
   setServerWarning: (text: string | null) => void;
+  secureAdminModalOpen: boolean;
+  openSecureAdminModal: () => void;
+  closeSecureAdminModal: () => void;
 }
 
 export const useStore = create<GraphState>((set, get) => ({
@@ -465,5 +468,8 @@ export const useStore = create<GraphState>((set, get) => ({
   closeDirectoryMappingsModal: () => set({ directoryMappingsModalOpen: false }),
   serverWarning: null,
   setServerWarning: (text) => set({ serverWarning: text }),
+  secureAdminModalOpen: false,
+  openSecureAdminModal: () => set({ secureAdminModalOpen: true }),
+  closeSecureAdminModal: () => set({ secureAdminModalOpen: false }),
 
 }));

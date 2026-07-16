@@ -1476,3 +1476,11 @@ body {
 .cs-admin-flag--warning { color: #d97706; border-color: #d97706; }
 .cs-admin-flag--blocked { color: #dc2626; border-color: #dc2626; }
 .cs-toolbar-warning { color: #d97706; font-size: 13px; cursor: help; }
+
+/* ── Secure admin modal tabs (Phase E — @cantica/secure-ui) ─────────────────── */
+.cs-secure-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--cs-border, #444); margin-bottom: 10px; }
+.cs-secure-tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--cs-text-muted); padding: 6px 12px; cursor: pointer; font: inherit;
+}
+.cs-secure-tab--active { color: var(--cs-text); border-bottom-color: var(--cs-accent, #4ec9b0); }

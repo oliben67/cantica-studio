@@ -735,6 +735,20 @@ async function handleMessage(msg: unknown): Promise<void> {
       await adminAction(() => client.removeDirectoryMapping(raw['mappingId'] as string));
       break;
 
+    case 'secure:request': {
+      // Relay for @cantica/secure-ui's bridge transport (Phase E). The token
+      // stays in the main process and never enters the renderer.
+      const id = raw['id'] as number;
+      const req = raw['request'] as { method: string; path: string; body?: unknown };
+      try {
+        const response = await client.secureRequest(req);
+        send({ type: 'secure:response', id, response });
+      } catch (err) {
+        send({ type: 'secure:response', id, response: { ok: false, status: 0, data: { detail: String(err) } } });
+      }
+      break;
+    }
+
     default:
       platform.log(`[studio] Unhandled message type: ${String(raw['type'])}`);
   }

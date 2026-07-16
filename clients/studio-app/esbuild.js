@@ -58,6 +58,11 @@ async function build() {
     jsx: 'automatic',
     // Resolve React and other deps from the vscode extension's node_modules
     nodePaths: [path.resolve(__dirname, '../vscode/node_modules')],
+    // @cantica/secure-ui (Phase E) from the sibling submodule's source.
+    alias: {
+      '@cantica/secure-ui/styles.css': path.resolve(__dirname, '../../../cantica-secure/ui/src/styles.css'),
+      '@cantica/secure-ui': path.resolve(__dirname, '../../../cantica-secure/ui/src/index.ts'),
+    },
     plugins: [vscodeShimPlugin],
   });
 

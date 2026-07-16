@@ -34,6 +34,12 @@ const webviewOptions = {
   },
   // esbuild outputs CSS alongside the JS when CSS is imported
   loader: { '.css': 'css' },
+  // @cantica/secure-ui (Phase E) is consumed from the sibling submodule's
+  // source; React resolves from this package's node_modules via nodePaths.
+  alias: {
+    '@cantica/secure-ui/styles.css': path.resolve(__dirname, '../../../cantica-secure/ui/src/styles.css'),
+    '@cantica/secure-ui': path.resolve(__dirname, '../../../cantica-secure/ui/src/index.ts'),
+  },
   // webview-src is a symlink to ../shared/webview-src; resolve modules from
   // this package's own node_modules so react et al. are always found.
   nodePaths: [path.resolve(__dirname, 'node_modules')],

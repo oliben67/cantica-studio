@@ -42,7 +42,7 @@ function applyDagreLayout(
 export function GraphToolbar() {
   const { graph, addActor, addCodeActor, resetGraph,
           updateActorPosition, logVisible, toggleLog, studioHealth,
-          openSetupModal, openProviderKeysModal, openAdminUsersModal, serverWarning } = useStore();
+          openSetupModal, openProviderKeysModal, openSecureAdminModal, serverWarning } = useStore();
 
   const [resetConfirm, setResetConfirm] = useState(false);
 
@@ -162,7 +162,7 @@ export function GraphToolbar() {
           Keys
         </button>
 
-        <button className="cs-toolbar-btn" onClick={openAdminUsersModal} title="Users — activation, flags, directory mappings">
+        <button className="cs-toolbar-btn" onClick={openSecureAdminModal} title="Security — users, activation, flags, directory mappings, API tokens">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Users
         </button>

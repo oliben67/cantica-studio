@@ -31,6 +31,7 @@ import { SetupModal } from './components/SetupModal';
 import { ProviderKeysModal } from './components/ProviderKeysModal';
 import { AdminUsersModal } from './components/AdminUsersModal';
 import { DirectoryMappingsModal } from './components/DirectoryMappingsModal';
+import { SecureAdminModal } from './components/SecureAdminModal';
 import { LogPanel } from './components/LogPanel';
 import { useStore } from './store';
 import type { ActorEdgeDef, EdgeHandleInfo, HandleSide, IncomingMessage } from './types';
@@ -372,6 +373,13 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
         case 'serverWarning':
           store.setServerWarning(msg.text || null);
           break;
+        case 'openSecureAdmin':
+          store.openSecureAdminModal();
+          break;
+        case 'secure:response':
+          // Relayed to the bridge transport via the window 'message' event;
+          // no store handling needed here.
+          break;
         default: {
           const _x: never = msg;
           void _x;
@@ -405,6 +413,7 @@ export function App({ sidebar }: { sidebar?: ReactNode } = {}) {
       {store.providerKeysModalOpen && <ProviderKeysModal />}
       {store.adminUsersModalOpen && <AdminUsersModal />}
       {store.directoryMappingsModalOpen && <DirectoryMappingsModal />}
+      {store.secureAdminModalOpen && <SecureAdminModal />}
       <ProviderMenu />
       <ActorMenu />
       <EdgeMenu />

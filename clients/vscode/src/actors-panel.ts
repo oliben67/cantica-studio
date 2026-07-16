@@ -543,6 +543,23 @@ export class ActorsPanel {
       case 'removeDirectoryMapping':
         await this.adminAction(() => this.client.removeDirectoryMapping(raw['mappingId'] as string));
         break;
+
+      case 'secure:request': {
+        // Relay for @cantica/secure-ui's bridge transport (Phase E). The token
+        // stays here in the extension host and never enters the webview.
+        const id = raw['id'] as number;
+        const req = raw['request'] as { method: string; path: string; body?: unknown };
+        try {
+          const response = await this.client.secureRequest(req);
+          await this.post({ type: 'secure:response', id, response });
+        } catch (err) {
+          await this.post({
+            type: 'secure:response', id,
+            response: { ok: false, status: 0, data: { detail: String(err) } },
+          });
+        }
+        break;
+      }
     }
   }
 

@@ -242,6 +242,8 @@ export type ToWebview =
   | { type: 'setupState'; state: SetupState }
   | { type: 'openSetup' }
   | { type: 'openProviderKeys' }
+  | { type: 'openSecureAdmin' }
+  | { type: 'secure:response'; id: number; response: { ok: boolean; status: number; data: unknown; warning?: string } }
   | { type: 'adminData'; data: AdminData }
   | { type: 'serverWarning'; text: string };
 

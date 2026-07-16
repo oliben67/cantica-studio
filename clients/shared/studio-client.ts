@@ -40,6 +40,22 @@ export class StudioClient {
   /** Called whenever the server flags this account with an auth-gate warning. */
   onWarning: ((text: string) => void) | undefined;
 
+  /** Generic relay for @cantica/secure-ui's bridge transport (Phase E).
+   *  The webview posts {method, path, body}; the host forwards it here so the
+   *  bearer token stays in the extension host / Electron main and never in the
+   *  CSP-restricted webview. Returns the shape the bridge transport expects. */
+  async secureRequest(req: { method: string; path: string; body?: unknown }): Promise<{
+    ok: boolean; status: number; data: unknown; warning?: string;
+  }> {
+    const init: RequestInit = { method: req.method, headers: headers() };
+    if (req.body !== undefined) init.body = JSON.stringify(req.body);
+    const r = await this._fetch(req.path, init);
+    let data: unknown = null;
+    try { data = await r.json(); } catch { /* empty body (e.g. 204) */ }
+    const warning = r.headers.get('X-Cantica-Warning');
+    return { ok: r.ok, status: r.status, data, ...(warning ? { warning } : {}) };
+  }
+
   async registerClientKey(clientId: string, publicKeyPem: string): Promise<void> {
     const r = await fetch(this.url('/v1/auth/register'), {
       method: 'POST',

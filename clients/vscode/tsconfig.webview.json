@@ -1,5 +1,10 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@cantica/secure-ui": ["../../../cantica-secure/ui/src/index.ts"],
+      "@cantica/secure-ui/styles.css": ["../../../cantica-secure/ui/src/styles.css"]
+    },
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "ES2022",

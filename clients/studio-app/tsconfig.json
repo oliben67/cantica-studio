@@ -12,6 +12,8 @@
     "noEmit": true,
     "paths": {
       "@shared/*": ["../shared/*"],
+      "@cantica/secure-ui": ["../../../cantica-secure/ui/src/index.ts"],
+      "@cantica/secure-ui/styles.css": ["../../../cantica-secure/ui/src/styles.css"],
       "*": ["../vscode/node_modules/@types/*", "../vscode/node_modules/*"]
     }
   },

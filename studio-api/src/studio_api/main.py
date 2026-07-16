@@ -10,7 +10,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from studio_api.api.v1.router import router as v1_router
+from studio_api.api.v1.router import build_v1_router, router as v1_router
 from studio_api.auth.password import hash_password
 from studio_api.cantica_client import CanticaConnector
 from studio_api.config import get_settings
@@ -44,6 +44,11 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
             local_user = ensure_local_user(_db)
             seed_providers(_db, local_user)
             _app.state.local_user_id = local_user.id
+            # Shim-on: the synthetic local principal must carry the real DB
+            # user id so Provider.user_id links stay valid.
+            shim = getattr(_app.state, "cantica_secure", None)
+            if shim is not None:
+                shim.config.local_user_id = local_user.id
         elif settings.admin_password:
             ensure_admin(_db, settings.admin_email, hash_password(settings.admin_password))
 
@@ -96,7 +101,18 @@ def create_app() -> FastAPI:
             response.headers["X-Cantica-Warning"] = ", ".join(warnings)
         return response
 
-    app.include_router(v1_router, prefix="/v1")
+    settings = get_settings()
+    if settings.security_shim:
+        # Extraction roadmap Phase C: the cantica-secure shim serves the
+        # security surface; in-repo security routers are not mounted (the
+        # code remains in the tree as the flag-off path).
+        from studio_api.security_shim import build_security_shim  # noqa: PLC0415
+
+        shim = build_security_shim(settings)
+        app.include_router(build_v1_router(include_security=False), prefix="/v1")
+        shim.mount(app, prefix="/v1")
+    else:
+        app.include_router(v1_router, prefix="/v1")
 
     from studio_api.mcp_server import mcp  # noqa: PLC0415
 

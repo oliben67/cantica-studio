@@ -58,6 +58,24 @@ async def get_current_user(
     """
     settings = get_settings()
 
+    if settings.security_shim:
+        # Extraction roadmap Phase C: cantica-secure resolves the principal
+        # (including local mode and the per-request flag gate); map it onto
+        # studio's CurrentUser so every downstream call site is untouched.
+        from cantica_secure.api.deps import get_current_user as secure_get_current_user  # noqa: PLC0415
+
+        principal = await secure_get_current_user(
+            request, credentials, x_api_key=request.headers.get("X-API-Key")
+        )
+        return CurrentUser(
+            user_id=principal.user_id,
+            email=principal.email,
+            roles=principal.roles,
+            permissions=principal.permissions,
+            group_id=principal.group_id,
+            warnings=principal.warnings,
+        )
+
     if settings.local_mode:
         return CurrentUser(
             user_id=getattr(request.app.state, "local_user_id", "local"),

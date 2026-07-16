@@ -20,6 +20,7 @@ dependencies = [
     "PyJWT>=2.9",
     "cryptography>=42",
     "argon2-cffi>=23.1",
+    "cantica-secure>=0.1",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +48,7 @@ dev = [
 [tool.uv.sources]
 # actor-ai lives at the cantica repo root, two levels up from studio-api/
 actor-ai = { path = "../../actor-ai", editable = true }
+cantica-secure = { path = "../../cantica-secure/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

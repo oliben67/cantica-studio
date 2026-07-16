@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     # from environment variables.  Set to False for remote/multi-user deployments.
     local_mode: bool = True
 
+    # Phase C of the cantica-secure extraction: when True, authentication and
+    # the security API (/auth, /users, /roles, /directory) are served by the
+    # mounted cantica-secure shim instead of the in-repo implementation. The
+    # in-repo code stays and remains the flag-off path.
+    security_shim: bool = False
+
     # ── JWT settings (required when local_mode=False) ─────────────────────────
     jwt_secret: str = ""
     jwt_expire_minutes: int = 60
